@@ -15,6 +15,7 @@ exprutils.egg-info/*
 !examples/*.expr
 !llvmexpr/frontend/infix2postfix/stdlib/*.expr
 .cursor/rules/build-and-test-rule.mdc
+.cursor/rules/codacy.mdc
 ARCHITECTURE.md
 
 # Meson subprojects

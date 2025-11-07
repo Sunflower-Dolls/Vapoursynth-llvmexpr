@@ -41,7 +41,7 @@ namespace {
 inline double locale_independent_stod(const std::string& s) {
     std::istringstream iss(s);
     iss.imbue(std::locale::classic());
-    double val = NAN;
+    double val = std::numeric_limits<double>::quiet_NaN();
     if (!(iss >> val) || !iss.eof()) {
         throw std::runtime_error(std::format("Failed to parse number: {}", s));
     }
@@ -1601,9 +1601,8 @@ std::vector<Token> tokenize(const std::string& expr, int num_inputs,
 TokenBehavior get_token_behavior(const Token& token) {
     constexpr auto token_defs = get_token_definitions();
 
-    const auto* it =
-        std::find_if(token_defs.begin(), token_defs.end(),
-                     [&](const auto& def) { return def.type == token.type; });
+    const auto* it = std::ranges::find_if(
+        token_defs, [&](const auto& def) { return def.type == token.type; });
 
     return std::visit(
         [&token](auto&& arg) -> TokenBehavior {
