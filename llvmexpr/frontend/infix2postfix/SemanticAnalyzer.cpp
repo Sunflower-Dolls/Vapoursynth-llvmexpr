@@ -485,19 +485,19 @@ const FunctionSignature* SemanticAnalyzer::resolveOverload(
             arg_types.push_back(analyzeExpr(arg.get()));
         }
 
-        auto candidates = computeCandidates<FunctionSignature>(
-            overloads, args.size(),
-            [&](const FunctionSignature& sig, size_t j) -> std::optional<Type> {
-                if (sig.params.size() != args.size()) {
-                    return std::nullopt;
-                }
-                return arg_types[j];
-            },
-            [&](const FunctionSignature& sig, size_t j) -> std::optional<Type> {
-                if (sig.params.size() != args.size()) {
-                    return std::nullopt;
-                }
-                return sig.params[j].type;
+        std::vector<const FunctionSignature*> possible_overloads;
+        for (const auto& s : overloads) {
+            if (s.params.size() == args.size()) {
+                possible_overloads.push_back(&s);
+            }
+        }
+
+        auto candidates = computeCandidates<const FunctionSignature*>(
+            possible_overloads, args.size(),
+            [&](const FunctionSignature* /*sig*/,
+                size_t j) -> std::optional<Type> { return arg_types[j]; },
+            [&](const FunctionSignature* sig, size_t j) -> std::optional<Type> {
+                return sig->params[j].type;
             },
             mode);
 
@@ -530,11 +530,12 @@ const FunctionSignature* SemanticAnalyzer::resolveOverload(
         if ((call_expr != nullptr) && (function_defs.contains(name))) {
             const auto& defs = function_defs.at(name);
             for (auto* def : defs) {
-                if (def->params.size() == best_candidate->item->params.size()) {
+                if (def->params.size() ==
+                    (*best_candidate->item)->params.size()) {
                     bool match = true;
                     for (size_t i = 0; i < def->params.size(); ++i) {
                         if (def->params[i].type !=
-                            best_candidate->item->params[i].type) {
+                            (*best_candidate->item)->params[i].type) {
                             match = false;
                             break;
                         }
@@ -550,7 +551,7 @@ const FunctionSignature* SemanticAnalyzer::resolveOverload(
             }
         }
 
-        return best_candidate->item;
+        return *best_candidate->item;
     }
 
     const auto& builtins = get_builtin_functions();
@@ -558,21 +559,22 @@ const FunctionSignature* SemanticAnalyzer::resolveOverload(
     if (builtins.contains(name)) {
         const auto& overloads = builtins.at(name);
 
+        std::vector<const BuiltinFunction*> possible_overloads;
+        for (const auto& o : overloads) {
+            if (static_cast<size_t>(o.arity) == args.size() &&
+                (!o.mode_restriction.has_value() ||
+                 o.mode_restriction.value() == mode)) {
+                possible_overloads.push_back(&o);
+            }
+        }
+
         std::vector<std::optional<Type>> arg_types(args.size());
 
-        auto candidates = computeCandidates<BuiltinFunction>(
-            overloads, args.size(),
-            [&](const BuiltinFunction& builtin,
+        auto candidates = computeCandidates<const BuiltinFunction*>(
+            possible_overloads, args.size(),
+            [&](const BuiltinFunction* builtin,
                 size_t j) -> std::optional<Type> {
-                if (static_cast<size_t>(builtin.arity) != args.size()) {
-                    return std::nullopt;
-                }
-                if (builtin.mode_restriction.has_value() &&
-                    builtin.mode_restriction.value() != mode) {
-                    return std::nullopt;
-                }
-
-                Type param_type = builtin.param_types[j];
+                Type param_type = builtin->param_types[j];
                 if (param_type == Type::Literal_string) {
                     auto* var_expr = get_if<VariableExpr>(args[j].get());
                     if (!var_expr || var_expr->name.value.starts_with("$")) {
@@ -586,17 +588,8 @@ const FunctionSignature* SemanticAnalyzer::resolveOverload(
                 }
                 return arg_types[j];
             },
-            [&](const BuiltinFunction& builtin,
-                size_t j) -> std::optional<Type> {
-                if (static_cast<size_t>(builtin.arity) != args.size()) {
-                    return std::nullopt;
-                }
-                if (builtin.mode_restriction.has_value() &&
-                    builtin.mode_restriction.value() != mode) {
-                    return std::nullopt;
-                }
-                return builtin.param_types[j];
-            },
+            [&](const BuiltinFunction* builtin, size_t j)
+                -> std::optional<Type> { return builtin->param_types[j]; },
             mode);
 
         if (candidates.empty()) {
@@ -637,7 +630,7 @@ const FunctionSignature* SemanticAnalyzer::resolveOverload(
         }
 
         if (call_expr != nullptr) {
-            call_expr->resolved_builtin = best_candidate->item;
+            call_expr->resolved_builtin = *best_candidate->item;
         }
 
         // Built-in functions don't have FunctionSignature, return nullptr
