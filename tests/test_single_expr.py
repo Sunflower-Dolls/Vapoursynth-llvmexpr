@@ -154,6 +154,15 @@ def test_atomic_prop_write():
     assert frame.props["MyVar2"] == pytest.approx(30.0)
 
 
+def test_atomic_prop_read_modify_write():
+    """Test reading an input property and writing back to it."""
+    clip = core.std.BlankClip().std.SetFrameProps(MyVar=10)
+    expr = "x.MyVar 5 + MyVar$"
+    res = core.llvmexpr.SingleExpr(clip, expr)
+    frame = res.get_frame(0)
+    assert frame.props["MyVar"] == pytest.approx(15.0)
+
+
 def test_empty_expr():
     """Test that an empty expression is valid and does nothing."""
     clip = core.std.BlankClip(color=[42, 42, 42])
@@ -365,3 +374,22 @@ def test_error_on_array_reallocation():
         vs.Error, match="Statically allocated array cannot be reallocated"
     ):
         core.llvmexpr.SingleExpr(clip, "a{}^10 10 a{}^")
+
+def test_single_expr_frame_property_access_multiple_clips() -> None:
+    """Test that SingleExpr can access frame properties from multiple clips without collision."""
+    c0 = core.std.BlankClip(format=vs.GRAYS, color=0.0)
+    c0 = core.std.SetFrameProps(c0, _TestProp=0.25)
+
+    c1 = core.std.BlankClip(format=vs.GRAYS, color=0.0)
+    c1 = core.std.SetFrameProps(c1, _TestProp=0.75)
+
+    expr = "src0._TestProp src1._TestProp + out_sum$"
+    res = core.llvmexpr.SingleExpr([c0, c1], expr, vs.GRAYS)
+    frame_props = res.get_frame(0).props
+    assert frame_props["out_sum"] == pytest.approx(0.25 + 0.75)
+
+    expr_store = "src0._TestProp out0$ src1._TestProp out1$"
+    res_store = core.llvmexpr.SingleExpr([c0, c1], expr_store, vs.GRAYS)
+    frame_props = res_store.get_frame(0).props
+    assert frame_props["out0"] == pytest.approx(0.25)
+    assert frame_props["out1"] == pytest.approx(0.75)

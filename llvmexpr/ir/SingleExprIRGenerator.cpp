@@ -19,6 +19,8 @@
 
 #include "SingleExprIRGenerator.hpp"
 
+#include <format>
+
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
@@ -126,15 +128,23 @@ void SingleExprIRGenerator::
             builder.getFloatTy(),
             builder.CreateGEP(builder.getFloatTy(), props_arg,
                               builder.getInt32(idx)));
+        const std::string unique_prop_name =
+            std::format("prop_{}_{}", key.first, key.second);
         llvm::Value* alloca =
-            createAllocaInEntry(builder.getFloatTy(), key.second);
+            createAllocaInEntry(builder.getFloatTy(), unique_prop_name);
         builder.CreateStore(prop_val, alloca);
-        prop_allocas[key.second] = alloca;
+        prop_allocas[unique_prop_name] = alloca;
     }
     for (const auto& prop_name : output_props_list) {
-        if (!prop_allocas.contains(prop_name)) {
-            prop_allocas[prop_name] =
-                createAllocaInEntry(builder.getFloatTy(), prop_name);
+        const std::string mangled_input_name =
+            std::format("prop_0_{}", prop_name);
+        if (prop_allocas.contains(mangled_input_name)) {
+            prop_allocas[prop_name] = prop_allocas.at(mangled_input_name);
+        } else {
+            if (!prop_allocas.contains(prop_name)) {
+                prop_allocas[prop_name] =
+                    createAllocaInEntry(builder.getFloatTy(), prop_name);
+            }
         }
     }
 
@@ -349,8 +359,16 @@ bool SingleExprIRGenerator::process_mode_specific_token(
     }
     case TokenType::PROP_ACCESS: {
         const auto& payload = std::get<TokenPayload_PropAccess>(token.payload);
-        rpn_stack.push_back(
-            builder.CreateLoad(float_ty, prop_allocas.at(payload.prop_name)));
+        if (payload.clip_idx == 0 &&
+            output_prop_map.contains(payload.prop_name)) {
+            rpn_stack.push_back(builder.CreateLoad(
+                float_ty, prop_allocas.at(payload.prop_name)));
+        } else {
+            const std::string unique_prop_name =
+                std::format("prop_{}_{}", payload.clip_idx, payload.prop_name);
+            rpn_stack.push_back(builder.CreateLoad(
+                float_ty, prop_allocas.at(unique_prop_name)));
+        }
         return true;
     }
 
