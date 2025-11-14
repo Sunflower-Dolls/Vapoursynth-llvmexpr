@@ -333,8 +333,15 @@ Type SemanticAnalyzer::analyze(VariableExpr& expr) {
             }
             return Type::Clip;
         }
-        if (base_name == "width" || base_name == "height" ||
-            base_name == "pi" || base_name == "N") {
+        if (base_name == "width" || base_name == "height") {
+            reportWarning(std::format("The built-in constant '${}' is "
+                                      "deprecated and will be removed "
+                                      "in a future version.",
+                                      base_name),
+                          expr.range);
+            return Type::Value;
+        }
+        if (base_name == "pi" || base_name == "N") {
             return Type::Value;
         }
         reportError(std::format("Invalid identifier '{}'.", base_name),
@@ -718,6 +725,10 @@ Type SemanticAnalyzer::analyze(const StaticRelPixelAccessExpr& expr) {
 }
 
 Type SemanticAnalyzer::analyze(FrameDimensionExpr& expr) {
+    reportWarning("The 'frame.width[N]' and 'frame.height[N]' constructs are "
+                  "deprecated and will be removed in a future version.",
+                  expr.range);
+
     if (mode == Mode::Expr) {
         reportError("frame.width[N] and frame.height[N] are only "
                     "available in SingleExpr mode. "

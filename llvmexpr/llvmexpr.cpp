@@ -628,11 +628,19 @@ singleExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
             ctx.output_format = (d->vi.format.sampleType == stFloat) ? 1 : -1;
             ctx.input_bitdepths.resize(d->num_inputs);
             ctx.input_formats.resize(d->num_inputs);
+            ctx.input_widths.resize(d->num_inputs);
+            ctx.input_heights.resize(d->num_inputs);
+            ctx.input_subsample_ws.resize(d->num_inputs);
+            ctx.input_subsample_hs.resize(d->num_inputs);
             for (int i = 0; i < d->num_inputs; ++i) {
                 const VSVideoInfo* input_vi = vsapi->getVideoInfo(d->nodes[i]);
                 ctx.input_bitdepths[i] = input_vi->format.bitsPerSample;
                 ctx.input_formats[i] =
                     (input_vi->format.sampleType == stFloat) ? 1 : -1;
+                ctx.input_widths[i] = input_vi->width;
+                ctx.input_heights[i] = input_vi->height;
+                ctx.input_subsample_ws[i] = input_vi->format.subSamplingW;
+                ctx.input_subsample_hs[i] = input_vi->format.subSamplingH;
             }
             processed_expr = convertInfixToPostfix(
                 expr_str, d->num_inputs, infix2postfix::Mode::Single, &ctx);

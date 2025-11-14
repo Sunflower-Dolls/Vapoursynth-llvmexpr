@@ -364,18 +364,22 @@ The preprocessor provides several built-in macros that expose information about 
 #### Context Macros (when `infix=1` is used)
 These are defined by the VapourSynth filter when it invokes the transpiler.
 
-| Macro                  | Description                                                                                        |
-| :--------------------- | :------------------------------------------------------------------------------------------------- |
-| `__WIDTH__`            | Output frame width (integer, sub-sampling not counted).                                            |
-| `__HEIGHT__`           | Output frame height (integer, sub-sampling not counted).                                           |
-| `__INPUT_NUM__`        | Number of input clips (integer).                                                                   |
-| `__OUTPUT_BITDEPTH__`  | Output bit depth.                                                                                  |
-| `__INPUT_BITDEPTH_N__` | Bit depth of the (N+1)-th input clip (e.g., `__INPUT_BITDEPTH_0__`).                               |
-| `__OUTPUT_FMT__`       | Output format type (`1` for float, `-1` for integer).                                              |
-| `__INPUT_FMT_N__`      | Format type of the (N+1)-th input clip (e.g., `__INPUT_FMT_0__`). `1` for float, `-1` for integer. |
-| `__SUBSAMPLE_W__`      | Horizontal chroma subsampling (`1` for 4:2:x, `0` otherwise).                                      |
-| `__SUBSAMPLE_H__`      | Vertical chroma subsampling (`1` for 4:2:0, `0` otherwise).                                        |
-| `__PLANE_NO__`         | Current plane being processed (`0`, `1`, or `2`). (**`Expr` mode only**)                           |
+| Macro                     | Description                                                                                        |
+| :------------------------ | :------------------------------------------------------------------------------------------------- |
+| `__WIDTH__`               | Output frame width (integer, sub-sampling not counted).                                            |
+| `__HEIGHT__`              | Output frame height (integer, sub-sampling not counted).                                           |
+| `__INPUT_NUM__`           | Number of input clips (integer).                                                                   |
+| `__OUTPUT_BITDEPTH__`     | Output bit depth.                                                                                  |
+| `__OUTPUT_FMT__`          | Output format type (`1` for float, `-1` for integer).                                              |
+| `__SUBSAMPLE_W__`         | Horizontal chroma subsampling of the output (`1` for 4:2:x, `0` otherwise).                        |
+| `__SUBSAMPLE_H__`         | Vertical chroma subsampling of the output (`1` for 4:2:0, `0` otherwise).                          |
+| `__INPUT_BITDEPTH_N__`    | Bit depth of the (N+1)-th input clip (e.g., `__INPUT_BITDEPTH_0__`).                               |
+| `__INPUT_FMT_N__`         | Format type of the (N+1)-th input clip (e.g., `__INPUT_FMT_0__`). `1` for float, `-1` for integer. |
+| `__INPUT_WIDTH_N__`       | Width of the (N+1)-th input clip's luma plane. (**`SingleExpr` mode only**)                        |
+| `__INPUT_HEIGHT_N__`      | Height of the (N+1)-th input clip's luma plane. (**`SingleExpr` mode only**)                       |
+| `__INPUT_SUBSAMPLE_W_N__` | Horizontal chroma subsampling of the (N+1)-th input clip. (**`SingleExpr` mode only**)             |
+| `__INPUT_SUBSAMPLE_H_N__` | Vertical chroma subsampling of the (N+1)-th input clip. (**`SingleExpr` mode only**)               |
+| `__PLANE_NO__`            | Current plane being processed (`0`, `1`, or `2`). (**`Expr` mode only**)                           |
 
 ### 2.10. Debugging Macros
 
@@ -491,14 +495,16 @@ Constants represent fixed values and are **always** identified by a `$` prefix. 
 
 The language provides several built-in constants.
 
-| Constant  | Description                                                                                                                               | Availability |
-| :-------- | :---------------------------------------------------------------------------------------------------------------------------------------- | :----------- |
-| `$pi`     | The value of π.                                                                                                                           | Both         |
-| `$N`      | The current frame number (0-based).                                                                                                       | Both         |
-| `$X`      | The current column coordinate (chroma-subsampling counted).                                                                               | `Expr` only  |
-| `$Y`      | The current row coordinate (chroma-subsampling counted).                                                                                  | `Expr` only  |
-| `$width`  | The width of the video plane. In `Expr`, this is the width of the current plane. In `SingleExpr`, this is the width of the luma plane.    | Both         |
-| `$height` | The height of the video plane. In `Expr`, this is the height of the current plane. In `SingleExpr`, this is the height of the luma plane. | Both         |
+**Note on Deprecation:** The `$width` and `$height` constants are deprecated and will be removed in a future version. Please use the corresponding macros provided by the `meta` standard library instead.
+
+| Constant  | Description                                                                                                                                                | Availability |
+| :-------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------- |
+| `$pi`     | The value of π.                                                                                                                                            | Both         |
+| `$N`      | The current frame number (0-based).                                                                                                                        | Both         |
+| `$X`      | The current column coordinate (chroma-subsampling counted).                                                                                                | `Expr` only  |
+| `$Y`      | The current row coordinate (chroma-subsampling counted).                                                                                                   | `Expr` only  |
+| `$width`  | (**Deprecated**) The width of the video plane. In `Expr`, this is the width of the current plane. In `SingleExpr`, this is the width of the luma plane.    | Both         |
+| `$height` | (**Deprecated**) The height of the video plane. In `Expr`, this is the height of the current plane. In `SingleExpr`, this is the height of the luma plane. | Both         |
 
 ### 5.4. Source Clips
 
@@ -599,6 +605,8 @@ Access a pixel at a dynamically calculated coordinate using the 3-argument `dyn(
 In `SingleExpr` mode, all data I/O is explicit and uses absolute coordinates.
 
 #### Plane-Specific Dimensions
+
+**Deprecated:** The `frame.width[N]` and `frame.height[N]` constructs are deprecated and will be removed in a future version. Please use the corresponding macros provided by the `meta` standard library instead.
 
 Access the width and height of specific planes using `frame.width[N]` and `frame.height[N]`.
 

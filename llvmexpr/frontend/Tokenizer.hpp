@@ -40,8 +40,8 @@ enum class TokenType : std::uint8_t {
     CONSTANT_CLIP_HEIGHT,       // srcN:height
     CONSTANT_CLIP_PLANE_WIDTH,  // srcN:width^plane_no
     CONSTANT_CLIP_PLANE_HEIGHT, // srcN:height^plane_no
-    CONSTANT_N,
-    CONSTANT_PI,
+    CONSTANT_N,                 // N
+    CONSTANT_PI,                // pi
 
     // Variable Ops
     VAR_STORE, // my_var!
