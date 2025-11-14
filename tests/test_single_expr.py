@@ -345,6 +345,7 @@ def test_array_float_to_int_index():
     # 2.9 should truncate to 2
     assert frame.props["result"] == pytest.approx(30.0)
 
+
 def test_array_reallocation():
     """Test that dynamically allocated arrays can be reallocated."""
     clip = core.std.BlankClip(width=10, height=10, format=vs.GRAY8, color=0)
@@ -375,6 +376,7 @@ def test_error_on_array_reallocation():
     ):
         core.llvmexpr.SingleExpr(clip, "a{}^10 10 a{}^")
 
+
 def test_single_expr_frame_property_access_multiple_clips() -> None:
     """Test that SingleExpr can access frame properties from multiple clips without collision."""
     c0 = core.std.BlankClip(format=vs.GRAYS, color=0.0)
@@ -393,3 +395,52 @@ def test_single_expr_frame_property_access_multiple_clips() -> None:
     frame_props = res_store.get_frame(0).props
     assert frame_props["out0"] == pytest.approx(0.25)
     assert frame_props["out1"] == pytest.approx(0.75)
+
+
+def test_multi_clip_different_dimensions():
+    """Test that SingleExpr can handle clips with different dimensions."""
+    clip1 = core.std.BlankClip(width=100, height=100, format=vs.GRAY8, color=10)
+    clip2 = core.std.BlankClip(width=200, height=200, format=vs.GRAY8, color=20)
+    expr = "10 10 src0^0[] 150 150 src1^0[] + Sum$"
+    res = core.llvmexpr.SingleExpr([clip1, clip2], expr)
+    frame = res.get_frame(0)
+    assert frame.props["Sum"] == 30
+    assert res.width == 100
+    assert res.height == 100
+
+
+def test_clip_dimensions_tokens():
+    """Test getting dimensions of specific clips."""
+    clip1 = core.std.BlankClip(width=1280, height=720, format=vs.YUV420P8)
+    clip2 = core.std.BlankClip(width=640, height=480, format=vs.YUV444P10)
+    clip3 = core.std.BlankClip(width=1920, height=1080, format=vs.GRAY16)
+
+    expr = """
+        x:width c1w$
+        x:height c1h$
+        x:width^1 c1wp1$
+        x:height^1 c1hp1$
+
+        y:width c2w$
+        y:height c2h$
+        y:width^2 c2wp2$
+        y:height^2 c2hp2$
+
+        src2:width c3w$
+        src2:height c3h$
+    """
+    res = core.llvmexpr.SingleExpr([clip1, clip2, clip3], expr)
+    frame = res.get_frame(0)
+
+    assert frame.props["c1w"] == 1280
+    assert frame.props["c1h"] == 720
+    assert frame.props["c1wp1"] == 1280 / 2
+    assert frame.props["c1hp1"] == 720 / 2
+
+    assert frame.props["c2w"] == 640
+    assert frame.props["c2h"] == 480
+    assert frame.props["c2wp2"] == 640
+    assert frame.props["c2hp2"] == 480
+
+    assert frame.props["c3w"] == 1920
+    assert frame.props["c3h"] == 1080

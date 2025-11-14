@@ -93,6 +93,10 @@ These operators push a specific value onto the stack without needing an operand.
 - `height`: The height of the frame (of the current plane in `Expr`, or the container/luma plane in `SingleExpr`).
 - `width^plane_no`: (**SingleExpr only**) The width of the specified plane (`plane_no` is an integer, e.g., `width^0`). This is useful for formats with subsampled chroma.
 - `height^plane_no`: (**SingleExpr only**) The height of the specified plane (e.g., `height^1`). This is useful for formats with subsampled chroma.
+- `C:width`: (**SingleExpr only**) The width of the luma plane of a specific input clip `C` (e.g., `x:width`, `src1:width`).
+- `C:height`: (**SingleExpr only**) The height of the luma plane of a specific input clip `C`.
+- `C:width^P`: (**SingleExpr only**) The width of plane `P` of a specific input clip `C` (e.g., `y:width^1`).
+- `C:height^P`: (**SingleExpr only**) The height of plane `P` of a specific input clip `C`.
 - `X`: (**Expr only**) The current pixel's column coordinate.
 - `Y`: (**Expr only**) The current pixel's row coordinate.
 

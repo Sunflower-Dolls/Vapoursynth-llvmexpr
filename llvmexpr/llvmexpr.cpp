@@ -84,6 +84,7 @@ struct SingleExprFrameData {
 thread_local SingleExprFrameData
     g_frame_data; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
+template <bool check_dimensions>
 void validateAndInitClips(BaseExprData* d, const VSMap* in,
                           const VSAPI* vsapi) {
     int err = 0;
@@ -106,10 +107,13 @@ void validateAndInitClips(BaseExprData* d, const VSMap* in,
         }
     }
 
-    for (int i = 1; i < d->num_inputs; ++i) {
-        if (vi[i]->width != vi[0]->width || vi[i]->height != vi[0]->height) {
-            throw std::runtime_error(
-                "All clips must have the same dimensions.");
+    if constexpr (check_dimensions) {
+        for (int i = 1; i < d->num_inputs; ++i) {
+            if (vi[i]->width != vi[0]->width ||
+                vi[i]->height != vi[0]->height) {
+                throw std::runtime_error(
+                    "All clips must have the same dimensions.");
+            }
         }
     }
 
@@ -375,7 +379,7 @@ exprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
     int err = 0;
 
     try {
-        validateAndInitClips(d.get(), in, vsapi);
+        validateAndInitClips<true>(d.get(), in, vsapi);
         parseFormatParam(d.get(), in, vsapi, core);
 
         d->mirror_boundary = vsapi->mapGetInt(in, "boundary", 0, &err) != 0;
@@ -599,7 +603,7 @@ singleExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
     int err = 0;
 
     try {
-        validateAndInitClips(d.get(), in, vsapi);
+        validateAndInitClips<false>(d.get(), in, vsapi);
         parseFormatParam(d.get(), in, vsapi, core);
 
         d->mirror_boundary = vsapi->mapGetInt(in, "boundary", 0, &err) != 0;

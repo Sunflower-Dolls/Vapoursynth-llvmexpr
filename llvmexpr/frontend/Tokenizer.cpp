@@ -614,6 +614,74 @@ inline std::optional<Token> parse_plane_height(std::string_view input) {
     return std::nullopt;
 }
 
+inline std::optional<Token> parse_clip_width(std::string_view input) {
+    if (auto m = ctre::match<R"(^(?:src(\d+)|([x-za-w])):width$)">(input)) {
+        TokenPayload_ClipDim data;
+        if (m.template get<1>()) {
+            data.clip_idx = svtoi(m.template get<1>().to_view());
+        } else if (m.template get<2>()) {
+            data.clip_idx =
+                parse_std_clip_idx(m.template get<2>().to_view()[0]);
+        }
+        return Token{.type = TokenType::CONSTANT_CLIP_WIDTH,
+                     .text = std::string(input),
+                     .payload = data};
+    }
+    return std::nullopt;
+}
+
+inline std::optional<Token> parse_clip_height(std::string_view input) {
+    if (auto m = ctre::match<R"(^(?:src(\d+)|([x-za-w])):height$)">(input)) {
+        TokenPayload_ClipDim data;
+        if (m.template get<1>()) {
+            data.clip_idx = svtoi(m.template get<1>().to_view());
+        } else if (m.template get<2>()) {
+            data.clip_idx =
+                parse_std_clip_idx(m.template get<2>().to_view()[0]);
+        }
+        return Token{.type = TokenType::CONSTANT_CLIP_HEIGHT,
+                     .text = std::string(input),
+                     .payload = data};
+    }
+    return std::nullopt;
+}
+
+inline std::optional<Token> parse_clip_plane_width(std::string_view input) {
+    if (auto m =
+            ctre::match<R"(^(?:src(\d+)|([x-za-w])):width\^(\d+)$)">(input)) {
+        TokenPayload_ClipPlaneDim data;
+        if (m.template get<1>()) {
+            data.clip_idx = svtoi(m.template get<1>().to_view());
+        } else if (m.template get<2>()) {
+            data.clip_idx =
+                parse_std_clip_idx(m.template get<2>().to_view()[0]);
+        }
+        data.plane_idx = svtoi(m.template get<3>().to_view());
+        return Token{.type = TokenType::CONSTANT_CLIP_PLANE_WIDTH,
+                     .text = std::string(input),
+                     .payload = data};
+    }
+    return std::nullopt;
+}
+
+inline std::optional<Token> parse_clip_plane_height(std::string_view input) {
+    if (auto m =
+            ctre::match<R"(^(?:src(\d+)|([x-za-w])):height\^(\d+)$)">(input)) {
+        TokenPayload_ClipPlaneDim data;
+        if (m.template get<1>()) {
+            data.clip_idx = svtoi(m.template get<1>().to_view());
+        } else if (m.template get<2>()) {
+            data.clip_idx =
+                parse_std_clip_idx(m.template get<2>().to_view()[0]);
+        }
+        data.plane_idx = svtoi(m.template get<3>().to_view());
+        return Token{.type = TokenType::CONSTANT_CLIP_PLANE_HEIGHT,
+                     .text = std::string(input),
+                     .payload = data};
+    }
+    return std::nullopt;
+}
+
 inline std::optional<Token> parse_dup(std::string_view input) {
     if (auto m = ctre::match<R"(^dup(\d*)$)">(input)) {
         int n = 0;
@@ -1359,6 +1427,34 @@ constexpr auto get_token_definitions() {
                         .behavior =
                             TokenBehavior{.arity = 0, .stack_effect = 1},
                         .parser = parse_plane_height,
+                        .available_in_expr = false,
+                        .available_in_single_expr = true},
+        TokenDefinition{.type = TokenType::CONSTANT_CLIP_WIDTH,
+                        .name = "clip_width",
+                        .behavior =
+                            TokenBehavior{.arity = 0, .stack_effect = 1},
+                        .parser = parse_clip_width,
+                        .available_in_expr = false,
+                        .available_in_single_expr = true},
+        TokenDefinition{.type = TokenType::CONSTANT_CLIP_HEIGHT,
+                        .name = "clip_height",
+                        .behavior =
+                            TokenBehavior{.arity = 0, .stack_effect = 1},
+                        .parser = parse_clip_height,
+                        .available_in_expr = false,
+                        .available_in_single_expr = true},
+        TokenDefinition{.type = TokenType::CONSTANT_CLIP_PLANE_WIDTH,
+                        .name = "clip_plane_width",
+                        .behavior =
+                            TokenBehavior{.arity = 0, .stack_effect = 1},
+                        .parser = parse_clip_plane_width,
+                        .available_in_expr = false,
+                        .available_in_single_expr = true},
+        TokenDefinition{.type = TokenType::CONSTANT_CLIP_PLANE_HEIGHT,
+                        .name = "clip_plane_height",
+                        .behavior =
+                            TokenBehavior{.arity = 0, .stack_effect = 1},
+                        .parser = parse_clip_plane_height,
                         .available_in_expr = false,
                         .available_in_single_expr = true},
         TokenDefinition{.type = TokenType::EXIT_NO_WRITE,

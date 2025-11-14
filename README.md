@@ -65,7 +65,7 @@ llvmexpr.Expr(clip[] clips, string[] expr[, int format, int boundary=0, string d
 **Parameters:**
 - `clips`: Input video clips
 - `expr`: Expression strings (one per plane). Format depends on `infix` parameter
-- `format`: Output format (optional)
+- `format`: Output format (optional). This parameter controls the `sampleType` (integer or float) and `bitsPerSample` (bit depth) of the output clip. The `colorFamily`, `subSamplingW`, `subSamplingH`, `width`, and `height` of the output clip are always inherited from the first input clip and cannot be changed by this parameter.
 - `boundary`: Boundary handling mode (0=clamp, 1=mirror)
 - `dump_ir`: Path to dump LLVM IR for debugging (optional)
 - `opt_level`: Optimization level (> 0, default: 5)
@@ -89,7 +89,7 @@ llvmexpr.SingleExpr(clip[] clips, string expr[, int format, int boundary=0, stri
 **Parameters:**
 - `clips`: Input video clips.
 - `expr`: A single expression string. Unlike `Expr`, only one string is accepted for all planes. Format depends on `infix` parameter
-- `format`: Output format (optional)
+- `format`: Output format (optional). This parameter controls the `sampleType` (integer or float) and `bitsPerSample` (bit depth) of the output clip. The `colorFamily`, `subSamplingW`, `subSamplingH`, `width`, and `height` of the output clip are always inherited from the first input clip and cannot be changed by this parameter.
 - `boundary`: Boundary handling mode for pixel reads (0=clamp, 1=mirror). This does not affect writes.
 - `dump_ir`: Path to dump LLVM IR for debugging (optional).
 - `opt_level`: Optimization level (> 0, default: 5).

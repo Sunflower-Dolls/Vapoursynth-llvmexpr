@@ -30,12 +30,16 @@
 enum class TokenType : std::uint8_t {
     // Literals & Constants
     NUMBER,
-    CONSTANT_X,
-    CONSTANT_Y,
-    CONSTANT_WIDTH,
-    CONSTANT_HEIGHT,
-    CONSTANT_PLANE_WIDTH,
-    CONSTANT_PLANE_HEIGHT,
+    CONSTANT_X,                 // X
+    CONSTANT_Y,                 // Y
+    CONSTANT_WIDTH,             // width
+    CONSTANT_HEIGHT,            // height
+    CONSTANT_PLANE_WIDTH,       // width^plane_no
+    CONSTANT_PLANE_HEIGHT,      // height^plane_no
+    CONSTANT_CLIP_WIDTH,        // srcN:width
+    CONSTANT_CLIP_HEIGHT,       // srcN:height
+    CONSTANT_CLIP_PLANE_WIDTH,  // srcN:width^plane_no
+    CONSTANT_CLIP_PLANE_HEIGHT, // srcN:height^plane_no
     CONSTANT_N,
     CONSTANT_PI,
 
@@ -174,6 +178,15 @@ struct TokenPayload_PlaneDim {
     int plane_idx;
 };
 
+struct TokenPayload_ClipDim {
+    int clip_idx;
+};
+
+struct TokenPayload_ClipPlaneDim {
+    int clip_idx;
+    int plane_idx;
+};
+
 struct TokenPayload_ArrayOp {
     std::string name;
     int static_size = 0; // ARRAY_ALLOC_STATIC
@@ -186,6 +199,7 @@ struct Token {
                      TokenPayload_ClipAccess, TokenPayload_PropAccess,
                      TokenPayload_ClipAccessPlane, TokenPayload_StoreAbsPlane,
                      TokenPayload_PropStore, TokenPayload_PlaneDim,
+                     TokenPayload_ClipDim, TokenPayload_ClipPlaneDim,
                      TokenPayload_ArrayOp>;
 
     TokenType type;

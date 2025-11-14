@@ -280,6 +280,44 @@ bool SingleExprIRGenerator::process_mode_specific_token(
     llvm::Type* i32_ty = builder.getInt32Ty();
 
     switch (token.type) {
+    case TokenType::CONSTANT_CLIP_WIDTH: {
+        const auto& payload = std::get<TokenPayload_ClipDim>(token.payload);
+        const VSVideoInfo* vinfo = vi[payload.clip_idx];
+        rpn_stack.push_back(
+            builder.CreateSIToFP(builder.getInt32(vinfo->width), float_ty));
+        return true;
+    }
+    case TokenType::CONSTANT_CLIP_HEIGHT: {
+        const auto& payload = std::get<TokenPayload_ClipDim>(token.payload);
+        const VSVideoInfo* vinfo = vi[payload.clip_idx];
+        rpn_stack.push_back(
+            builder.CreateSIToFP(builder.getInt32(vinfo->height), float_ty));
+        return true;
+    }
+    case TokenType::CONSTANT_CLIP_PLANE_WIDTH: {
+        const auto& payload =
+            std::get<TokenPayload_ClipPlaneDim>(token.payload);
+        const VSVideoInfo* vinfo = vi[payload.clip_idx];
+        int plane_w = vinfo->width;
+        if (vinfo->format.colorFamily == cfYUV && payload.plane_idx > 0) {
+            plane_w >>= vinfo->format.subSamplingW;
+        }
+        rpn_stack.push_back(
+            builder.CreateSIToFP(builder.getInt32(plane_w), float_ty));
+        return true;
+    }
+    case TokenType::CONSTANT_CLIP_PLANE_HEIGHT: {
+        const auto& payload =
+            std::get<TokenPayload_ClipPlaneDim>(token.payload);
+        const VSVideoInfo* vinfo = vi[payload.clip_idx];
+        int plane_h = vinfo->height;
+        if (vinfo->format.colorFamily == cfYUV && payload.plane_idx > 0) {
+            plane_h >>= vinfo->format.subSamplingH;
+        }
+        rpn_stack.push_back(
+            builder.CreateSIToFP(builder.getInt32(plane_h), float_ty));
+        return true;
+    }
     case TokenType::CONSTANT_PLANE_WIDTH: {
         const auto& payload = std::get<TokenPayload_PlaneDim>(token.payload);
         int plane_w = vo->width; // NOLINT(cppcoreguidelines-init-variables)

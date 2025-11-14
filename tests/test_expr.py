@@ -603,3 +603,16 @@ def test_array_uninitialized_error():
     clip = core.std.BlankClip(format=vs.GRAYS, width=10, height=10, color=0)
     with pytest.raises(vs.Error, match="Array is uninitialized"):
         core.llvmexpr.Expr(clip, "0 arr{}@", vs.GRAYS)
+
+
+@pytest.mark.parametrize(
+    "expr", ["x:width", "y:height", "src0:width^0", "z:height^1"]
+)
+def test_clip_dim_tokens_disabled_in_expr(expr: str):
+    """Test that clip dimension tokens are disabled in Expr mode."""
+    clip1 = core.std.BlankClip()
+    clip2 = core.std.BlankClip()
+    clip3 = core.std.BlankClip()
+    clip4 = core.std.BlankClip()
+    with pytest.raises(vs.Error, match="Invalid token"):
+        core.llvmexpr.Expr([clip1, clip2, clip3, clip4], expr)
