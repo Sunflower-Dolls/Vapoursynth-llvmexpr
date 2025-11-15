@@ -19,6 +19,7 @@
 
 #include <array>
 #include <bit>
+#include <cmath>
 #include <cstdint>
 #include <format>
 #include <map>
@@ -68,7 +69,7 @@ struct ExprData : BaseExprData {
 
 struct SingleExprData : BaseExprData {
     CompiledFunction compiled;
-    std::vector<std::string> output_props;
+    std::vector<std::pair<std::string, PropWriteType>> output_props;
     std::map<std::string, int> output_prop_map;
     std::vector<Token> tokens;
     std::unique_ptr<analysis::AnalysisManager> analysis_manager;
@@ -548,9 +549,15 @@ const VSFrame*
                 expr_str += token.text;
             }
 
+            std::vector<std::string> output_prop_names;
+            output_prop_names.reserve(d->output_props.size());
+            for (const auto& p : d->output_props) {
+                output_prop_names.push_back(p.first);
+            }
+
             const std::string key = generate_cache_key(
                 expr_str, &d->vi, vsapi, vi, d->mirror_boundary, d->prop_map,
-                d->vi.width, d->vi.height, d->output_props);
+                d->vi.width, d->vi.height, output_prop_names);
 
             std::lock_guard<std::mutex> lock(cache_mutex);
             if (!jit_cache.contains(key)) {
@@ -565,7 +572,7 @@ const VSFrame*
                         std::vector<Token>(d->tokens), &d->vi, vi, d->vi.width,
                         d->vi.height, d->mirror_boundary, d->dump_ir_path,
                         d->prop_map, func_name, d->opt_level, d->approx_math,
-                        results, ExprMode::SINGLE_EXPR, d->output_props);
+                        results, ExprMode::SINGLE_EXPR, output_prop_names);
                     jit_cache[key] = compiler.compile();
                 } catch (const std::exception& e) {
                     for (const auto& frame : src_frames) {
@@ -580,11 +587,55 @@ const VSFrame*
 
         d->compiled.func_ptr(d, rwptrs.data(), strides.data(), props.data());
 
+        // Resolve prop types and write to output frame
+        enum class ResolvedPropWriteType : std::uint8_t { INT, FLOAT };
+        std::vector<ResolvedPropWriteType> resolved_types;
+        resolved_types.reserve(d->output_props.size());
+        const VSMap* src_props = vsapi->getFramePropertiesRO(src_frames[0]);
+
+        for (const auto& prop_info : d->output_props) {
+            const auto& prop_name = prop_info.first;
+            const auto prop_write_type = prop_info.second;
+
+            switch (prop_write_type) {
+            case PropWriteType::INT:
+                resolved_types.push_back(ResolvedPropWriteType::INT);
+                break;
+            case PropWriteType::FLOAT:
+                resolved_types.push_back(ResolvedPropWriteType::FLOAT);
+                break;
+            case PropWriteType::AUTO_INT:
+            case PropWriteType::AUTO_FLOAT:
+                int existing_type =
+                    vsapi->mapGetType(src_props, prop_name.c_str());
+                if (existing_type == ptInt) {
+                    resolved_types.push_back(ResolvedPropWriteType::INT);
+                } else if (existing_type == ptFloat) {
+                    resolved_types.push_back(ResolvedPropWriteType::FLOAT);
+                } else {
+                    if (prop_write_type == PropWriteType::AUTO_INT) {
+                        resolved_types.push_back(ResolvedPropWriteType::INT);
+                    } else {
+                        resolved_types.push_back(ResolvedPropWriteType::FLOAT);
+                    }
+                }
+                break;
+            }
+        }
+
         VSMap* dst_props = vsapi->getFramePropertiesRW(dst_frame);
         for (size_t i = 0; i < d->output_props.size(); ++i) {
-            const auto& prop_name = d->output_props[i];
+            const auto& prop_name = d->output_props[i].first;
             float value = props[1 + d->required_props.size() + i];
-            vsapi->mapSetFloat(dst_props, prop_name.c_str(), value, maReplace);
+
+            if (resolved_types[i] == ResolvedPropWriteType::INT) {
+                auto int_value = static_cast<int64_t>(lroundf(value));
+                vsapi->mapSetInt(dst_props, prop_name.c_str(), int_value,
+                                 maReplace);
+            } else { // FLOAT
+                vsapi->mapSetFloat(dst_props, prop_name.c_str(), value,
+                                   maReplace);
+            }
         }
 
         for (const auto& frame : src_frames) {
@@ -687,7 +738,8 @@ singleExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
                 if (!d->output_prop_map.contains(payload.prop_name)) {
                     d->output_prop_map[payload.prop_name] =
                         static_cast<int>(d->output_props.size());
-                    d->output_props.push_back(payload.prop_name);
+                    d->output_props.emplace_back(payload.prop_name,
+                                                 payload.type);
                 }
             }
         }

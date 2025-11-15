@@ -170,8 +170,16 @@ struct TokenPayload_StoreAbsPlane {
     int plane_idx;
 };
 
+enum class PropWriteType : std::uint8_t {
+    FLOAT,      // $f or $
+    INT,        // $i
+    AUTO_INT,   // $ai
+    AUTO_FLOAT, // $af
+};
+
 struct TokenPayload_PropStore {
     std::string prop_name;
+    PropWriteType type;
 };
 
 struct TokenPayload_PlaneDim {

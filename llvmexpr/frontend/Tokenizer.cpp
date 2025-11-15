@@ -958,12 +958,28 @@ inline std::optional<Token> parse_store_abs_plane(std::string_view input) {
 }
 
 inline std::optional<Token> parse_prop_store(std::string_view input) {
-    if (auto m = ctre::match<R"(^([a-zA-Z_][a-zA-Z0-9_]*)\$$)">(input)) {
+    if (auto m =
+            ctre::match<R"(^([a-zA-Z_][a-zA-Z0-9_]*)\$(af|ai|f|i)?$)">(input)) {
+        PropWriteType type = PropWriteType::FLOAT; // Default for bare '$'
+        if (m.template get<2>()) {
+            auto suffix = m.template get<2>().to_view();
+            if (suffix == "i") {
+                type = PropWriteType::INT;
+            } else if (suffix == "f") {
+                type = PropWriteType::FLOAT;
+            } else if (suffix == "ai") {
+                type = PropWriteType::AUTO_INT;
+            } else if (suffix == "af") {
+                type = PropWriteType::AUTO_FLOAT;
+            }
+        }
+
         return Token{
             .type = TokenType::PROP_STORE,
             .text = std::string(input),
             .payload = TokenPayload_PropStore{
-                .prop_name = std::string(m.template get<1>().to_view())}};
+                .prop_name = std::string(m.template get<1>().to_view()),
+                .type = type}};
     }
     return std::nullopt;
 }

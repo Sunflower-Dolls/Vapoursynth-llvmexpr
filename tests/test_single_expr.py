@@ -444,3 +444,68 @@ def test_clip_dimensions_tokens():
 
     assert frame.props["c3w"] == 1920
     assert frame.props["c3h"] == 1080
+
+
+@pytest.mark.parametrize(
+    "expr, prop_name, expected_value, expected_type",
+    [
+        ("123 MyInt$i", "MyInt", 123, int),
+        ("123.7 MyIntRound$i", "MyIntRound", 124, int),
+
+        ("45.6 MyFloat$f", "MyFloat", pytest.approx(45.6), float),
+        ("45 MyFloatInt$f", "MyFloatInt", pytest.approx(45.0), float),
+
+        ("78.9 MyOldFloat$", "MyOldFloat", pytest.approx(78.9), float),
+    ],
+)
+def test_property_write_typed(expr, prop_name, expected_value, expected_type):
+    """Test writing properties with explicit type suffixes."""
+    clip = core.std.BlankClip()
+    res = core.llvmexpr.SingleExpr(clip, expr)
+    frame = res.get_frame(0)
+    assert prop_name in frame.props
+    value = frame.props[prop_name]
+    assert value == expected_value
+    assert isinstance(value, expected_type)
+
+
+def test_property_write_auto_int():
+    """Test auto-int ($ai) property writing."""
+    clip = core.std.BlankClip()
+    res = core.llvmexpr.SingleExpr(clip, "123.7 NoExist$ai")
+    frame = res.get_frame(0)
+    assert frame.props["NoExist"] == 124
+    assert isinstance(frame.props["NoExist"], int)
+
+    clip_with_int = clip.std.SetFrameProps(Existing=500)
+    res_with_int = core.llvmexpr.SingleExpr(clip_with_int, "999 Existing$ai")
+    frame_with_int = res_with_int.get_frame(0)
+    assert frame_with_int.props["Existing"] == 999
+    assert isinstance(frame_with_int.props["Existing"], int)
+
+    clip_with_float = clip.std.SetFrameProps(Existing=500.5)
+    res_with_float = core.llvmexpr.SingleExpr(clip_with_float, "999.9 Existing$ai")
+    frame_with_float = res_with_float.get_frame(0)
+    assert frame_with_float.props["Existing"] == pytest.approx(999.9)
+    assert isinstance(frame_with_float.props["Existing"], float)
+
+
+def test_property_write_auto_float():
+    """Test auto-float ($af) property writing."""
+    clip = core.std.BlankClip()
+    res = core.llvmexpr.SingleExpr(clip, "123.7 NoExist$af")
+    frame = res.get_frame(0)
+    assert frame.props["NoExist"] == pytest.approx(123.7)
+    assert isinstance(frame.props["NoExist"], float)
+
+    clip_with_int = clip.std.SetFrameProps(Existing=500)
+    res_with_int = core.llvmexpr.SingleExpr(clip_with_int, "999 Existing$af")
+    frame_with_int = res_with_int.get_frame(0)
+    assert frame_with_int.props["Existing"] == 999
+    assert isinstance(frame_with_int.props["Existing"], int)
+
+    clip_with_float = clip.std.SetFrameProps(Existing=500.5)
+    res_with_float = core.llvmexpr.SingleExpr(clip_with_float, "999.9 Existing$af")
+    frame_with_float = res_with_float.get_frame(0)
+    assert frame_with_float.props["Existing"] == pytest.approx(999.9)
+    assert isinstance(frame_with_float.props["Existing"], float)

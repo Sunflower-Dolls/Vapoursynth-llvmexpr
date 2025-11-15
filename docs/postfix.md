@@ -332,12 +332,24 @@ Since `SingleExpr` has no concept of a "current pixel," all data I/O must be exp
   - If the property is not a scalar numerical property, its value will be its first byte.
   - If the property does not exist, its value will be `NaN` (Not a Number).
 
-- **Writing (`SingleExpr` only):** `value prop_name$`
-  - The `$` operator, suffixed with a property name, writes a value to that frame property on the output frame.
+- **Writing (`SingleExpr` only):** `value prop_name$[suffix]`
+  - The `$` operator, suffixed with a property name and an optional type specifier, writes a value to a frame property on the output frame.
   - It pops one value from the stack and assigns it to the property `prop_name`.
   - If the property already exists, it is overwritten. This is useful for calculating and passing metadata.
   - **Atomicity:** Property writes are atomic. A subsequent read within the same expression will see the newly written value.
-  - **Example:** `x.PlaneStatsMax 2 / MyNewProp$` reads `PlaneStatsMax` from clip `x`, divides it by 2, and writes the result to a new property named `MyNewProp`.
+  - **Type Suffixes:** You can control the output property's type using a suffix.
+
+| Suffix      | Type         | Description                                                                                                                                        |
+| :---------- | :----------- | :------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `$` or `$f` | Float        | Writes the value as a **float**.                                                                                                                   |
+| `$i`        | Integer      | Writes the value as an **integer**. The value from the stack is rounded to the nearest integer before being stored.                                |
+| `$af`       | Auto Float   | If a property with the same name already exists on the first source frame, its type (int or float) is kept. Otherwise, it defaults to **float**.   |
+| `$ai`       | Auto Integer | If a property with the same name already exists on the first source frame, its type (int or float) is kept. Otherwise, it defaults to **integer**. |
+
+  - **Examples:**
+    - `x.PlaneStatsMax 2 / MyNewProp$f`: Writes the result as a float.
+    - `123.7 MyIntProp$i`: Rounds `123.7` to `124` and writes it as an integer.
+    - `N MyFrameNum$ai`: Writes the frame number. If `MyFrameNum` already exists on the source frame as a float, it will be overwritten as a float. If it doesn't exist or has a non-numerical type, it will be created as an integer.
 
 #### **4.5. `Expr`-Specific Output Control**
 
