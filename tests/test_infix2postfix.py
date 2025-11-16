@@ -1576,6 +1576,18 @@ RESULT = f(10)
         success, output = run_infix2postfix(infix, "expr")
         assert success, f"Failed: {output}"
 
+    def test_goto_skips_variable_initialization(self):
+        """Test that goto cannot skip the first assignment of a variable."""
+        infix = """
+    goto skip_init
+    a = 10
+skip_init:
+    RESULT = a
+"""
+        success, output = run_infix2postfix(infix, "expr")
+        assert not success, "Should fail because goto skips variable initialization"
+        assert "goto jumps over initialization of variable 'a'" in output
+
     # RETURN related tests
     def test_return_in_global_scope(self):
         infix = "return 10"
@@ -2858,7 +2870,6 @@ flag = 1
 if (flag) {
     goto skip
 }
-a = 0
 skip:
 RESULT = 0
 """

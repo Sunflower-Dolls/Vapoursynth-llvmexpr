@@ -970,14 +970,13 @@ void SemanticAnalyzer::analyze(LabelStmt& stmt) {
         const auto& pending_gotos = current_pending_gotos.at(stmt.name.value);
         for (const auto& goto_info : pending_gotos) {
             for (const auto& [name, symbol_at_label] : symbols_at_label) {
-                if (symbol_at_label->kind != SymbolKind::VARIABLE &&
-                    symbol_at_label->kind != SymbolKind::PARAMETER) {
-                    continue;
-                }
 
-                if (!goto_info.symbols_at_goto.contains(name)) {
+                if (symbol_at_label->kind == SymbolKind::VARIABLE &&
+                    !goto_info.symbols_at_goto.contains(name)) {
                     reportError(
-                        std::format("goto jumps over initialization of variable '{}'", name),
+                        std::format(
+                            "goto jumps over initialization of variable '{}'",
+                            name),
                         goto_info.stmt->range);
                 }
             }
