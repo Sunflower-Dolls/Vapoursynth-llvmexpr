@@ -524,6 +524,32 @@ def test_prop_write_safety_error():
         core.llvmexpr.SingleExpr(clip, expr_jump)
 
 
+def test_prop_write_inconsistent_type_error():
+    """Test that writing to a property with inconsistent types raises an error."""
+    clip = core.std.BlankClip()
+
+    expr_fi = "1.0 MyProp$f 2 MyProp$i"
+    with pytest.raises(
+        vs.Error,
+        match=r"Inconsistent types used for property 'MyProp'\. Previous type: FLOAT \(idx: 1\), current type: INT \(idx: 3\)\.",
+    ):
+        core.llvmexpr.SingleExpr(clip, expr_fi)
+
+    expr_di = "1.0 MyProp$ 2 MyProp$i"
+    with pytest.raises(
+        vs.Error,
+        match=r"Inconsistent types used for property 'MyProp'\. Previous type: FLOAT \(idx: 1\), current type: INT \(idx: 3\)\.",
+    ):
+        core.llvmexpr.SingleExpr(clip, expr_di)
+
+    expr_afi = "1.0 MyProp$af 2 MyProp$i"
+    with pytest.raises(
+        vs.Error,
+        match=r"Inconsistent types used for property 'MyProp'\. Previous type: AUTO_FLOAT \(idx: 1\), current type: INT \(idx: 3\)\.",
+    ):
+        core.llvmexpr.SingleExpr(clip, expr_afi)
+
+
 def test_prop_write_safety_valid():
     """Test valid prop writes that are guaranteed to execute."""
     clip = core.std.BlankClip()

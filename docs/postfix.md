@@ -354,6 +354,7 @@ Since `SingleExpr` has no concept of a "current pixel," all data I/O must be exp
 
     - **Dominance Requirement:** A property write must be in a code block that *dominates* all possible exit points of the expression. In simpler terms, it must be impossible to reach the end of the expression without executing the property write.
     - **Error on Conditional Writes:** If a property write is placed inside a conditional block and there is a path through the code that bypasses this block, the compiler will raise an error. This prevents ambiguous or non-deterministic behavior where a property might or might not be written depending on runtime conditions.
+    - **Type Consistency:** All write operations to the same property within a single expression must use a consistent type. This check also applies to auto-types (`$af`, `$ai`).
 
   - **Examples:**
     - `x.PlaneStatsMax 2 / MyNewProp$f`: Writes the result as a float.
