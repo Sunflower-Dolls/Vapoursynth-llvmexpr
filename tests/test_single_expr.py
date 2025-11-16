@@ -451,10 +451,8 @@ def test_clip_dimensions_tokens():
     [
         ("123 MyInt$i", "MyInt", 123, int),
         ("123.7 MyIntRound$i", "MyIntRound", 124, int),
-
         ("45.6 MyFloat$f", "MyFloat", pytest.approx(45.6), float),
         ("45 MyFloatInt$f", "MyFloatInt", pytest.approx(45.0), float),
-
         ("78.9 MyOldFloat$", "MyOldFloat", pytest.approx(78.9), float),
     ],
 )
@@ -509,3 +507,34 @@ def test_property_write_auto_float():
     frame_with_float = res_with_float.get_frame(0)
     assert frame_with_float.props["Existing"] == pytest.approx(999.9)
     assert isinstance(frame_with_float.props["Existing"], float)
+
+
+def test_prop_write_safety_error():
+    """Test that a prop write that is not guaranteed to execute raises an error."""
+    clip = core.std.BlankClip()
+    expr_jump = """
+        N 10 > loop_end#
+        123 MyProp$
+        #loop_end
+    """
+    with pytest.raises(
+        vs.Error,
+        match="is not guaranteed to be executed",
+    ):
+        core.llvmexpr.SingleExpr(clip, expr_jump)
+
+
+def test_prop_write_safety_valid():
+    """Test valid prop writes that are guaranteed to execute."""
+    clip = core.std.BlankClip()
+
+    expr_after_loop = """
+        0 i!
+        #loop
+        i@ 1 + i!
+        i@ 10 < loop#
+        i@ MyProp$
+    """
+    res = core.llvmexpr.SingleExpr(clip, expr_after_loop)
+    frame = res.get_frame(0)
+    assert frame.props["MyProp"] == 10.0

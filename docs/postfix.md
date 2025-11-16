@@ -346,6 +346,12 @@ Since `SingleExpr` has no concept of a "current pixel," all data I/O must be exp
 | `$af`       | Auto Float   | If a property with the same name already exists on the first source frame, its type (int or float) is kept. Otherwise, it defaults to **float**.   |
 | `$ai`       | Auto Integer | If a property with the same name already exists on the first source frame, its type (int or float) is kept. Otherwise, it defaults to **integer**. |
 
+  - **Execution Guarantees and Safety:**
+    The compiler performs a rigorous static analysis to ensure that any property write operation is guaranteed to be executed, regardless of the control flow path taken.
+
+    - **Dominance Requirement:** A property write must be in a code block that *dominates* all possible exit points of the expression. In simpler terms, it must be impossible to reach the end of the expression without executing the property write.
+    - **Error on Conditional Writes:** If a property write is placed inside a conditional block and there is a path through the code that bypasses this block, the compiler will raise an error. This prevents ambiguous or non-deterministic behavior where a property might or might not be written depending on runtime conditions.
+
   - **Examples:**
     - `x.PlaneStatsMax 2 / MyNewProp$f`: Writes the result as a float.
     - `123.7 MyIntProp$i`: Rounds `123.7` to `124` and writes it as an integer.

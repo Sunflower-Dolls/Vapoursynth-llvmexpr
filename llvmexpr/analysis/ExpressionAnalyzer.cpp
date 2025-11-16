@@ -19,6 +19,7 @@
 
 #include "ExpressionAnalyzer.hpp"
 #include "framework/AnalysisError.hpp"
+#include "llvmexpr/analysis/passes/PropWriteSafetyPass.hpp"
 #include "llvmexpr/analysis/passes/StackSafetyPass.hpp"
 #include "llvmexpr/analysis/passes/ValidationPass.hpp"
 #include "passes/CoordinateUsagePass.hpp"
@@ -39,6 +40,7 @@ void ExpressionAnalyzer::analyze() {
     manager.getResult<RelAccessAnalysisPass>();
     manager.getResult<CoordinateUsagePass>();
     manager.getResult<VariableUsagePass>();
+    manager.getResult<PropWriteSafetyPass>();
 }
 
 } // namespace analysis

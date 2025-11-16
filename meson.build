@@ -118,6 +118,7 @@ sources = [
   'llvmexpr/analysis/passes/StaticAllocReachabilityPass.cpp',
   'llvmexpr/analysis/passes/ValidationPass.cpp',
   'llvmexpr/analysis/passes/StackSafetyPass.cpp',
+  'llvmexpr/analysis/passes/PropWriteSafetyPass.cpp',
   'llvmexpr/analysis/passes/RelAccessAnalysisPass.cpp',
   'llvmexpr/analysis/passes/CoordinateUsagePass.cpp',
   'llvmexpr/analysis/passes/VariableUsagePass.cpp',
