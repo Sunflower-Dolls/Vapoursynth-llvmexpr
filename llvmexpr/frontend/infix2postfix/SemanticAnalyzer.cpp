@@ -964,6 +964,8 @@ void SemanticAnalyzer::analyze(LabelStmt& stmt) {
     current_labels_seen.insert(stmt.name.value);
 
     if (current_pending_gotos.contains(stmt.name.value)) {
+        symbol->is_used = true;
+
         std::map<std::string, std::shared_ptr<Symbol>> symbols_at_label;
         getAllSymbols(current_scope, symbols_at_label);
 
