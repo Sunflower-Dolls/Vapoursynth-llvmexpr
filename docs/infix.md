@@ -835,8 +835,10 @@ if (condition) {
 
 Constraints and rules:
 
-- Jumps may cross `if/else` braces (C-like). Targets are resolved against any label defined in the global scope of the script.
+- Jumps may cross `if/else` braces (C-like).
+- The `goto` statement cannot jump over a variable's initialization statement and enter that variable's lexical scope.
 - The target label must exist somewhere in the script; otherwise a syntax error is raised.
+- Goto cannot jump across global scope and functions, or between functions.
 - Labels only mark positions; they do not execute anything by themselves.
 
 ### 10.3. While Loops

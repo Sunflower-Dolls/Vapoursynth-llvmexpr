@@ -97,6 +97,15 @@ class SemanticAnalyzer {
     void analyze(const GlobalDecl& stmt);
     void analyze(ArrayAssignStmt& stmt);
 
+    void getAllSymbols(
+        const SymbolTable* scope,
+        std::map<std::string, std::shared_ptr<Symbol>>& symbols) const;
+
+    struct ForwardGotoInfo {
+        GotoStmt* stmt;
+        std::map<std::string, std::shared_ptr<Symbol>> symbols_at_goto;
+    };
+
     void enterScope();
     void exitScope();
     std::shared_ptr<Symbol> defineSymbol(SymbolKind kind,
@@ -150,6 +159,9 @@ class SemanticAnalyzer {
     std::set<std::string> current_function_labels;
 
     std::vector<Diagnostic> diagnostics;
+
+    std::map<std::string, std::vector<ForwardGotoInfo>> current_pending_gotos;
+    std::set<std::string> current_labels_seen;
 
     const FunctionSignature* current_function = nullptr;
 };

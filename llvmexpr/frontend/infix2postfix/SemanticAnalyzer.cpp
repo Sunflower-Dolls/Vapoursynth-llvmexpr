@@ -41,6 +41,9 @@ bool SemanticAnalyzer::analyze(const Program* program) {
         return false;
     }
 
+    current_pending_gotos.clear();
+    current_labels_seen.clear();
+
     // Collect global labels
     for (const auto& stmt : program->statements) {
         if (auto* label_def = get_if<LabelStmt>(stmt.get())) {
@@ -679,6 +682,20 @@ const FunctionSignature* SemanticAnalyzer::resolveOverload(
     return nullptr;
 }
 
+void SemanticAnalyzer::getAllSymbols(
+    const SymbolTable* scope,
+    std::map<std::string, std::shared_ptr<Symbol>>& symbols) const {
+    if (scope == nullptr) {
+        return;
+    }
+    for (const auto& [name, symbol] : scope->get_symbols()) {
+        if (!symbols.contains(name)) {
+            symbols[name] = symbol;
+        }
+    }
+    getAllSymbols(scope->get_parent(), symbols);
+}
+
 void SemanticAnalyzer::validateClipReference(const std::string& clip_name,
                                              const Range& range) {
     std::string name = clip_name;
@@ -943,6 +960,30 @@ void SemanticAnalyzer::analyze(LabelStmt& stmt) {
     auto symbol = defineSymbol(SymbolKind::LABEL, stmt.name.value, Type::Value,
                                stmt.range);
     stmt.symbol = symbol;
+
+    current_labels_seen.insert(stmt.name.value);
+
+    if (current_pending_gotos.contains(stmt.name.value)) {
+        std::map<std::string, std::shared_ptr<Symbol>> symbols_at_label;
+        getAllSymbols(current_scope, symbols_at_label);
+
+        const auto& pending_gotos = current_pending_gotos.at(stmt.name.value);
+        for (const auto& goto_info : pending_gotos) {
+            for (const auto& [name, symbol_at_label] : symbols_at_label) {
+                if (symbol_at_label->kind != SymbolKind::VARIABLE &&
+                    symbol_at_label->kind != SymbolKind::PARAMETER) {
+                    continue;
+                }
+
+                if (!goto_info.symbols_at_goto.contains(name)) {
+                    reportError(
+                        std::format("goto jumps over initialization of variable '{}'", name),
+                        goto_info.stmt->range);
+                }
+            }
+        }
+        current_pending_gotos.erase(stmt.name.value);
+    }
 }
 
 void SemanticAnalyzer::analyze(GotoStmt& stmt) {
@@ -970,6 +1011,14 @@ void SemanticAnalyzer::analyze(GotoStmt& stmt) {
         }
     }
 
+    if (!current_labels_seen.contains(stmt.label.value)) {
+        // Forward jump
+        ForwardGotoInfo info;
+        info.stmt = &stmt;
+        getAllSymbols(current_scope, info.symbols_at_goto);
+        current_pending_gotos[stmt.label.value].push_back(info);
+    }
+
     auto symbol = current_scope->resolve(stmt.label.value);
     if (symbol) {
         symbol->is_used = true;
@@ -982,6 +1031,12 @@ void SemanticAnalyzer::analyze(GotoStmt& stmt) {
 }
 
 void SemanticAnalyzer::analyze(FunctionDef& stmt) {
+    // Save global goto state and clear for function analysis
+    auto saved_pending_gotos = std::move(current_pending_gotos);
+    current_pending_gotos.clear();
+    auto saved_labels_seen = std::move(current_labels_seen);
+    current_labels_seen.clear();
+
     // Collect labels in function
     auto saved_current_function_labels = current_function_labels;
     current_function_labels.clear();
@@ -1073,6 +1128,10 @@ void SemanticAnalyzer::analyze(FunctionDef& stmt) {
     // Restore context
     current_function = saved_current_function;
     current_function_labels = saved_current_function_labels;
+
+    // Restore global goto state
+    current_pending_gotos = std::move(saved_pending_gotos);
+    current_labels_seen = std::move(saved_labels_seen);
 }
 
 void SemanticAnalyzer::analyze([[maybe_unused]] const GlobalDecl& stmt) {

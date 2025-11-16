@@ -288,7 +288,10 @@ Both `Expr` and `SingleExpr` can read pixel data and frame properties. However, 
 
 ##### **4.4.1. Pixel Access (`Expr` only)**
 
-In `Expr`, you can access pixels from any clip at absolute or relative coordinates.
+In `Expr`, there are three ways to access pixel values from input clips, all of which are specific to this mode.
+
+- **Current Pixel Access:** `clip`
+  - Simply using a clip identifier (e.g., `x`, `y`, `srcN`) is the most fundamental operation. It pushes the value of the pixel at the current coordinate (`X`, `Y`) from that clip onto the stack. All basic expressions like `x 2 *` rely on this behavior.
 
 - **Relative Access:** `clip[relX, relY]:[mode]`
   - Accesses a pixel relative to the current coordinate (`X`, `Y`). `relX` and `relY` must be integer constants.
