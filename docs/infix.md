@@ -563,21 +563,54 @@ Read a property from a clip's frame properties using `clip.propname` syntax.
 
 #### Writing (`SingleExpr` only)
 
-Write a frame property using the `set_prop()` built-in function.
+Write a frame property using the `set_prop` family of built-in functions. These functions allow you to specify the data type of the property being written.
 
-- **Signature:** `set_prop(property_name, value)`
-- `property_name`: Property name as an identifier (not a string). The transpiler treats `property_name` as a literal key for the property map; it is not evaluated as a variable.
-- `value`: The value to write, which can be the result of an expression.
+- **Signatures:**
+  - `set_prop(property_name, value)` (alias for `set_propf`)
+  - `set_propf(property_name, value)`
+  - `set_propi(property_name, value)`
+  - `set_propaf(property_name, value)`
+  - `set_propai(property_name, value)`
 
+- **Parameters:**
+  - `property_name`: Property name as an identifier (not a string). The transpiler treats `property_name` as a literal key for the property map; it is not evaluated as a variable.
+  - `value`: The value to write, which can be the result of an expression.
+
+- **Type Suffixes:**
+  Each function corresponds to a type suffix in the underlying postfix language, controlling how the property is stored:
+
+| Function     | Postfix Suffix | Resulting Type                                                                                               |
+| :----------- | :------------- | :----------------------------------------------------------------------------------------------------------- |
+| `set_propf`  | `$f`           | Float                                                                                                        |
+| `set_propi`  | `$i`           | Integer (value is rounded to the nearest integer)                                                            |
+| `set_propaf` | `$af`          | **Auto Float**: Keeps the type of an existing property on the first source frame, otherwise defaults to float.     |
+| `set_propai` | `$ai`          | **Auto Integer**: Keeps the type of an existing property on the first source frame, otherwise defaults to integer. |
+
+**Undefined Behavior with Conditional Writes**
+
+Undefined behavior can occur when a property is written conditionally (e.g., inside an `if` statement). If the condition is false and the write operation is skipped, llvmexpr attempts to copy the property from the first source frame (`src0`).
+
+The result is **undefined** if the property on the first source frame:
+*   Does not exist, or
+*   Is not a numeric type.
+
+If the property exists on the source frame and is numeric, it will be safely copied and converted to the target type.
+
+**Type Consistency**
+
+The compiler enforces type consistency at compile time. You cannot write to the same property using functions that imply different types (e.g., mixing `set_propi` and `set_propai` for `MyProp` will result in an error).
+
+**Example:**
 ```
-# Write a simple value
-set_prop(MyProperty, 123.456);
+# Write a simple integer value
+set_propi(MyInteger, 123);
 
-# Write computed value
-w = frame.width[0];
-h = frame.height[0];
-avg = (dyn($x, 0, 0, 0) + dyn($x, w-1, h-1, 0)) / 2;
-set_prop(AverageValue, avg);
+# Conditionally write a property
+if ($N > 10) {
+    set_propaf(MyAutoFloat, 99.9);
+}
+# Note: If N <= 10, MyAutoFloat will be initialized from the property
+# on the source frame of clip $x. If it doesn't exist there, the result is undefined.
 ```
 
 ### 7.2. Pixel Access (`Expr` mode)

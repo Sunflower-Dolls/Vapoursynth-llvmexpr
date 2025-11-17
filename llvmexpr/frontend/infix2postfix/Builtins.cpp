@@ -126,25 +126,49 @@ PostfixBuilder handle_store_single(CodeGenerator* codegen,
     return b;
 }
 
-PostfixBuilder handle_set_prop(CodeGenerator* codegen, const CallExpr& expr) {
-    // set_prop(prop_name, value)
+PostfixBuilder handle_set_prop_typed(CodeGenerator* codegen,
+                                     const CallExpr& expr,
+                                     const std::string& suffix) {
+    // set_prop*(prop_name, value)
     auto* prop_name_expr = get_if<VariableExpr>(expr.args[0].get());
     if (prop_name_expr == nullptr) {
-        throw CodeGenError("set_prop() requires a property name identifier as "
-                           "the first argument.",
-                           expr.range);
+        throw CodeGenError(
+            std::format("{}() requires a property name identifier as the first "
+                        "argument.",
+                        expr.callee),
+            expr.range);
     }
     if (prop_name_expr->name.value.starts_with('$')) {
-        throw CodeGenError("Property names in set_prop() cannot be $-prefixed "
-                           "constants.",
-                           expr.range);
+        throw CodeGenError(
+            std::format("Property names in {}() cannot be $-prefixed "
+                        "constants.",
+                        expr.callee),
+            expr.range);
     }
 
     PostfixBuilder b;
     b.append(codegen->generate_expr(expr.args[1].get()).postfix);
-    b.add_set_prop(prop_name_expr->name.value);
+    b.add_set_prop(prop_name_expr->name.value, suffix);
     return b;
 }
+
+const auto handle_set_propf = [](CodeGenerator* codegen, const CallExpr& expr) {
+    return handle_set_prop_typed(codegen, expr, "f");
+};
+
+const auto handle_set_propi = [](CodeGenerator* codegen, const CallExpr& expr) {
+    return handle_set_prop_typed(codegen, expr, "i");
+};
+
+const auto handle_set_propaf = [](CodeGenerator* codegen,
+                                  const CallExpr& expr) {
+    return handle_set_prop_typed(codegen, expr, "af");
+};
+
+const auto handle_set_propai = [](CodeGenerator* codegen,
+                                  const CallExpr& expr) {
+    return handle_set_prop_typed(codegen, expr, "ai");
+};
 
 PostfixBuilder handle_exit([[maybe_unused]] CodeGenerator* codegen,
                            [[maybe_unused]] const CallExpr& expr) {
@@ -283,7 +307,36 @@ const std::map<std::string, std::vector<BuiltinFunction>> builtin_functions = {
                       .arity = 2,
                       .mode_restriction = Mode::Single,
                       .param_types = {Type::Literal_string, Type::Value},
-                      .special_handler = &handle_set_prop,
+                      .special_handler =
+                          handle_set_propf, // alias for set_propf
+                      .returns_value = false}}},
+    {"set_propf",
+     {BuiltinFunction{.name = "set_propf",
+                      .arity = 2,
+                      .mode_restriction = Mode::Single,
+                      .param_types = {Type::Literal_string, Type::Value},
+                      .special_handler = handle_set_propf,
+                      .returns_value = false}}},
+    {"set_propi",
+     {BuiltinFunction{.name = "set_propi",
+                      .arity = 2,
+                      .mode_restriction = Mode::Single,
+                      .param_types = {Type::Literal_string, Type::Value},
+                      .special_handler = handle_set_propi,
+                      .returns_value = false}}},
+    {"set_propaf",
+     {BuiltinFunction{.name = "set_propaf",
+                      .arity = 2,
+                      .mode_restriction = Mode::Single,
+                      .param_types = {Type::Literal_string, Type::Value},
+                      .special_handler = handle_set_propaf,
+                      .returns_value = false}}},
+    {"set_propai",
+     {BuiltinFunction{.name = "set_propai",
+                      .arity = 2,
+                      .mode_restriction = Mode::Single,
+                      .param_types = {Type::Literal_string, Type::Value},
+                      .special_handler = handle_set_propai,
                       .returns_value = false}}},
     {"dyn",
      {

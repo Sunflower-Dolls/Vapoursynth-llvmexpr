@@ -22,6 +22,7 @@
 
 #include "AST.hpp"
 #include "PostfixBuilder.hpp"
+#include "SemanticAnalyzer.hpp"
 #include "types.hpp"
 #include <format>
 #include <map>
@@ -49,7 +50,8 @@ class CodeGenerator {
         Type type;
     };
 
-    CodeGenerator(Mode mode, int num_inputs);
+    CodeGenerator(Mode mode, int num_inputs,
+                  const SemanticAnalyzer& semantic_analyzer);
 
     std::string generate(const Program* program);
 
@@ -106,8 +108,10 @@ class CodeGenerator {
     std::vector<int> call_site_id_stack;
 
     std::set<std::string> current_function_labels;
+
+    const SemanticAnalyzer& semantic_analyzer;
 };
 
 } // namespace infix2postfix
 
-#endif
+#endif // LLVMEXPR_INFIX2POSTFIX_CODEGENERATOR_HPP

@@ -55,7 +55,7 @@ class PostfixBuilder {
     // Data Access & I/O
     void add_prop_access(const std::string& clip_name,
                          const std::string& prop_name);
-    void add_set_prop(const std::string& prop_name);
+    void add_set_prop(const std::string& prop_name, const std::string& suffix);
     void add_static_pixel_access(const std::string& clip_name,
                                  const std::string& x, const std::string& y,
                                  const std::string& suffix);

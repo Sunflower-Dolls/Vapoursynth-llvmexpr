@@ -101,16 +101,63 @@ store(5, 5, 1, 128)
         assert "255 10 20 @[]^0" in output
         assert "128 5 5 @[]^1" in output
 
-    def test_set_prop(self):
-        """Test set_prop() for frame property writing."""
+    def test_set_prop_legacy(self):
+        """Test legacy set_prop() for frame property writing."""
         infix = """
 set_prop(MyProperty, 123.456)
 set_prop(TestProp, 42)
 """
         success, output = run_infix2postfix(infix, "single")
         assert success, f"Failed to convert: {output}"
-        assert "123.456 MyProperty$" in output
-        assert "42 TestProp$" in output
+        assert "x.MyProperty MyProperty$f" in output
+        assert "x.TestProp TestProp$f" in output
+        assert "123.456 MyProperty$f" in output
+        assert "42 TestProp$f" in output
+
+    def test_set_prop_typed(self):
+        """Test typed set_prop functions (set_propf, set_propi, etc.)."""
+        infix = """
+set_propf(PropF, 1.0)
+set_propi(PropI, 2)
+set_propaf(PropAF, 3.0)
+set_propai(PropAI, 4)
+"""
+        success, output = run_infix2postfix(infix, "single")
+        assert success, f"Failed to convert: {output}"
+        # Check for the initialization part
+        assert "x.PropF PropF$f" in output
+        assert "x.PropI PropI$i" in output
+        assert "x.PropAF PropAF$af" in output
+        assert "x.PropAI PropAI$ai" in output
+        # Check for the main part
+        assert "1.0 PropF$f" in output
+        assert "2 PropI$i" in output
+        assert "3.0 PropAF$af" in output
+        assert "4 PropAI$ai" in output
+
+    def test_set_prop_type_consistency_error(self):
+        """Test that inconsistent types for the same property cause an error."""
+        infix = """
+set_propi(MyProp, 1)
+set_propf(MyProp, 2.0)
+"""
+        success, output = run_infix2postfix(infix, "single")
+        assert not success, "Should have failed due to type inconsistency"
+        assert "inconsistent types" in output
+        assert "MyProp" in output
+
+    def test_set_prop_conditional_initialization(self):
+        """Test that conditional set_prop generates an initialization prefix."""
+        infix = """
+if ($N > 10) {
+    set_propi(ConditionalProp, 100)
+}
+"""
+        success, output = run_infix2postfix(infix, "single")
+        assert success, f"Failed to convert: {output}"
+        assert output.startswith("x.ConditionalProp ConditionalProp$i")
+        assert "100 ConditionalProp$i" in output
+        assert "#" in output
 
     def test_set_prop_with_variable(self):
         """Test set_prop() with a variable as the value."""
@@ -120,8 +167,9 @@ set_prop(MyProperty, my_value)
 """
         success, output = run_infix2postfix(infix, "single")
         assert success, f"Failed to convert: {output}"
+        assert "x.MyProperty MyProperty$f" in output
         assert "42 my_value!" in output
-        assert "my_value@ MyProperty$" in output
+        assert "my_value@ MyProperty$f" in output
 
     def test_complex_single_expr(self):
         """Test a complex SingleExpr script."""
@@ -144,12 +192,14 @@ set_prop(BottomRight, bottom_right)
 """
         success, output = run_infix2postfix(infix, "single")
         assert success, f"Failed to convert: {output}"
+        assert "x.TopLeft TopLeft$f" in output
+        assert "x.BottomRight BottomRight$f" in output
         assert "width^0" in output
         assert "height^0" in output
         assert "x^0[]" in output
         assert "@[]^0" in output
-        assert "TopLeft$" in output
-        assert "BottomRight$" in output
+        assert "TopLeft$f" in output
+        assert "BottomRight$f" in output
 
 
 class TestExprMode:
@@ -1253,7 +1303,10 @@ RESULT = 1
 """
         success, output = run_infix2postfix(infix, "expr")
         assert not success, "Should fail assigning array to variable"
-        assert "Variable assignment value must be convertible to a value, got Array." in output
+        assert (
+            "Variable assignment value must be convertible to a value, got Array."
+            in output
+        )
 
     def test_array_cannot_be_assigned_in_function(self):
         """Test that arrays cannot be assigned to variables in functions."""
@@ -1267,7 +1320,10 @@ RESULT = process(arr)
 """
         success, output = run_infix2postfix(infix, "expr")
         assert not success, "Should fail assigning array parameter to variable"
-        assert "Variable assignment value must be convertible to a value, got Array." in output
+        assert (
+            "Variable assignment value must be convertible to a value, got Array."
+            in output
+        )
 
     def test_function_cannot_return_array(self):
         """Test that functions cannot return arrays."""
@@ -1745,7 +1801,10 @@ RESULT = 0
 """
         success, output = run_infix2postfix(infix, "expr")
         assert not success
-        assert "Variable assignment value must be convertible to a value, got Void." in output
+        assert (
+            "Variable assignment value must be convertible to a value, got Void."
+            in output
+        )
 
     def test_assign_void_builtin_function_fails(self):
         """Test that assigning the result of a built-in void function (store) fails."""
@@ -1755,7 +1814,10 @@ RESULT = 0
 """
         success, output = run_infix2postfix(infix, "expr")
         assert not success
-        assert "Variable assignment value must be convertible to a value, got Void." in output
+        assert (
+            "Variable assignment value must be convertible to a value, got Void."
+            in output
+        )
 
     def test_pass_void_user_function_as_arg_fails(self):
         """Test that passing a user-defined void function as an argument fails."""

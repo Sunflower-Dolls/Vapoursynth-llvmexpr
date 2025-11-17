@@ -69,8 +69,12 @@ class SemanticAnalyzer {
         return function_defs;
     }
 
+    [[nodiscard]] const std::map<std::string, std::pair<std::string, Range>>&
+    get_written_properties() const {
+        return written_properties;
+    }
+
   private:
-    // Expression analysis
     Type analyzeExpr(Expr* expr);
     Type analyze(VariableExpr& expr);
     Type analyze(const NumberExpr& expr);
@@ -162,6 +166,8 @@ class SemanticAnalyzer {
 
     std::map<std::string, std::vector<ForwardGotoInfo>> current_pending_gotos;
     std::set<std::string> current_labels_seen;
+
+    std::map<std::string, std::pair<std::string, Range>> written_properties;
 
     const FunctionSignature* current_function = nullptr;
 };
