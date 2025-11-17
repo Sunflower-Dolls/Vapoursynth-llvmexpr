@@ -87,6 +87,8 @@ enum class TokenType : std::uint8_t {
     COMMENT,
     END_OF_FILE,
     CONCAT,
+    BEGIN_MACRO_EXPANSION,
+    END_MACRO_EXPANSION,
 };
 
 struct Token {
@@ -96,6 +98,7 @@ struct Token {
     int column;
     std::variant<int64_t, double> numericValue;
     bool hasNumericValue = false;
+    size_t expansion_idx = static_cast<size_t>(-1);
 
     Token() : type(TokenType::END_OF_FILE), line(0), column(0) {}
 
@@ -544,7 +547,9 @@ class TokenStream {
 
     void skipWhitespace() {
         while (!is_eof() && (peek().type == TokenType::WHITESPACE ||
-                             peek().type == TokenType::COMMENT)) {
+                             peek().type == TokenType::COMMENT ||
+                             peek().type == TokenType::BEGIN_MACRO_EXPANSION ||
+                             peek().type == TokenType::END_MACRO_EXPANSION)) {
             consume();
         }
     }
@@ -658,7 +663,9 @@ class Evaluator {
 
     void skipWhitespace() {
         while (!is_eof() && (peek().type == TokenType::WHITESPACE ||
-                             peek().type == TokenType::COMMENT)) {
+                             peek().type == TokenType::COMMENT ||
+                             peek().type == TokenType::BEGIN_MACRO_EXPANSION ||
+                             peek().type == TokenType::END_MACRO_EXPANSION)) {
             consume();
         }
     }
@@ -1491,10 +1498,24 @@ class Expander {
         expansion.original_line = tok.line;
         expansion.original_column = tok.column;
         expansion.replacement_text = initialReplacement;
+
+        size_t expansion_idx = expansions.size();
         expansions.push_back(expansion);
 
         expansions.insert(expansions.end(), nestedExpansions.begin(),
                           nestedExpansions.end());
+
+        if (!substituted.empty()) {
+            Token begin_tok(TokenType::BEGIN_MACRO_EXPANSION, "", tok.line,
+                            tok.column);
+            begin_tok.expansion_idx = expansion_idx;
+            substituted.insert(substituted.begin(), begin_tok);
+
+            Token end_tok(TokenType::END_MACRO_EXPANSION, "", tok.line,
+                          tok.column);
+            end_tok.expansion_idx = expansion_idx;
+            substituted.push_back(end_tok);
+        }
 
         stream.prepend(substituted);
     }
@@ -1518,10 +1539,24 @@ class Expander {
         expansion.original_line = tok.line;
         expansion.original_column = tok.column;
         expansion.replacement_text = replacementText;
+
+        size_t expansion_idx = expansions.size();
         expansions.push_back(expansion);
 
         expansions.insert(expansions.end(), nestedExpansions.begin(),
                           nestedExpansions.end());
+
+        if (!expanded.empty()) {
+            Token begin_tok(TokenType::BEGIN_MACRO_EXPANSION, "", tok.line,
+                            tok.column);
+            begin_tok.expansion_idx = expansion_idx;
+            expanded.insert(expanded.begin(), begin_tok);
+
+            Token end_tok(TokenType::END_MACRO_EXPANSION, "", tok.line,
+                          tok.column);
+            end_tok.expansion_idx = expansion_idx;
+            expanded.push_back(end_tok);
+        }
 
         stream.prepend(expanded);
     }
@@ -1818,13 +1853,30 @@ class Preprocessor::Impl {
             try {
                 preprocessor::Expander expander(macros);
                 std::vector<Token> expanded = expander.expand(lineTokens);
+                auto expansions = expander.getExpansions();
 
-                std::string lineText =
-                    preprocessor_detail::tokensToString(expanded, true);
+                std::string lineText;
+                int current_column = 1;
+                for (const auto& tok : expanded) {
+                    if (tok.type == TokenType::BEGIN_MACRO_EXPANSION) {
+                        if (tok.expansion_idx < expansions.size()) {
+                            expansions[tok.expansion_idx]
+                                .preprocessed_start_column = current_column;
+                        }
+                    } else if (tok.type == TokenType::END_MACRO_EXPANSION) {
+                        if (tok.expansion_idx < expansions.size()) {
+                            expansions[tok.expansion_idx]
+                                .preprocessed_end_column = current_column;
+                        }
+                    } else {
+                        lineText += tok.text;
+                        current_column += static_cast<int>(tok.text.length());
+                    }
+                }
+
                 addOutputLine(lineText, lineNumber);
 
                 if (!line_mappings.empty()) {
-                    auto expansions = expander.getExpansions();
                     line_mappings.back().expansions.insert(
                         line_mappings.back().expansions.end(),
                         expansions.begin(), expansions.end());

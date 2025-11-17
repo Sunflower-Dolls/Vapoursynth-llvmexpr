@@ -124,16 +124,30 @@ std::string AnalysisEngine::formatDiagnostics() const {
 
             if (!mapping->expansions.empty()) {
                 std::string expansion_trace;
+                std::vector<const MacroExpansion*> containing_expansions;
+
                 for (const auto& expansion : mapping->expansions) {
-                    if (diag.range.start.column + 1 ==
+                    if (diag.range.start.column + 1 >=
                             expansion.preprocessed_start_column &&
-                        diag.range.end.column + 1 ==
+                        diag.range.end.column <
                             expansion.preprocessed_end_column) {
-                        expansion_trace += std::format(
-                            "\n  note: in expansion of macro '{}' from {}:{}",
-                            expansion.macro_name, mapping->original_line,
-                            expansion.original_column);
+                        containing_expansions.push_back(&expansion);
                     }
+                }
+
+                std::ranges::sort(containing_expansions,
+                                  [](const auto* a, const auto* b) {
+                                      return (a->preprocessed_end_column -
+                                              a->preprocessed_start_column) <
+                                             (b->preprocessed_end_column -
+                                              b->preprocessed_start_column);
+                                  });
+
+                for (const auto* expansion : containing_expansions) {
+                    expansion_trace += std::format(
+                        "\n  note: in expansion of macro '{}' from {}:{}",
+                        expansion->macro_name, mapping->original_line,
+                        expansion->original_column);
                 }
                 message += expansion_trace;
             }

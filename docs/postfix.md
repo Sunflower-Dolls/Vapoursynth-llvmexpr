@@ -315,7 +315,7 @@ In `Expr`, there are three ways to access pixel values from input clips, all of 
 Since `SingleExpr` has no concept of a "current pixel," all data I/O must be explicit and use absolute coordinates.
 
 - **Absolute Pixel Reading:** `absX absY clip^plane []`
-  - A new token `clip^plane` is used to specify both the clip and the plane index (`0` for Y, `1` for U, `2` for V, etc.).
+  - Token `clip^plane` is used to specify both the clip and the plane index (`0` for Y, `1` for U, `2` for V, etc.).
   - The `[]` operator then pops `absY` and `absX` from the stack and pushes the pixel value from the specified location. If the coordinates are floating-point values, they are rounded to the nearest integer (with ties to even).
   - **Boundary Handling:** The boundary behavior is controlled by the filter's global `boundary` parameter, which can be set to clamp (0, default) or mirror (1).
   - **Example:** `100 200 src0^0 []` reads the pixel at coordinate (100, 200) from the first clip's (`src0`) luma plane (`^0`) and pushes it onto the stack.
