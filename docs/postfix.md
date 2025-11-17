@@ -350,10 +350,10 @@ Since `SingleExpr` has no concept of a "current pixel," all data I/O must be exp
 | `$ai`       | Auto Integer | If a property with the same name already exists on the first source frame, its type (int or float) is kept. Otherwise, it defaults to **integer**. |
 
   - **Execution Guarantees and Safety:**
-    The compiler performs a rigorous static analysis to ensure that any property write operation is guaranteed to be executed, regardless of the control flow path taken.
+    The compiler performs a rigorous static analysis to ensure that for each named property, a write to it is guaranteed to be executed on every possible path.
 
-    - **Dominance Requirement:** A property write must be in a code block that *dominates* all possible exit points of the expression. In simpler terms, it must be impossible to reach the end of the expression without executing the property write.
-    - **Error on Conditional Writes:** If a property write is placed inside a conditional block and there is a path through the code that bypasses this block, the compiler will raise an error. This prevents ambiguous or non-deterministic behavior where a property might or might not be written depending on runtime conditions.
+    - **Path Coverage Requirement:** For any given property name (e.g., `MyProp`), it must be impossible to reach the end of the expression without executing at least one write to that property (e.g., `MyProp$f`). This ensures that properties are never left unwritten due to conditional logic.
+    - **Conditional Writes:** This allows for patterns where a property is written in different branches of the control flow. For example, you can write to `MyProp` inside an `if` branch, as long as you also write to it in the corresponding `else` branch. However, if there's any path that could bypass all writes to `MyProp`, the compiler will raise an error.
     - **Type Consistency:** All write operations to the same property within a single expression must use a consistent type. This check also applies to auto-types (`$af`, `$ai`).
 
   - **Examples:**

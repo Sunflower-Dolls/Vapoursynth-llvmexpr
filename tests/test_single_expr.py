@@ -509,7 +509,7 @@ def test_property_write_auto_float():
     assert isinstance(frame_with_float.props["Existing"], float)
 
 
-def test_prop_write_safety_error():
+def test_prop_write_safety_fail_on_conditional_skip():
     """Test that a prop write that is not guaranteed to execute raises an error."""
     clip = core.std.BlankClip()
     expr_jump = """
@@ -550,8 +550,8 @@ def test_prop_write_inconsistent_type_error():
         core.llvmexpr.SingleExpr(clip, expr_afi)
 
 
-def test_prop_write_safety_valid():
-    """Test valid prop writes that are guaranteed to execute."""
+def test_prop_write_safety_pass_unconditional():
+    """Test valid prop writes that are guaranteed to execute unconditionally."""
     clip = core.std.BlankClip()
 
     expr_after_loop = """
@@ -564,3 +564,21 @@ def test_prop_write_safety_valid():
     res = core.llvmexpr.SingleExpr(clip, expr_after_loop)
     frame = res.get_frame(0)
     assert frame.props["MyProp"] == 10.0
+
+
+def test_prop_write_safety_pass_if_else():
+    """Test that prop writes in both branches of an if/else are valid."""
+    clip = core.std.BlankClip()
+    expr_if_else = """
+        N 10 <= if_true#
+        200 MyProp$
+        1 endif#
+    #if_true
+        100 MyProp$
+    #endif
+    """
+    res = core.llvmexpr.SingleExpr(clip, expr_if_else)
+    frame1 = res.get_frame(5)
+    assert frame1.props["MyProp"] == 100.0
+    frame2 = res.get_frame(15)
+    assert frame2.props["MyProp"] == 200.0

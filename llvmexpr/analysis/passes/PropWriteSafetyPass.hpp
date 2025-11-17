@@ -27,10 +27,8 @@ namespace analysis {
 struct PropWriteSafetyResult {};
 
 /**
-    Ensures that all prop write operations (`prop$`) are guaranteed to be
-    executed on every possible execution path. If a prop write can be
-    bypassed due to control flow (e.g., conditional jumps), this pass
-    will raise an AnalysisError.
+    Ensures that for each named property, a write to it (`prop$`) is
+    guaranteed to be executed on every possible execution path.
 
     Depends on: BlockAnalysisPass, StackSafetyPass
  */
