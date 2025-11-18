@@ -45,6 +45,8 @@
 constexpr uint32_t PROP_READ_NAN_PAYLOAD = 0x7FC0BEEF; // qNaN with payload
 constexpr uint32_t PROP_WRITE_NAN_PAYLOAD =
     0x7FC0DEAD; // qNaN with payload 0xBEEF
+constexpr uint32_t PROP_DELETE_NAN_PAYLOAD =
+    0x7FC0DE1E; // qNaN with payload DE1E
 
 namespace {
 
@@ -613,6 +615,10 @@ const VSFrame*
             case PropWriteType::FLOAT:
                 resolved_types.push_back(ResolvedPropWriteType::FLOAT);
                 break;
+            case PropWriteType::DELETE:
+                // The prop will be deleted so anything is fine.
+                resolved_types.push_back(ResolvedPropWriteType::FLOAT);
+                break;
             case PropWriteType::AUTO_INT:
             case PropWriteType::AUTO_FLOAT:
                 int existing_type =
@@ -638,6 +644,11 @@ const VSFrame*
             float value = props[1 + d->required_props.size() + i];
 
             if (std::bit_cast<uint32_t>(value) == PROP_WRITE_NAN_PAYLOAD) {
+                continue;
+            }
+
+            if (std::bit_cast<uint32_t>(value) == PROP_DELETE_NAN_PAYLOAD) {
+                vsapi->mapDeleteKey(dst_props, prop_name.c_str());
                 continue;
             }
 

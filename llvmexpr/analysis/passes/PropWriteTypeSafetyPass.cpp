@@ -43,16 +43,24 @@ PropWriteTypeSafetyPass::run(const std::vector<Token>& tokens,
 
             auto it = prop_types.find(prop_name);
             if (it != prop_types.end()) {
-                if (it->second.first != prop_type) {
-                    throw AnalysisError(
-                        std::format(
-                            "Inconsistent types used for property '{}'. "
-                            "Previous type: {} (idx: {}), current type: {} "
-                            "(idx: {}).",
-                            prop_name, enum_name(it->second.first),
-                            it->second.second, enum_name(prop_type),
-                            static_cast<int>(i)),
-                        static_cast<int>(i));
+                auto& [stored_type, stored_idx] = it->second;
+                if (stored_type != prop_type) {
+                    // DELETE can co-exist with other types.
+                    if (stored_type == PropWriteType::DELETE) {
+                        stored_type = prop_type;
+                        stored_idx = static_cast<int>(i);
+                    }
+                    else if (prop_type != PropWriteType::DELETE) {
+                        throw AnalysisError(
+                            std::format(
+                                "Inconsistent types used for property '{}'. "
+                                "Previous type: {} (idx: {}), current type: {} "
+                                "(idx: {}).",
+                                prop_name, enum_name(stored_type),
+                                stored_idx, enum_name(prop_type),
+                                static_cast<int>(i)),
+                            static_cast<int>(i));
+                    }
                 }
             } else {
                 prop_types[prop_name] =

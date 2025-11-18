@@ -17,8 +17,7 @@ exprutils.egg-info/*
 .cursor/rules/build-and-test-rule.mdc
 .cursor/rules/codacy.mdc
 ARCHITECTURE.md
-
-# Meson subprojects
 subprojects/compile-time-regular-expressions-*
 subprojects/packagecache
 subprojects/.wraplock
+.codacy/codacy.yaml

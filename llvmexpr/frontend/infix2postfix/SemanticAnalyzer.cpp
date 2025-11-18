@@ -464,7 +464,7 @@ Type SemanticAnalyzer::analyze(CallExpr& expr) {
 
     if (expr.callee == "set_prop" || expr.callee == "set_propf" ||
         expr.callee == "set_propi" || expr.callee == "set_propaf" ||
-        expr.callee == "set_propai") {
+        expr.callee == "set_propai" || expr.callee == "remove_prop") {
 
         if (expr.resolved_builtin == nullptr) {
             return Type::Void;
@@ -473,28 +473,36 @@ Type SemanticAnalyzer::analyze(CallExpr& expr) {
         auto* prop_name_expr = get_if<VariableExpr>(expr.args[0].get());
 
         std::string prop_name = prop_name_expr->name.value;
-        std::string_view suffix;
+        std::string suffix;
         std::string_view callee_view(expr.callee);
 
-        suffix = callee_view.substr(std::string_view("set_prop").length());
-
-        if (suffix.empty()) {
-            suffix = "f";
+        if (callee_view == "remove_prop") {
+            suffix = "d";
+        } else {
+            suffix = callee_view.substr(std::string_view("set_prop").length());
+            if (suffix.empty()) {
+                suffix = "f";
+            }
         }
 
         auto it = written_properties.find(prop_name);
         if (it != written_properties.end()) {
-            if (it->second.first != suffix) {
-                reportError(
-                    std::format(
-                        "Property '{}' is written with inconsistent types. "
-                        "First write was '{}', current write is '{}'.",
-                        prop_name, it->second.first, suffix),
-                    expr.range);
-                return Type::Void;
+            auto& [stored_suffix, stored_range] = it->second;
+            if (stored_suffix != suffix) {
+                if (stored_suffix == "d") {
+                    stored_suffix = suffix;
+                    stored_range = expr.range;
+                } else if (suffix != "d") {
+                    reportError(
+                        std::format("Property '{}' is written with "
+                                    "inconsistent types. First write was "
+                                    "'{}', current write is '{}'.",
+                                    prop_name, stored_suffix, suffix),
+                        expr.range);
+                }
             }
         } else {
-            written_properties[prop_name] = {std::string(suffix), expr.range};
+            written_properties[prop_name] = {suffix, expr.range};
         }
     }
 

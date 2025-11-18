@@ -609,3 +609,35 @@ def test_prop_write_safety_pass_if_else():
         frame2 = res.get_frame(10)
         assert "MyProp" in frame2.props
         assert frame2.props["MyProp"] == 999
+
+
+def test_property_deletion():
+    """Test deleting frame properties using the $d suffix."""
+    clip_with_prop = core.std.BlankClip().std.SetFrameProps(ToDelete=100)
+    res_delete = core.llvmexpr.SingleExpr(clip_with_prop, "ToDelete$d")
+    frame_deleted = res_delete.get_frame(0)
+    assert "ToDelete" not in frame_deleted.props
+
+    clip_no_prop = core.std.BlankClip()
+    res_delete_nonexistent = core.llvmexpr.SingleExpr(clip_no_prop, "NonExistent$d")
+    frame_delete_nonexistent = res_delete_nonexistent.get_frame(0)
+    assert "NonExistent" not in frame_delete_nonexistent.props
+    clip_with_prop_and_other = core.std.BlankClip().std.SetFrameProps(
+        ToKeep=50, ToDelete=100
+    )
+    res_delete_one = core.llvmexpr.SingleExpr(clip_with_prop_and_other, "ToDelete$d")
+    frame_delete_one = res_delete_one.get_frame(0)
+    assert "ToDelete" not in frame_delete_one.props
+    assert "ToKeep" in frame_delete_one.props
+    assert frame_delete_one.props["ToKeep"] == 50
+
+    clip_del_write = core.std.BlankClip().std.SetFrameProps(MyProp=100)
+    res_del_write = core.llvmexpr.SingleExpr(clip_del_write, "MyProp$d 42 MyProp$")
+    frame_del_write = res_del_write.get_frame(0)
+    assert "MyProp" in frame_del_write.props
+    assert frame_del_write.props["MyProp"] == 42.0
+
+    clip_write_del = core.std.BlankClip().std.SetFrameProps(MyProp=100)
+    res_write_del = core.llvmexpr.SingleExpr(clip_write_del, "42 MyProp$ MyProp$d")
+    frame_write_del = res_write_del.get_frame(0)
+    assert "MyProp" not in frame_write_del.props

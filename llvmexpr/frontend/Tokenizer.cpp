@@ -958,8 +958,8 @@ inline std::optional<Token> parse_store_abs_plane(std::string_view input) {
 }
 
 inline std::optional<Token> parse_prop_store(std::string_view input) {
-    if (auto m =
-            ctre::match<R"(^([a-zA-Z_][a-zA-Z0-9_]*)\$(af|ai|f|i)?$)">(input)) {
+    if (auto m = ctre::match<R"(^([a-zA-Z_][a-zA-Z0-9_]*)\$(af|ai|f|i|d)?$)">(
+            input)) {
         PropWriteType type = PropWriteType::FLOAT; // Default for bare '$'
         if (m.template get<2>()) {
             auto suffix = m.template get<2>().to_view();
@@ -971,6 +971,8 @@ inline std::optional<Token> parse_prop_store(std::string_view input) {
                 type = PropWriteType::AUTO_INT;
             } else if (suffix == "af") {
                 type = PropWriteType::AUTO_FLOAT;
+            } else if (suffix == "d") {
+                type = PropWriteType::DELETE;
             }
         }
 
@@ -1034,6 +1036,14 @@ inline TokenBehavior swap_behavior(const Token& t) {
 inline TokenBehavior sortn_behavior(const Token& t) {
     const auto& payload = std::get<TokenPayload_StackOp>(t.payload);
     return {.arity = payload.n, .stack_effect = 0};
+}
+
+inline TokenBehavior prop_store_behavior(const Token& t) {
+    const auto& payload = std::get<TokenPayload_PropStore>(t.payload);
+    if (payload.type == PropWriteType::DELETE) {
+        return {.arity = 0, .stack_effect = 0};
+    }
+    return {.arity = 1, .stack_effect = -1};
 }
 
 // Compile-time token definitions table
@@ -1611,8 +1621,7 @@ constexpr auto get_token_definitions() {
                         .available_in_single_expr = true},
         TokenDefinition{.type = TokenType::PROP_STORE,
                         .name = "prop_store",
-                        .behavior =
-                            TokenBehavior{.arity = 1, .stack_effect = -1},
+                        .behavior = DynamicBehaviorFn(prop_store_behavior),
                         .parser = parse_prop_store,
                         .available_in_expr = false,
                         .available_in_single_expr = true},

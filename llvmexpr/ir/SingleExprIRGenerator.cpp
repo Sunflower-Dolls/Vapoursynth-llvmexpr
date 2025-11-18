@@ -399,9 +399,21 @@ bool SingleExprIRGenerator::process_mode_specific_token(
     }
     case TokenType::PROP_STORE: {
         const auto& payload = std::get<TokenPayload_PropStore>(token.payload);
-        llvm::Value* val_to_store = rpn_stack.back();
-        rpn_stack.pop_back();
-        builder.CreateStore(val_to_store, prop_allocas.at(payload.prop_name));
+        if (payload.type == PropWriteType::DELETE) {
+            // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
+            llvm::APInt payload_bits(32, 0x7FC0DE1E); // PROP_DELETE_NAN_PAYLOAD
+            llvm::APFloat nan_payload_apf(llvm::APFloat::IEEEsingle(),
+                                          payload_bits);
+            llvm::Value* nan_with_payload =
+                llvm::ConstantFP::get(context, nan_payload_apf);
+            builder.CreateStore(nan_with_payload,
+                                prop_allocas.at(payload.prop_name));
+        } else {
+            llvm::Value* val_to_store = rpn_stack.back();
+            rpn_stack.pop_back();
+            builder.CreateStore(val_to_store,
+                                prop_allocas.at(payload.prop_name));
+        }
         return true;
     }
     case TokenType::PROP_ACCESS: {

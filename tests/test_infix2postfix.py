@@ -162,6 +162,31 @@ set_prop(MyProperty, my_value)
         assert "42 my_value!" in output
         assert "my_value@ MyProperty$f" in output
 
+    def test_prop_deletion_infix(self):
+        """Test remove_prop() and its type consistency with set_prop."""
+        infix_remove = "remove_prop(ToDelete)"
+        success, output = run_infix2postfix(infix_remove, "single")
+        assert success, f"Failed to convert remove_prop: {output}"
+        assert output.strip() == "ToDelete$d"
+
+        infix_set_remove = "set_propi(MyProp, 1); remove_prop(MyProp)"
+        success, output = run_infix2postfix(infix_set_remove, "single")
+        assert success, f"Should pass with set then remove: {output}"
+        assert "1 MyProp$i" in output
+        assert "MyProp$d" in output
+
+        infix_remove_set = "remove_prop(MyProp); set_propf(MyProp, 2.0)"
+        success, output = run_infix2postfix(infix_remove_set, "single")
+        assert success, f"Should pass with remove then set: {output}"
+        assert "MyProp$d" in output
+        assert "2.0 MyProp$f" in output
+
+        infix_fail = "set_propi(MyProp, 1); remove_prop(MyProp); set_propf(MyProp, 3.0)"
+        success, output = run_infix2postfix(infix_fail, "single")
+        assert not success, "Should fail with inconsistent types around remove_prop"
+        assert "inconsistent types" in output
+        assert "MyProp" in output
+
     def test_complex_single_expr(self):
         """Test a complex SingleExpr script."""
         infix = """

@@ -37,10 +37,6 @@ PostfixBuilder handle_dyn_expr_3args(CodeGenerator* codegen,
     b.append(codegen->generate_expr(expr.args[2].get()).postfix);
 
     auto clip_res = codegen->generate_expr(expr.args[0].get());
-    if (clip_res.type != Type::Clip) {
-        throw CodeGenError("The first argument to dyn() must be a clip.",
-                           expr.range);
-    }
     std::string clip_name = clip_res.postfix.get_expression();
 
     b.add_dyn_pixel_access_expr(clip_name, ":c");
@@ -55,10 +51,6 @@ PostfixBuilder handle_dyn_expr_4args(CodeGenerator* codegen,
     b.append(codegen->generate_expr(expr.args[2].get()).postfix);
 
     auto clip_res = codegen->generate_expr(expr.args[0].get());
-    if (clip_res.type != Type::Clip) {
-        throw CodeGenError("The first argument to dyn() must be a clip.",
-                           expr.range);
-    }
     std::string clip_name = clip_res.postfix.get_expression();
 
     auto* boundary_expr = get_if<NumberExpr>(expr.args[3].get());
@@ -86,10 +78,6 @@ PostfixBuilder handle_dyn_expr_4args(CodeGenerator* codegen,
 PostfixBuilder handle_dyn_single(CodeGenerator* codegen, const CallExpr& expr) {
     // Signature: dyn($clip, x, y, plane)
     auto clip_res = codegen->generate_expr(expr.args[0].get());
-    if (clip_res.type != Type::Clip) {
-        throw CodeGenError("The first argument to dyn() must be a clip.",
-                           expr.range);
-    }
     std::string clip_name = clip_res.postfix.get_expression();
 
     auto* plane_expr = get_if<NumberExpr>(expr.args[3].get());
@@ -131,20 +119,6 @@ PostfixBuilder handle_set_prop_typed(CodeGenerator* codegen,
                                      const std::string& suffix) {
     // set_prop*(prop_name, value)
     auto* prop_name_expr = get_if<VariableExpr>(expr.args[0].get());
-    if (prop_name_expr == nullptr) {
-        throw CodeGenError(
-            std::format("{}() requires a property name identifier as the first "
-                        "argument.",
-                        expr.callee),
-            expr.range);
-    }
-    if (prop_name_expr->name.value.starts_with('$')) {
-        throw CodeGenError(
-            std::format("Property names in {}() cannot be $-prefixed "
-                        "constants.",
-                        expr.callee),
-            expr.range);
-    }
 
     PostfixBuilder b;
     b.append(codegen->generate_expr(expr.args[1].get()).postfix);
@@ -169,6 +143,16 @@ const auto handle_set_propai = [](CodeGenerator* codegen,
                                   const CallExpr& expr) {
     return handle_set_prop_typed(codegen, expr, "ai");
 };
+
+PostfixBuilder handle_remove_prop([[maybe_unused]] CodeGenerator* codegen,
+                                  const CallExpr& expr) {
+    // remove_prop(prop_name)
+    auto* prop_name_expr = get_if<VariableExpr>(expr.args[0].get());
+
+    PostfixBuilder b;
+    b.add_delete_prop(prop_name_expr->name.value);
+    return b;
+}
 
 PostfixBuilder handle_exit([[maybe_unused]] CodeGenerator* codegen,
                            [[maybe_unused]] const CallExpr& expr) {
@@ -337,6 +321,13 @@ const std::map<std::string, std::vector<BuiltinFunction>> builtin_functions = {
                       .mode_restriction = Mode::Single,
                       .param_types = {Type::Literal_string, Type::Value},
                       .special_handler = handle_set_propai,
+                      .returns_value = false}}},
+    {"remove_prop",
+     {BuiltinFunction{.name = "remove_prop",
+                      .arity = 1,
+                      .mode_restriction = Mode::Single,
+                      .param_types = {Type::Literal_string},
+                      .special_handler = handle_remove_prop,
                       .returns_value = false}}},
     {"dyn",
      {

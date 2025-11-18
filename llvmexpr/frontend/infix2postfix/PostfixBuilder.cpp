@@ -150,6 +150,10 @@ void PostfixBuilder::add_set_prop(const std::string& prop_name,
     push_token(std::format("{}${}", prop_name, suffix));
 }
 
+void PostfixBuilder::add_delete_prop(const std::string& prop_name) {
+    push_token(std::format("{}$d", prop_name));
+}
+
 void PostfixBuilder::add_static_pixel_access(const std::string& clip_name,
                                              const std::string& x,
                                              const std::string& y,

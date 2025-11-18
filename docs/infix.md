@@ -579,10 +579,10 @@ Write a frame property using the `set_prop` family of built-in functions. These 
 - **Type Suffixes:**
   Each function corresponds to a type suffix in the underlying postfix language, controlling how the property is stored:
 
-| Function     | Postfix Suffix | Resulting Type                                                                                               |
-| :----------- | :------------- | :----------------------------------------------------------------------------------------------------------- |
-| `set_propf`  | `$f`           | Float                                                                                                        |
-| `set_propi`  | `$i`           | Integer (value is rounded to the nearest integer)                                                            |
+| Function     | Postfix Suffix | Resulting Type                                                                                                     |
+| :----------- | :------------- | :----------------------------------------------------------------------------------------------------------------- |
+| `set_propf`  | `$f`           | Float                                                                                                              |
+| `set_propi`  | `$i`           | Integer (value is rounded to the nearest integer)                                                                  |
 | `set_propaf` | `$af`          | **Auto Float**: Keeps the type of an existing property on the first source frame, otherwise defaults to float.     |
 | `set_propai` | `$ai`          | **Auto Integer**: Keeps the type of an existing property on the first source frame, otherwise defaults to integer. |
 
@@ -609,6 +609,23 @@ if ($N > 10) {
 # Note: If N <= 10, MyAutoFloat will be initialized from the property
 # on the source frame of clip $x. If it doesn't exist there, the result is undefined.
 ```
+
+#### Deleting (`SingleExpr` only)
+
+Delete a frame property using the `remove_prop` built-in function.
+
+- **Signature:**
+  - `remove_prop(property_name)`
+
+- **Parameters:**
+  - `property_name`: The name of the property to delete, as an identifier (not a string).
+
+**Example:**
+```
+# Remove a property that might exist on the source frame
+remove_prop(MyOldProp);
+```
+
 
 ### 7.2. Pixel Access (`Expr` mode)
 

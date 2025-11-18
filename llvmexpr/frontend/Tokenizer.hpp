@@ -175,6 +175,7 @@ enum class PropWriteType : std::uint8_t {
     INT,        // $i
     AUTO_INT,   // $ai
     AUTO_FLOAT, // $af
+    DELETE,     // $d
 };
 
 struct TokenPayload_PropStore {

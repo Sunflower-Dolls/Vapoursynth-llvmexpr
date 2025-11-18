@@ -337,7 +337,7 @@ Since `SingleExpr` has no concept of a "current pixel," all data I/O must be exp
 
 - **Writing (`SingleExpr` only):** `value prop_name$[suffix]`
   - The `$` operator, suffixed with a property name and an optional type specifier, writes a value to a frame property on the output frame.
-  - It pops one value from the stack and assigns it to the property `prop_name`.
+  - It pops one value from the stack and assigns it to the property `prop_name` (Except for `d` suffix).
   - If the property already exists, it is overwritten. This is useful for calculating and passing metadata.
   - **Atomicity:** Property writes are atomic. A subsequent read within the same expression will see the newly written value.
   - **Type Suffixes:** You can control the output property's type using a suffix.
@@ -348,6 +348,7 @@ Since `SingleExpr` has no concept of a "current pixel," all data I/O must be exp
 | `$i`        | Integer      | Writes the value as an **integer**. The value from the stack is rounded to the nearest integer before being stored.                                |
 | `$af`       | Auto Float   | If a property with the same name already exists on the first source frame, its type (int or float) is kept. Otherwise, it defaults to **float**.   |
 | `$ai`       | Auto Integer | If a property with the same name already exists on the first source frame, its type (int or float) is kept. Otherwise, it defaults to **integer**. |
+| `$d`        | Delete       | Deletes the property from the output frame. Takes no arguments from the stack.                                                                     |
 
   - **Conditional Writes:** If an expression path is taken where no write to a specific property occurs, that property will not be modified on the output frame.
 
