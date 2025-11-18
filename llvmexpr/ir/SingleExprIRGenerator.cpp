@@ -135,6 +135,13 @@ void SingleExprIRGenerator::
         builder.CreateStore(prop_val, alloca);
         prop_allocas[unique_prop_name] = alloca;
     }
+
+    //NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
+    llvm::APInt payload_bits(32, 0x7FC0DEAD);
+    llvm::APFloat nan_payload_apf(llvm::APFloat::IEEEsingle(), payload_bits);
+    llvm::Value* nan_with_payload =
+        llvm::ConstantFP::get(context, nan_payload_apf);
+
     for (const auto& prop_name : output_props_list) {
         const std::string mangled_input_name =
             std::format("prop_0_{}", prop_name);
@@ -142,8 +149,10 @@ void SingleExprIRGenerator::
             prop_allocas[prop_name] = prop_allocas.at(mangled_input_name);
         } else {
             if (!prop_allocas.contains(prop_name)) {
-                prop_allocas[prop_name] =
+                llvm::Value* alloca =
                     createAllocaInEntry(builder.getFloatTy(), prop_name);
+                builder.CreateStore(nan_with_payload, alloca);
+                prop_allocas[prop_name] = alloca;
             }
         }
     }

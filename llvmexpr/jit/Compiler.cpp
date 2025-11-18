@@ -68,6 +68,10 @@ CompiledFunction Compiler::compile_with_approx_math(int actual_approx_math) {
         needs_nans = std::ranges::any_of(tokens, [](const auto& token) {
             return token.type == TokenType::EXIT_NO_WRITE;
         });
+    } else if (expr_mode == ExprMode::SINGLE_EXPR) {
+        needs_nans = std::ranges::any_of(tokens, [](const auto& token) {
+            return token.type == TokenType::PROP_STORE;
+        });
     }
 
     OrcJit& jit = needs_nans ? global_jit_nan_safe : global_jit_fast;

@@ -50,8 +50,7 @@ class CodeGenerator {
         Type type;
     };
 
-    CodeGenerator(Mode mode, int num_inputs,
-                  const SemanticAnalyzer& semantic_analyzer);
+    CodeGenerator(Mode mode, int num_inputs);
 
     std::string generate(const Program* program);
 
@@ -108,8 +107,6 @@ class CodeGenerator {
     std::vector<int> call_site_id_stack;
 
     std::set<std::string> current_function_labels;
-
-    const SemanticAnalyzer& semantic_analyzer;
 };
 
 } // namespace infix2postfix

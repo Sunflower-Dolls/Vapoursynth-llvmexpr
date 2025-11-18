@@ -75,7 +75,7 @@ std::string AnalysisEngine::generateCode() {
             "Cannot generate code: semantic analysis had errors");
     }
 
-    CodeGenerator code_generator(mode, num_inputs, *semantic_analyzer);
+    CodeGenerator code_generator(mode, num_inputs);
 
     return code_generator.generate(ast.get());
 }

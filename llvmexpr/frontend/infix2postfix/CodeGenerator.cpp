@@ -28,10 +28,8 @@
 
 namespace infix2postfix {
 
-CodeGenerator::CodeGenerator(Mode mode, int num_inputs,
-                             const SemanticAnalyzer& semantic_analyzer)
-    : mode(mode), num_inputs(num_inputs), semantic_analyzer(semantic_analyzer) {
-}
+CodeGenerator::CodeGenerator(Mode mode, int num_inputs)
+    : mode(mode), num_inputs(num_inputs) {}
 
 std::string CodeGenerator::generate(const Program* program) {
     PostfixBuilder main_builder;
@@ -41,19 +39,6 @@ std::string CodeGenerator::generate(const Program* program) {
 
     if (mode == Mode::Expr) {
         main_builder.add_variable_load("RESULT");
-    }
-
-    // Workaround postfix prop write restriction
-    if (mode == Mode::Single) {
-        PostfixBuilder init_builder;
-        const auto& written_props = semantic_analyzer.get_written_properties();
-        for (const auto& [prop_name, prop_info] : written_props) {
-            const std::string& suffix = prop_info.first;
-            init_builder.add_prop_access("x", prop_name);
-            init_builder.add_set_prop(prop_name, suffix);
-        }
-        init_builder.append(main_builder);
-        return init_builder.get_expression();
     }
 
     return main_builder.get_expression();

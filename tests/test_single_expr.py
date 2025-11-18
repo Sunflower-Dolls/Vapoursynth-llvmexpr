@@ -509,19 +509,24 @@ def test_property_write_auto_float():
     assert isinstance(frame_with_float.props["Existing"], float)
 
 
-def test_prop_write_safety_fail_on_conditional_skip():
-    """Test that a prop write that is not guaranteed to execute raises an error."""
+def test_conditional_prop_write():
+    """Test that a prop write can be conditional and is not required on all paths."""
     clip = core.std.BlankClip()
     expr_jump = """
         N 10 > loop_end#
         123 MyProp$
         #loop_end
     """
-    with pytest.raises(
-        vs.Error,
-        match="is not guaranteed to be executed",
-    ):
-        core.llvmexpr.SingleExpr(clip, expr_jump)
+    res = core.llvmexpr.SingleExpr(clip, expr_jump)
+
+    # Frame 5: N <= 10, so MyProp should be written
+    frame1 = res.get_frame(5)
+    assert "MyProp" in frame1.props
+    assert frame1.props["MyProp"] == 123.0
+
+    # Frame 15: N > 10, so MyProp should NOT be written and should not exist
+    frame2 = res.get_frame(15)
+    assert "MyProp" not in frame2.props
 
 
 def test_prop_write_inconsistent_type_error():
@@ -582,3 +587,25 @@ def test_prop_write_safety_pass_if_else():
     assert frame1.props["MyProp"] == 100.0
     frame2 = res.get_frame(15)
     assert frame2.props["MyProp"] == 200.0
+
+    def test_conditional_prop_write_copy_fallback():
+        """Test that a conditionally-written prop falls back to copying from src0."""
+        clip = core.std.BlankClip().std.SetFrameProps(MyProp=100)
+        expr = """
+            N 5 = if_true#
+            999 MyProp$
+            1 endif#
+        #if_true
+        #endif
+        """
+        res = core.llvmexpr.SingleExpr(clip, expr)
+
+        # Frame 5: N == 5, prop is NOT written by expr. Should be copied from source.
+        frame1 = res.get_frame(5)
+        assert "MyProp" in frame1.props
+        assert frame1.props["MyProp"] == 100
+
+        # Frame 10: N != 5, prop IS written by expr. Should be the new value.
+        frame2 = res.get_frame(10)
+        assert "MyProp" in frame2.props
+        assert frame2.props["MyProp"] == 999

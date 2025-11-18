@@ -109,8 +109,6 @@ set_prop(TestProp, 42)
 """
         success, output = run_infix2postfix(infix, "single")
         assert success, f"Failed to convert: {output}"
-        assert "x.MyProperty MyProperty$f" in output
-        assert "x.TestProp TestProp$f" in output
         assert "123.456 MyProperty$f" in output
         assert "42 TestProp$f" in output
 
@@ -124,11 +122,6 @@ set_propai(PropAI, 4)
 """
         success, output = run_infix2postfix(infix, "single")
         assert success, f"Failed to convert: {output}"
-        # Check for the initialization part
-        assert "x.PropF PropF$f" in output
-        assert "x.PropI PropI$i" in output
-        assert "x.PropAF PropAF$af" in output
-        assert "x.PropAI PropAI$ai" in output
         # Check for the main part
         assert "1.0 PropF$f" in output
         assert "2 PropI$i" in output
@@ -155,7 +148,6 @@ if ($N > 10) {
 """
         success, output = run_infix2postfix(infix, "single")
         assert success, f"Failed to convert: {output}"
-        assert output.startswith("x.ConditionalProp ConditionalProp$i")
         assert "100 ConditionalProp$i" in output
         assert "#" in output
 
@@ -167,7 +159,6 @@ set_prop(MyProperty, my_value)
 """
         success, output = run_infix2postfix(infix, "single")
         assert success, f"Failed to convert: {output}"
-        assert "x.MyProperty MyProperty$f" in output
         assert "42 my_value!" in output
         assert "my_value@ MyProperty$f" in output
 
@@ -192,8 +183,6 @@ set_prop(BottomRight, bottom_right)
 """
         success, output = run_infix2postfix(infix, "single")
         assert success, f"Failed to convert: {output}"
-        assert "x.TopLeft TopLeft$f" in output
-        assert "x.BottomRight BottomRight$f" in output
         assert "width^0" in output
         assert "height^0" in output
         assert "x^0[]" in output

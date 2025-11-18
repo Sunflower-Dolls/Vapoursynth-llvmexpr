@@ -349,12 +349,10 @@ Since `SingleExpr` has no concept of a "current pixel," all data I/O must be exp
 | `$af`       | Auto Float   | If a property with the same name already exists on the first source frame, its type (int or float) is kept. Otherwise, it defaults to **float**.   |
 | `$ai`       | Auto Integer | If a property with the same name already exists on the first source frame, its type (int or float) is kept. Otherwise, it defaults to **integer**. |
 
-  - **Execution Guarantees and Safety:**
-    The compiler performs a rigorous static analysis to ensure that for each named property, a write to it is guaranteed to be executed on every possible path.
+  - **Conditional Writes:** If an expression path is taken where no write to a specific property occurs, that property will not be modified on the output frame.
 
-    - **Path Coverage Requirement:** For any given property name (e.g., `MyProp`), it must be impossible to reach the end of the expression without executing at least one write to that property (e.g., `MyProp$f`). This ensures that properties are never left unwritten due to conditional logic.
-    - **Conditional Writes:** This allows for patterns where a property is written in different branches of the control flow. For example, you can write to `MyProp` inside an `if` branch, as long as you also write to it in the corresponding `else` branch. However, if there's any path that could bypass all writes to `MyProp`, the compiler will raise an error.
-    - **Type Consistency:** All write operations to the same property within a single expression must use a consistent type. This check also applies to auto-types (`$af`, `$ai`).
+  - **Default Behavior:** If a property is not written by the expression, it will be copied from the first input clip (`src0`). If the property does not exist on the first input clip, it will not be present on the output frame.
+  - **Type Consistency:** All write operations to the same property within a single expression must use a consistent type (e.g., you cannot mix `$f` and `$i` for the same property name). This check also applies to auto-types (`$af`, `$ai`).
 
   - **Examples:**
     - `x.PlaneStatsMax 2 / MyNewProp$f`: Writes the result as a float.

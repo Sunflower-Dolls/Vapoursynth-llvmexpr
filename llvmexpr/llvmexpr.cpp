@@ -42,7 +42,9 @@
 #include "jit/Compiler.hpp"
 #include "jit/Jit.hpp"
 
-constexpr uint32_t PROP_NAN_PAYLOAD = 0x7FC0BEEF; // qNaN with payload 0xBEEF
+constexpr uint32_t PROP_READ_NAN_PAYLOAD = 0x7FC0BEEF; // qNaN with payload
+constexpr uint32_t PROP_WRITE_NAN_PAYLOAD =
+    0x7FC0DEAD; // qNaN with payload 0xBEEF
 
 namespace {
 
@@ -212,7 +214,7 @@ void readFrameProperties(
         }
 
         if (err != 0) {
-            props[prop_array_idx] = std::bit_cast<float>(PROP_NAN_PAYLOAD);
+            props[prop_array_idx] = std::bit_cast<float>(PROP_READ_NAN_PAYLOAD);
         }
     }
 }
@@ -501,6 +503,8 @@ const VSFrame*
             vsapi->requestFrameFilter(n, d->nodes[i], frameCtx);
         }
     } else if (activationReason == arAllFramesReady) {
+        g_frame_data.dynamic_arrays.clear();
+
         std::vector<const VSFrame*> src_frames(d->num_inputs);
         for (int i = 0; i < d->num_inputs; ++i) {
             src_frames[i] = vsapi->getFrameFilter(n, d->nodes[i], frameCtx);
@@ -520,6 +524,11 @@ const VSFrame*
                                  d->output_props.size());
 
         readFrameProperties(props, src_frames, d->required_props, n, vsapi);
+
+        for (size_t i = 0; i < d->output_props.size(); ++i) {
+            props[1 + d->required_props.size() + i] =
+                std::bit_cast<float>(PROP_WRITE_NAN_PAYLOAD);
+        }
 
         for (int i = 0; i <= d->num_inputs; ++i) {
             for (int p = 0; p < num_planes; ++p) {
@@ -627,6 +636,10 @@ const VSFrame*
         for (size_t i = 0; i < d->output_props.size(); ++i) {
             const auto& prop_name = d->output_props[i].first;
             float value = props[1 + d->required_props.size() + i];
+
+            if (std::bit_cast<uint32_t>(value) == PROP_WRITE_NAN_PAYLOAD) {
+                continue;
+            }
 
             if (resolved_types[i] == ResolvedPropWriteType::INT) {
                 auto int_value = static_cast<int64_t>(lroundf(value));

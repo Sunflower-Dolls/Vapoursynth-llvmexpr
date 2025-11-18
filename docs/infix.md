@@ -586,15 +586,12 @@ Write a frame property using the `set_prop` family of built-in functions. These 
 | `set_propaf` | `$af`          | **Auto Float**: Keeps the type of an existing property on the first source frame, otherwise defaults to float.     |
 | `set_propai` | `$ai`          | **Auto Integer**: Keeps the type of an existing property on the first source frame, otherwise defaults to integer. |
 
-**Undefined Behavior with Conditional Writes**
+**Conditional Writes and Fallback Behavior**
 
-Undefined behavior can occur when a property is written conditionally (e.g., inside an `if` statement). If the condition is false and the write operation is skipped, llvmexpr attempts to copy the property from the first source frame (`src0`).
+If a `set_prop` call is inside a conditional block (e.g., an `if` statement) and that block is not executed, the property is not written by the expression. In this case, VapourSynth's default behavior takes effect:
 
-The result is **undefined** if the property on the first source frame:
-*   Does not exist, or
-*   Is not a numeric type.
-
-If the property exists on the source frame and is numeric, it will be safely copied and converted to the target type.
+- If a property with the same name exists on the first source frame (`$x` or `$src0`), it will be copied to the output frame.
+- If the property does not exist on the first source frame, it will not be created on the output frame.
 
 **Type Consistency**
 
