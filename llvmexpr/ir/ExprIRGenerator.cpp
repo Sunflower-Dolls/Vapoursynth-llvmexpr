@@ -410,6 +410,32 @@ bool ExprIRGenerator::process_mode_specific_token(
         return true;
     }
 
+    case TokenType::PROP_EXISTS: {
+        const auto& payload = std::get<TokenPayload_PropAccess>(token.payload);
+        auto key = std::make_pair(payload.clip_idx, payload.prop_name);
+        llvm::Value* exists_val = nullptr;
+        if (prop_map.contains(key)) {
+            int prop_idx = prop_map.at(key);
+            llvm::Value* prop_val = builder.CreateLoad(
+                float_ty, builder.CreateGEP(float_ty, props_arg,
+                                            builder.getInt32(prop_idx)));
+
+            llvm::Value* prop_val_int = builder.CreateBitCast(prop_val, i32_ty);
+            //NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
+            llvm::Value* nan_payload_int = builder.getInt32(0x7FC0BEEF);
+            llvm::Value* is_prop_read_nan =
+                builder.CreateICmpEQ(prop_val_int, nan_payload_int);
+
+            exists_val = builder.CreateSelect(
+                is_prop_read_nan, llvm::ConstantFP::get(float_ty, 0.0),
+                llvm::ConstantFP::get(float_ty, 1.0));
+        } else {
+            exists_val = llvm::ConstantFP::get(float_ty, 0.0);
+        }
+        rpn_stack.push_back(exists_val);
+        return true;
+    }
+
     case TokenType::STORE_ABS: {
         llvm::Value* coord_y_f = rpn_stack.back();
         rpn_stack.pop_back();

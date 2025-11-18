@@ -431,6 +431,45 @@ bool SingleExprIRGenerator::process_mode_specific_token(
         return true;
     }
 
+    case TokenType::PROP_EXISTS: {
+        const auto& payload = std::get<TokenPayload_PropAccess>(token.payload);
+        llvm::Value* prop_val = nullptr;
+        if (payload.clip_idx == 0 &&
+            output_prop_map.contains(payload.prop_name)) {
+            prop_val = builder.CreateLoad(
+                float_ty, prop_allocas.at(payload.prop_name));
+        } else {
+            const std::string unique_prop_name =
+                std::format("prop_{}_{}", payload.clip_idx, payload.prop_name);
+            if (!prop_allocas.contains(unique_prop_name)) {
+                rpn_stack.push_back(llvm::ConstantFP::get(float_ty, 0.0));
+                return true;
+            }
+            prop_val = builder.CreateLoad(
+                float_ty, prop_allocas.at(unique_prop_name));
+        }
+
+        llvm::Value* prop_val_int = builder.CreateBitCast(prop_val, i32_ty);
+
+        llvm::Value* read_nan_payload = builder.getInt32(0x7FC0BEEF);
+        llvm::Value* is_read_nan =
+            builder.CreateICmpEQ(prop_val_int, read_nan_payload);
+
+        llvm::Value* delete_nan_payload = builder.getInt32(0x7FC0DE1E);
+        llvm::Value* is_delete_nan =
+            builder.CreateICmpEQ(prop_val_int, delete_nan_payload);
+
+        llvm::Value* does_not_exist =
+            builder.CreateOr(is_read_nan, is_delete_nan);
+
+        llvm::Value* exists_val =
+            builder.CreateSelect(does_not_exist,
+                                 llvm::ConstantFP::get(float_ty, 0.0),
+                                 llvm::ConstantFP::get(float_ty, 1.0));
+        rpn_stack.push_back(exists_val);
+        return true;
+    }
+
     // Array
     case TokenType::ARRAY_ALLOC_STATIC: {
         const auto& payload = std::get<TokenPayload_ArrayOp>(token.payload);

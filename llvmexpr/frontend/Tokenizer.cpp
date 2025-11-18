@@ -928,6 +928,25 @@ inline std::optional<Token> parse_prop_access(std::string_view input) {
     return std::nullopt;
 }
 
+inline std::optional<Token> parse_prop_exists(std::string_view input) {
+    if (auto m = ctre::match<
+            R"(^(?:src(\d+)|([x-za-w]))\.([a-zA-Z_][a-zA-Z0-9_]*)\?$)">(
+            input)) {
+        TokenPayload_PropAccess data;
+        if (m.template get<1>()) {
+            data.clip_idx = svtoi(m.template get<1>().to_view());
+        } else if (m.template get<2>()) {
+            data.clip_idx =
+                parse_std_clip_idx(m.template get<2>().to_view()[0]);
+        }
+        data.prop_name = std::string(m.template get<3>().to_view());
+        return Token{.type = TokenType::PROP_EXISTS,
+                     .text = std::string(input),
+                     .payload = data};
+    }
+    return std::nullopt;
+}
+
 inline std::optional<Token> parse_clip_abs_plane(std::string_view input) {
     if (auto m =
             ctre::match<R"(^(?:src(\d+)|([x-za-w]))\^(\d+)\[\]$)">(input)) {
@@ -1603,6 +1622,13 @@ constexpr auto get_token_definitions() {
                         .behavior =
                             TokenBehavior{.arity = 0, .stack_effect = 1},
                         .parser = parse_prop_access,
+                        .available_in_expr = true,
+                        .available_in_single_expr = true},
+        TokenDefinition{.type = TokenType::PROP_EXISTS,
+                        .name = "prop_exists",
+                        .behavior =
+                            TokenBehavior{.arity = 0, .stack_effect = 1},
+                        .parser = parse_prop_exists,
                         .available_in_expr = true,
                         .available_in_single_expr = true},
         TokenDefinition{.type = TokenType::CLIP_ABS_PLANE,

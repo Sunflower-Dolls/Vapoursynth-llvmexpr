@@ -66,11 +66,13 @@ CompiledFunction Compiler::compile_with_approx_math(int actual_approx_math) {
     bool needs_nans = false;
     if (expr_mode == ExprMode::EXPR) {
         needs_nans = std::ranges::any_of(tokens, [](const auto& token) {
-            return token.type == TokenType::EXIT_NO_WRITE;
+            return token.type == TokenType::EXIT_NO_WRITE ||
+                   token.type == TokenType::PROP_EXISTS;
         });
     } else if (expr_mode == ExprMode::SINGLE_EXPR) {
         needs_nans = std::ranges::any_of(tokens, [](const auto& token) {
-            return token.type == TokenType::PROP_STORE;
+            return token.type == TokenType::PROP_STORE ||
+                   token.type == TokenType::PROP_EXISTS;
         });
     }
 

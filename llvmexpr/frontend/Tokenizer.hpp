@@ -58,6 +58,7 @@ enum class TokenType : std::uint8_t {
     CLIP_ABS,        // src[]
     CLIP_CUR,        // src
     PROP_ACCESS,     // src.prop
+    PROP_EXISTS,     // src.prop?
     CLIP_ABS_PLANE,  // src^plane[]
     STORE_ABS_PLANE, // @[]^plane
     PROP_STORE,      // prop$

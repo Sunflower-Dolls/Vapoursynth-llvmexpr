@@ -303,6 +303,35 @@ def test_frame_property_access() -> None:
     assert res.get_frame(0)[0][0, 0] == pytest.approx(0.25)
 
 
+def test_frame_property_exists() -> None:
+    c = core.std.BlankClip(format=vs.GRAYS, color=0.0)
+
+    c_with_prop = core.std.SetFrameProps(c, _TestProp=123)
+    res_exists = core.llvmexpr.Expr(c_with_prop, "x._TestProp?", vs.GRAYS)
+    assert res_exists.get_frame(0)[0][0, 0] == pytest.approx(1.0)
+
+    res_not_exists = core.llvmexpr.Expr(c, "x._MissingProp?", vs.GRAYS)
+    assert res_not_exists.get_frame(0)[0][0, 0] == pytest.approx(0.0)
+
+    c2 = core.std.BlankClip(format=vs.GRAYS, color=0.0)
+    c2_with_prop = core.std.SetFrameProps(c2, _AnotherProp=456)
+
+    res_multi_exists = core.llvmexpr.Expr(
+        [c, c2_with_prop], "y._AnotherProp?", vs.GRAYS
+    )
+    assert res_multi_exists.get_frame(0)[0][0, 0] == pytest.approx(1.0)
+
+    res_multi_not_exists = core.llvmexpr.Expr(
+        [c_with_prop, c2], "y._TestProp?", vs.GRAYS
+    )
+    assert res_multi_not_exists.get_frame(0)[0][0, 0] == pytest.approx(0.0)
+
+    res_multi_src1 = core.llvmexpr.Expr(
+        [c, c2_with_prop], "src1._AnotherProp?", vs.GRAYS
+    )
+    assert res_multi_src1.get_frame(0)[0][0, 0] == pytest.approx(1.0)
+
+
 def test_direct_output_write_and_exit() -> None:
     base = core.std.BlankClip(format=vs.GRAYS, color=0.0, width=4, height=4)
     expr = "X 1 = Y 2 = and 5 1 2 @[] ^exit^ 0 ?"
@@ -605,9 +634,7 @@ def test_array_uninitialized_error():
         core.llvmexpr.Expr(clip, "0 arr{}@", vs.GRAYS)
 
 
-@pytest.mark.parametrize(
-    "expr", ["x:width", "y:height", "src0:width^0", "z:height^1"]
-)
+@pytest.mark.parametrize("expr", ["x:width", "y:height", "src0:width^0", "z:height^1"])
 def test_clip_dim_tokens_disabled_in_expr(expr: str):
     """Test that clip dimension tokens are disabled in Expr mode."""
     clip1 = core.std.BlankClip()

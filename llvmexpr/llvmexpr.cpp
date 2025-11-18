@@ -42,9 +42,10 @@
 #include "jit/Compiler.hpp"
 #include "jit/Jit.hpp"
 
-constexpr uint32_t PROP_READ_NAN_PAYLOAD = 0x7FC0BEEF; // qNaN with payload
+constexpr uint32_t PROP_READ_NAN_PAYLOAD =
+    0x7FC0BEEF; // qNaN with payload 0xBEEF
 constexpr uint32_t PROP_WRITE_NAN_PAYLOAD =
-    0x7FC0DEAD; // qNaN with payload 0xBEEF
+    0x7FC0DEAD; // qNaN with payload 0xDEAD
 constexpr uint32_t PROP_DELETE_NAN_PAYLOAD =
     0x7FC0DE1E; // qNaN with payload DE1E
 
@@ -440,7 +441,8 @@ exprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
                 tokenize(expr_strs.at(i), d->num_inputs, ExprMode::EXPR);
 
             for (const auto& token : d->tokens.at(i)) {
-                if (token.type == TokenType::PROP_ACCESS) {
+                if (token.type == TokenType::PROP_ACCESS ||
+                    token.type == TokenType::PROP_EXISTS) {
                     const auto& payload =
                         std::get<TokenPayload_PropAccess>(token.payload);
                     auto key =
@@ -746,7 +748,8 @@ singleExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
                         std::format("Invalid plane index {} in token '{}'",
                                     payload.plane_idx, token.text));
                 }
-            } else if (token.type == TokenType::PROP_ACCESS) {
+            } else if (token.type == TokenType::PROP_ACCESS ||
+                       token.type == TokenType::PROP_EXISTS) {
                 const auto& payload =
                     std::get<TokenPayload_PropAccess>(token.payload);
                 auto key = std::make_pair(payload.clip_idx, payload.prop_name);

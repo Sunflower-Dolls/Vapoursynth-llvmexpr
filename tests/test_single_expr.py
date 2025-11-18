@@ -397,6 +397,49 @@ def test_single_expr_frame_property_access_multiple_clips() -> None:
     assert frame_props["out1"] == pytest.approx(0.75)
 
 
+def test_single_expr_frame_property_exists() -> None:
+    """Test the prop? operator in SingleExpr."""
+    c = core.std.BlankClip(format=vs.GRAYS, color=0.0)
+
+    c_with_prop = core.std.SetFrameProps(c, _TestProp=123)
+    res_exists = core.llvmexpr.SingleExpr(c_with_prop, "x._TestProp? Result$")
+    assert res_exists.get_frame(0).props["Result"] == pytest.approx(1.0)
+
+    res_not_exists = core.llvmexpr.SingleExpr(c, "x._MissingProp? Result$")
+    assert res_not_exists.get_frame(0).props["Result"] == pytest.approx(0.0)
+
+    c2 = core.std.BlankClip(format=vs.GRAYS, color=0.0)
+    c2_with_prop = core.std.SetFrameProps(c2, _AnotherProp=456)
+
+    res_multi_exists = core.llvmexpr.SingleExpr(
+        [c, c2_with_prop], "y._AnotherProp? Result$"
+    )
+    assert res_multi_exists.get_frame(0).props["Result"] == pytest.approx(1.0)
+
+    res_multi_not_exists = core.llvmexpr.SingleExpr(
+        [c_with_prop, c2], "y._TestProp? Result$"
+    )
+    assert res_multi_not_exists.get_frame(0).props["Result"] == pytest.approx(0.0)
+
+    res_multi_src1 = core.llvmexpr.SingleExpr(
+        [c, c2_with_prop], "src1._AnotherProp? Result$"
+    )
+    assert res_multi_src1.get_frame(0).props["Result"] == pytest.approx(1.0)
+
+    c = core.std.BlankClip(format=vs.GRAYS, color=0.0)
+
+    c_with_prop = core.std.SetFrameProps(c, _TestProp=123)
+    res_exists = core.llvmexpr.SingleExpr(
+        c_with_prop,
+        "x._TestProp? exist1$i _TestProp$d x._TestProp? exist2$i 2 _TestProp$ x._TestProp? exist3$i",
+        vs.GRAYS,
+    )
+
+    assert res_exists.get_frame(0).props["exist1"] == pytest.approx(1)
+    assert res_exists.get_frame(0).props["exist2"] == pytest.approx(0)
+    assert res_exists.get_frame(0).props["exist3"] == pytest.approx(1)
+
+
 def test_multi_clip_different_dimensions():
     """Test that SingleExpr can handle clips with different dimensions."""
     clip1 = core.std.BlankClip(width=100, height=100, format=vs.GRAY8, color=10)

@@ -335,6 +335,11 @@ Since `SingleExpr` has no concept of a "current pixel," all data I/O must be exp
   - If the property is not a scalar numerical property, its value will be its first byte.
   - If the property does not exist, its value will be `NaN` (Not a Number).
 
+- **Checking for Existence (Both `Expr` and `SingleExpr`):** `clip.PropertyName?`
+  - Checks if a frame property exists.
+  - Pushes `1.0` onto the stack if the property exists.
+  - Pushes `0.0` onto the stack if the property does not exist.
+
 - **Writing (`SingleExpr` only):** `value prop_name$[suffix]`
   - The `$` operator, suffixed with a property name and an optional type specifier, writes a value to a frame property on the output frame.
   - It pops one value from the stack and assigns it to the property `prop_name`.
