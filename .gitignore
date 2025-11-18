@@ -21,3 +21,8 @@ subprojects/compile-time-regular-expressions-*
 subprojects/packagecache
 subprojects/.wraplock
 .codacy/codacy.yaml
+*.glob
+*.aux
+*.vo
+*.vok
+*.vos

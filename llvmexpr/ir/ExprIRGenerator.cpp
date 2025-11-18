@@ -421,7 +421,8 @@ bool ExprIRGenerator::process_mode_specific_token(
                                             builder.getInt32(prop_idx)));
 
             llvm::Value* prop_val_int = builder.CreateBitCast(prop_val, i32_ty);
-            //NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
+
+            // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
             llvm::Value* nan_payload_int = builder.getInt32(0x7FC0BEEF);
             llvm::Value* is_prop_read_nan =
                 builder.CreateICmpEQ(prop_val_int, nan_payload_int);

@@ -487,6 +487,25 @@ _ = 10 * 2
 # result = _ + 10 
 ```
 
+### 5.1.1. Formal Verification of Definite Assignment
+
+The robustness of the static analysis mentioned above is backed by a formal proof using the Coq Proof Assistant. The validity of this proof relies on the consistency between the language's control flow constraints and the proof's axioms.
+
+**Consistency of Hypotheses**
+
+The proof relies on the `step_safety_rule`, which posits that control flow cannot arbitrarily jump into a variable's scope from the outside without passing through its definition. This hypothesis is satisfied by language constraint described in [Section 10.2](#102-goto-and-labels).
+
+**Safety Conclusion**
+
+Given this constraint, the **Definite Assignment Theorem** (`definition_dominates_use`) is proven to hold. Formally, for any valid execution path $\text{trace}$ starting from the beginning of the script ($\text{start}$) to a variable usage point ($\text{target}$):
+
+$$
+(\text{start} < \text{def\_pos}) \land (\text{InScope}(\text{target})) \implies \text{def\_pos} \in \text{trace}
+$$
+
+This theorem mathematically guarantees that the variable definition *dominates* its use; i.e., it is impossible to reach a usage point without executing the definition. For the rigorous formal proof, refer to [proof.v](./proof.v).
+
+
 ### 5.2. Constants
 
 Constants represent fixed values and are **always** identified by a `$` prefix. They are treated as literal values and do not require prior assignment.

@@ -451,10 +451,12 @@ bool SingleExprIRGenerator::process_mode_specific_token(
 
         llvm::Value* prop_val_int = builder.CreateBitCast(prop_val, i32_ty);
 
+        // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
         llvm::Value* read_nan_payload = builder.getInt32(0x7FC0BEEF);
         llvm::Value* is_read_nan =
             builder.CreateICmpEQ(prop_val_int, read_nan_payload);
 
+        // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
         llvm::Value* delete_nan_payload = builder.getInt32(0x7FC0DE1E);
         llvm::Value* is_delete_nan =
             builder.CreateICmpEQ(prop_val_int, delete_nan_payload);
