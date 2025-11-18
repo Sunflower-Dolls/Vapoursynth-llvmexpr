@@ -292,7 +292,7 @@
       "patterns": [
         {
           "name": "meta.function-call.set-prop.llvmexpr-infix",
-          "begin": "\\b(set_prop)\\s*(\\()",
+          "begin": "\\b(set_prop|set_propf|set_propi|set_propaf|set_propai|remove_prop)\\s*(\\()",
           "beginCaptures": {
             "1": {
               "name": "support.function.io.llvmexpr-infix"

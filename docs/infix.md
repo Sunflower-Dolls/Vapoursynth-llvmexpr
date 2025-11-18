@@ -597,6 +597,10 @@ If a `set_prop` call is inside a conditional block (e.g., an `if` statement) and
 
 The compiler enforces type consistency at compile time. You cannot write to the same property using functions that imply different types (e.g., mixing `set_propi` and `set_propai` for `MyProp` will result in an error).
 
+**Note on Type Conversion**
+
+The type conversion specified by functions like `set_propi` and `set_propai` applies to how the property is stored on the final output frame's properties. Within the same expression execution, reading a property after it has been written will always yield the original floating-point value that was passed to the `set_prop` function, before any rounding or conversion. The integer conversion happens only when the filter returns the new clip with its frame properties.
+
 **Example:**
 ```
 # Write a simple integer value

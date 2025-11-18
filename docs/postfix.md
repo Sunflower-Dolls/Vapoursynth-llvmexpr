@@ -337,8 +337,8 @@ Since `SingleExpr` has no concept of a "current pixel," all data I/O must be exp
 
 - **Writing (`SingleExpr` only):** `value prop_name$[suffix]`
   - The `$` operator, suffixed with a property name and an optional type specifier, writes a value to a frame property on the output frame.
-  - It pops one value from the stack and assigns it to the property `prop_name` (Except for `d` suffix).
-  - If the property already exists, it is overwritten. This is useful for calculating and passing metadata.
+  - It pops one value from the stack and assigns it to the property `prop_name`.
+  - If the property already exists, it is overwritten. This is useful for calculating and passing metadata. For deleting properties, see the dedicated section below.
   - **Atomicity:** Property writes are atomic. A subsequent read within the same expression will see the newly written value.
   - **Type Suffixes:** You can control the output property's type using a suffix.
 
@@ -348,17 +348,25 @@ Since `SingleExpr` has no concept of a "current pixel," all data I/O must be exp
 | `$i`        | Integer      | Writes the value as an **integer**. The value from the stack is rounded to the nearest integer before being stored.                                |
 | `$af`       | Auto Float   | If a property with the same name already exists on the first source frame, its type (int or float) is kept. Otherwise, it defaults to **float**.   |
 | `$ai`       | Auto Integer | If a property with the same name already exists on the first source frame, its type (int or float) is kept. Otherwise, it defaults to **integer**. |
-| `$d`        | Delete       | Deletes the property from the output frame. Takes no arguments from the stack.                                                                     |
 
   - **Conditional Writes:** If an expression path is taken where no write to a specific property occurs, that property will not be modified on the output frame.
 
   - **Default Behavior:** If a property is not written by the expression, it will be copied from the first input clip (`src0`). If the property does not exist on the first input clip, it will not be present on the output frame.
   - **Type Consistency:** All write operations to the same property within a single expression must use a consistent type (e.g., you cannot mix `$f` and `$i` for the same property name). This check also applies to auto-types (`$af`, `$ai`).
 
+  - **Note on Type Conversion:** The type conversion specified by suffixes like `$i` and `$ai` applies to how the property is stored on the final output frame's properties. Within the same expression execution, reading a property after it has been written will always yield the original floating-point value that was on the stack, before any rounding or conversion. The integer conversion happens only when the filter returns the new clip with its frame properties. For example, after `123.7 MyIntProp$i`, a subsequent read with `MyIntProp` in the same expression will push `123.7` back onto the stack, not `124`.
+
   - **Examples:**
     - `x.PlaneStatsMax 2 / MyNewProp$f`: Writes the result as a float.
     - `123.7 MyIntProp$i`: Rounds `123.7` to `124` and writes it as an integer.
     - `N MyFrameNum$ai`: Writes the frame number. If `MyFrameNum` already exists on the source frame as a float, it will be overwritten as a float. If it doesn't exist or has a non-numerical type, it will be created as an integer.
+
+- **Deleting (`SingleExpr` only):** `prop_name$d`
+  - The `$d` suffix marks a property for deletion from the output frame.
+  - This operation is primarily used to prevent a property from being automatically copied from the first source clip (`src0`).
+  - **Stack Effect:** Unlike property write suffixes, `$d` is a zero-operand operator. It does not consume any values from the stack.
+  - **Example:**
+    - `ToDelete$d`: Deletes the `ToDelete` property from the output frame.
 
 #### **4.5. `Expr`-Specific Output Control**
 
