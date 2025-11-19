@@ -1,0 +1,48 @@
+# Copyright (C) 2025 yuygfgg
+# 
+# This file is part of Vapoursynth-llvmexpr.
+# 
+# Vapoursynth-llvmexpr is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# Vapoursynth-llvmexpr is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
+
+# Requires meta
+
+@define ___stdlib_std_INC(n) ((n) + 1)
+@define ___stdlib_std_DIV(a, b) ((a) / (b))
+
+# get_width(Value clip_idx, Value plane_idx)
+@define ___stdlib_std_LUMA_W(i) ___stdlib_meta_PASTE(___stdlib_meta_PASTE(__INPUT_WIDTH_, i), __)
+@define ___stdlib_std_SUB_W(i) ___stdlib_meta_PASTE(___stdlib_meta_PASTE(__INPUT_SUBSAMPLE_W_, i), __)
+@define ___stdlib_std_WIDTH_OF(i, p) ((p) < 0 || (p) > 2 ? -1 : (___stdlib_std_DIV(___stdlib_std_LUMA_W(i), ((p) == 0 ? 1 : (___stdlib_std_SUB_W(i) ? 2 : 1)))))
+@define ___stdlib_std_GET_WIDTH_LOOP(i, c, p) (((i) >= __INPUT_NUM__ || (i) < 0) ? -1 : ((c) == (i) ? ___stdlib_std_WIDTH_OF(i, p) : ___stdlib_std_GET_WIDTH_LOOP(___stdlib_std_INC(i), c, p)))
+@define ___stdlib_std_EXPR_WIDTH(p) ((p) < 0 || (p) > 2 ? -1 : (___stdlib_std_DIV(__WIDTH__, ((p) == 0 ? 1 : (__SUBSAMPLE_W__ ? 2 : 1)))))
+@define ___stdlib_std_get_width_(c, p) (defined(__SINGLEEXPR__) ? ___stdlib_std_GET_WIDTH_LOOP(0, c, p) : ___stdlib_std_EXPR_WIDTH(p))
+@define ___stdlib_std_get_width(c,p) ___stdlib_std_get_width_(c,p)
+
+# get_height(Value clip_idx, Value plane_idx)
+@define ___stdlib_std_LUMA_H(i) ___stdlib_meta_PASTE(___stdlib_meta_PASTE(__INPUT_HEIGHT_, i), __)
+@define ___stdlib_std_SUB_H(i) ___stdlib_meta_PASTE(___stdlib_meta_PASTE(__INPUT_SUBSAMPLE_H_, i), __)
+@define ___stdlib_std_HEIGHT_OF(i, p) ((p) < 0 || (p) > 2 ? -1 : (___stdlib_std_DIV(___stdlib_std_LUMA_H(i), ((p) == 0 ? 1 : (___stdlib_std_SUB_H(i) ? 2 : 1)))))
+@define ___stdlib_std_GET_HEIGHT_LOOP(i, c, p) (((i) >= __INPUT_NUM__ || (i) < 0) ? -1 : ((c) == (i) ? ___stdlib_std_HEIGHT_OF(i, p) : ___stdlib_std_GET_HEIGHT_LOOP(___stdlib_std_INC(i), c, p)))
+@define ___stdlib_std_EXPR_HEIGHT(p) ((p) < 0 || (p) > 2 ? -1 : (___stdlib_std_DIV(__HEIGHT__, ((p) == 0 ? 1 : (__SUBSAMPLE_H__ ? 2 : 1)))))
+@define ___stdlib_std_get_height(c, p) (defined(__SINGLEEXPR__) ? ___stdlib_std_GET_HEIGHT_LOOP(0, c, p) : ___stdlib_std_EXPR_HEIGHT(p))
+
+# get_bitdepth(Value clip_idx)
+@define ___stdlib_std_BD_OF(i) ___stdlib_meta_PASTE(___stdlib_meta_PASTE(__INPUT_BITDEPTH_, i), __)
+@define ___stdlib_std_GET_BD_LOOP(i, c) (((i) >= __INPUT_NUM__ || (i) < 0) ? -1 : ((c) == (i) ? ___stdlib_std_BD_OF(i) : ___stdlib_std_GET_BD_LOOP(___stdlib_std_INC(i), c)))
+@define ___stdlib_std_get_bitdepth(c) ___stdlib_std_GET_BD_LOOP(0, c)
+
+# get_fmt(Value clip_idx)
+@define ___stdlib_std_FMT_OF(i) ___stdlib_meta_PASTE(___stdlib_meta_PASTE(__INPUT_FMT_, i), __)
+@define ___stdlib_std_GET_FMT_LOOP(i, c) (((i) >= __INPUT_NUM__ || (i) < 0) ? 0 : ((c) == (i) ? ___stdlib_std_FMT_OF(i) : ___stdlib_std_GET_FMT_LOOP(___stdlib_std_INC(i), c)))
+@define ___stdlib_std_get_fmt(c) ___stdlib_std_GET_FMT_LOOP(0, c)

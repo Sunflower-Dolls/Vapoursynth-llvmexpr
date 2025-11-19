@@ -29,13 +29,15 @@
 #include "stdlib/Algorithms.hpp"
 #include "stdlib/LibraryBase.hpp"
 #include "stdlib/Meta.hpp"
+#include "stdlib/Std.hpp"
 
 namespace infix2postfix {
 
 using stdlib::ExportedFunction;
 using stdlib::IsLibrary;
 
-using AllStandardLibraries = std::tuple<stdlib::algorithms, stdlib::meta>;
+using AllStandardLibraries =
+    std::tuple<stdlib::algorithms, stdlib::meta, stdlib::std>;
 
 namespace detail {
 

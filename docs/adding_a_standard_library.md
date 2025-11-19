@@ -157,6 +157,10 @@ using dependencies = std::tuple<>;
 using dependencies = std::tuple<stdlib::algorithms>;
 ```
 
+> [!IMPORTANT]
+> Dependencies should **only** be declared in the `.hpp` file using the `dependencies` tuple. Do **not** use the `@requires` directive in the `.expr` file. However, it is recommended to document the dependencies in a comment at the top of the `.expr` file for clarity.
+
+
 ### Step 4: Define Exports
 
 Specify which internal symbols should be exposed to the user. This is crucial for creating the public API of your library.

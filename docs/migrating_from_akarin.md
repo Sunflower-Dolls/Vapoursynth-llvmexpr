@@ -23,7 +23,8 @@ The primary difference lies in their evaluation modes. `llvmexpr` operates exclu
 
 *   **In `llvmexpr`**: The expression `'2147483647 1 +'` will always be evaluated using floating-point math, resulting in `2147483648.0`. Wrap-around is impossible.
 
-**Implication:** Any expression that relies on integer overflow as a mechanism is **not** directly portable and will produce fundamentally different results in `llvmexpr`.
+> [!WARNING]
+> **Implication:** Any expression that relies on integer overflow as a mechanism is **not** directly portable and will produce fundamentally different results in `llvmexpr`.
 
 ##### Integer Precision & The Critical Role of `akarin`'s `opt` Parameter
 
@@ -49,7 +50,8 @@ This leads to a stark difference in capabilities:
 *   `akarin` with `opt=0` behaves like `llvmexpr` *when dealing with pixel data*, as the initial conversion to float limits precision. However, it still performs integer math on integer constants.
 *   `akarin` with `opt=1` unlocks a integer-only, high-precision pipeline that `llvmexpr` cannot replicate.
 
-Users migrating from `akarin.Expr` must be mindful of this core difference. **Expressions that depend on the precise representation of integers greater than 24 bits (especially for bitwise operations) or on integer wrap-around behavior will not work as expected in `llvmexpr` and may require algorithmic changes.**
+> [!IMPORTANT]
+> **Migration Consideration:** Users migrating from `akarin.Expr` must be mindful of this core difference. Expressions that depend on the precise representation of integers greater than 24 bits (especially for bitwise operations) or on integer wrap-around behavior will not work as expected in `llvmexpr` and may require algorithmic changes.
 
 #### 2. `pow` Function and Approximate Math
 
@@ -67,7 +69,8 @@ Beyond `pow`, `llvmexpr` provides more explicit control over mathematical precis
 
 #### 4. Incompatible Positional Arguments
 
-When migrating from `akarin.Expr`, **do not perform a simple find-and-replace** on the function name, especially if you use positional arguments. The optional parameters for `akarin.Expr` and `llvmexpr.Expr` are in a **different order**, which can lead to silent errors or immediate script failure.
+> [!CAUTION]
+> When migrating from `akarin.Expr`, **do not perform a simple find-and-replace** on the function name, especially if you use positional arguments. The optional parameters for `akarin.Expr` and `llvmexpr.Expr` are in a **different order**, which can lead to silent errors or immediate script failure.
 
 #### 5. Parameter Signature Mismatch
 

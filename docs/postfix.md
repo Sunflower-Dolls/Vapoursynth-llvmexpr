@@ -80,7 +80,10 @@ Literals are pushed directly onto the stack. The decimal separator for floating-
 
 - **Standard:** `128`, `3.14`, `-0.5`
 - **Hexadecimal:** `0x10` (16), `0xFF` (255).
-- **Octal:** `010` (8). Note that invalid octal numbers like `09` are parsed as floats (`9.0`).
+- **Octal:** `010` (8).
+
+> [!NOTE]
+> Invalid octal numbers like `09` are parsed as floats (`9.0`).
 
 **Example:** `x 128 -` (In `Expr`, this subtracts 128 from each pixel value of the first clip).
 
@@ -207,9 +210,10 @@ These operators round floating-point values to nearest integers before the opera
 - `var!`: Pops the top value from the stack and stores it in a variable named `var`.
 - `var@`: Pushes the value of the variable `var` onto the stack.
 
-**Variable Initialization:** Variables are allocated when the expression is compiled, but they are **not** automatically initialized to any value. It is your responsibility to store a value into a variable (`!`) before you load from it (`@`).
-
-The compiler performs a rigorous static analysis of the control flow. If it detects any path where a variable could be read before it is guaranteed to have been written to, it will raise an error and refuse to compile the expression. This prevents the use of uninitialized variables.
+> [!IMPORTANT]
+> **Variable Initialization:** Variables are allocated when the expression is compiled, but they are **not** automatically initialized to any value. It is your responsibility to store a value into a variable (`!`) before you load from it (`@`).
+>
+> The compiler performs a rigorous static analysis of the control flow. If it detects any path where a variable could be read before it is guaranteed to have been written to, it will raise an error and refuse to compile the expression. This prevents the use of uninitialized variables.
 
 **Example:** `x 2 / my_var! my_var@ my_var@ *` (In `Expr`, this calculates `(x/2)^2`).
 
@@ -256,11 +260,14 @@ Arrays must be allocated before use. The allocation method depends on whether th
 
 ##### **4.3.3. Array Initialization and Safety**
 
-Like variables, arrays undergo static initialization analysis:
-- The compiler verifies that an array is allocated before any read or write operations.
-- Attempting to access an uninitialized array will result in a compilation error.
-- An array allocated statically (`arrayname{}^size`) cannot be reallocated by any means (either statically or dynamically). The compiler will raise an error if it detects a re-allocation attempt. This applies to both `Expr` and `SingleExpr`.
-- Array indices are **not** bounds-checked at runtime. Accessing an out-of-bounds index results in **undefined behavior**.
+> [!IMPORTANT]
+> Like variables, arrays undergo static initialization analysis:
+> - The compiler verifies that an array is allocated before any read or write operations.
+> - Attempting to access an uninitialized array will result in a compilation error.
+> - An array allocated statically (`arrayname{}^size`) cannot be reallocated by any means (either statically or dynamically). The compiler will raise an error if it detects a re-allocation attempt. This applies to both `Expr` and `SingleExpr`.
+
+> [!WARNING]
+> **Bounds Checking:** Array indices are **not** bounds-checked at runtime. Accessing an out-of-bounds index results in **undefined behavior**.
 
 **Additional Safety Considerations:**
 - **Floating-point indices:** While the language accepts floating-point values for array indices and sizes (in dynamic allocation), they are truncated toward zero, not rounded. Use explicit rounding operations (`floor`, `ceil`, `round`) if you need specific rounding behavior before passing values to array operations.
@@ -270,7 +277,9 @@ Like variables, arrays undergo static initialization analysis:
 
 - **In `Expr`:** Arrays are allocated per-pixel and only exist during the evaluation of that pixel. They cannot share data between pixels.
 - **In `SingleExpr`:** Arrays are allocated once per filter instance and persist across frame evaluations.
-  - **Important Note:** Due to VapourSynth's parallel frame processing, frames may be processed out of order or simultaneously. Arrays should **not** be used for inter-frame communication or accumulation, as this will produce non-deterministic results.
+
+> [!IMPORTANT]
+> Due to VapourSynth's parallel frame processing, frames may be processed out of order or simultaneously. Arrays should **not** be used for inter-frame communication or accumulation, as this will produce non-deterministic results.
   - Array values are preserved in intra-frame resizes and reallocations.
   - **Example:**
     Do note that comments are not allowed in the expression, therefore the example is only for demonstration purposes. To actually run this example, for each line everything after `#` should be removed.
@@ -309,7 +318,9 @@ In `Expr`, there are three ways to access pixel values from input clips, all of 
     - `:c`: Forces clamped boundary. **This is the default if no suffix is specified.**
     - `:m`: Forces mirrored boundary.
     - `:b`: Uses the behavior from the filter's global `boundary` parameter.
-  - **Warning:** Absolute access may not be vectorized by the JIT compiler if coordinates are computed at runtime, which can cause severe performance degradation. Use relative access with constant offsets where possible.
+
+> [!WARNING]
+> Absolute access may not be vectorized by the JIT compiler if coordinates are computed at runtime, which can cause severe performance degradation. Use relative access with constant offsets where possible.
 
 ##### **4.4.2. Pixel & Data I/O (`SingleExpr` only)**
 
@@ -324,9 +335,14 @@ Since `SingleExpr` has no concept of a "current pixel," all data I/O must be exp
 - **Absolute Pixel Writing:** `value absX absY @[]^plane`
   - This is the primary way to modify the output frame in `SingleExpr`.
   - The operator is suffixed with the target plane index (`^plane`). It pops a `value`, `absX` coordinate, and `absY` coordinate from the stack and writes the value to that location in the output frame's specified plane. If the coordinates are floating-point values, they are rounded to the nearest integer (with ties to even).
-  - **Boundary Handling Warning:** Pixel writes perform **no boundary checking**. Writing to coordinates outside the valid frame dimensions (e.g., `[-1, -1]` or `[width, height]`) is a memory error. This leads to **undefined behavior** and can crash the process, corrupt the output frame, or cause other unpredictable issues. It is the expression author's responsibility to ensure all write coordinates are within the valid `[0, width-1]` and `[0, height-1]` range for each plane.
+
+> [!WARNING]
+> **Boundary Handling:** Pixel writes perform **no boundary checking**. Writing to coordinates outside the valid frame dimensions (e.g., `[-1, -1]` or `[width, height]`) is a memory error. This leads to **undefined behavior** and can crash the process, corrupt the output frame, or cause other unpredictable issues. It is the expression author's responsibility to ensure all write coordinates are within the valid `[0, width-1]` and `[0, height-1]` range for each plane.
+
   - **Example:** `255 0 0 @[]^0` writes the value `255` to the top-left pixel (0, 0) of the first plane.
-  - **Important:** If a pixel is not explicitly written to, its value is copied from the first input clip (`src0`).
+
+> [!IMPORTANT]
+> If a pixel is not explicitly written to, its value is copied from the first input clip (`src0`).
 
 > [!IMPORTANT]
 > **Read-After-Write Behavior for Pixels**
@@ -354,7 +370,10 @@ Since `SingleExpr` has no concept of a "current pixel," all data I/O must be exp
   - The `$` operator, suffixed with a property name and an optional type specifier, writes a value to a frame property on the output frame.
   - It pops one value from the stack and assigns it to the property `prop_name`.
   - If the property already exists, it is overwritten. This is useful for calculating and passing metadata. For deleting properties, see the dedicated section below.
-  - **Atomicity:** Property writes are atomic. A subsequent read within the same expression will see the newly written value. **Important:** This applies to reads from the first source clip (`src0` or `x`). Writing a property effectively "shadows" the property of the same name on `src0`. Properties on other clips (`src1`, etc.) are unaffected and remain read-only.
+
+> [!IMPORTANT]
+> **Atomicity:** Property writes are atomic. A subsequent read within the same expression will see the newly written value. This applies to reads from the first source clip (`src0` or `x`). Writing a property effectively "shadows" the property of the same name on `src0`. Properties on other clips (`src1`, etc.) are unaffected and remain read-only.
+
   - **Type Suffixes:** You can control the output property's type using a suffix.
 
 | Suffix      | Type         | Description                                                                                                                                        |
@@ -369,7 +388,10 @@ Since `SingleExpr` has no concept of a "current pixel," all data I/O must be exp
   - **Default Behavior:** If a property is not written by the expression, it will be copied from the first input clip (`src0`). If the property does not exist on the first input clip, it will not be present on the output frame.
   - **Type Consistency:** All write operations to the same property within a single expression must use a consistent type (e.g., you cannot mix `$f` and `$i` for the same property name). This check also applies to auto-types (`$af`, `$ai`).
 
-  - **Note on Type Conversion:** The type conversion specified by suffixes like `$i` and `$ai` applies to how the property is stored on the final output frame's properties. Within the same expression execution, reading a property after it has been written will always yield the original floating-point value that was on the stack, before any rounding or conversion. The integer conversion happens only when the filter returns the new clip with its frame properties. For example, after `123.7 MyIntProp$i`, a subsequent read with `MyIntProp` in the same expression will push `123.7` back onto the stack, not `124`.
+> [!NOTE]
+> **Type Conversion Behavior**
+>
+> The type conversion specified by suffixes like `$i` and `$ai` applies to how the property is stored on the final output frame's properties. Within the same expression execution, reading a property after it has been written will always yield the original floating-point value that was on the stack, before any rounding or conversion. The integer conversion happens only when the filter returns the new clip with its frame properties. For example, after `123.7 MyIntProp$i`, a subsequent read with `MyIntProp` in the same expression will push `123.7` back onto the stack, not `124`.
 
 > [!NOTE]
 > **Read-After-Write Behavior for Properties**
@@ -419,7 +441,8 @@ For example, an expression like `val x y @[] ^exit^` is valid: it writes `val` t
 
 The RPN engine is Turing-complete, allowing for arbitrary loops and conditional branching using labels and jumps. This enables complex iterative algorithms directly within an expression.
 
-**Warning:** With great power comes great responsibility. An infinite loop in your expression will cause the filter to hang indefinitely.
+> [!WARNING]
+> With great power comes great responsibility. An infinite loop in your expression will cause the filter to hang indefinitely.
 
 #### **5.1. Labels**
 

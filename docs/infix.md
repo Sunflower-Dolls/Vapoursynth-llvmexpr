@@ -63,7 +63,9 @@ These are used to define constants or feature flags.
 These provide parameterized text replacement, similar to C preprocessor macros.
 
 - **Syntax**: `@define NAME(param1, param2, ...) body`
-- **Important**: There must be **no space** between the macro name and the opening parenthesis `(`. A space will cause it to be parsed as an object-like macro.
+
+> [!IMPORTANT]
+> There must be **no space** between the macro name and the opening parenthesis `(`. A space will cause it to be parsed as an object-like macro.
 
 - **Invocation**: To invoke a function-like macro, use its name followed by parentheses containing the arguments. If a function-like macro's name appears without `()`, it will not be expanded.
 
@@ -292,14 +294,17 @@ Macros can be defined recursively. When combined with the short-circuiting terna
 **Example: Compile-Time Factorial**
 ```
 # The recursion terminates because when n == 0, the second branch is not evaluated.
-# Note: Parentheses around parameters are essential to avoid operator precedence issues.
 @define FACTORIAL(n) ((n) == 0 ? 1 : ((n) * FACTORIAL((n) - 1)))
 
 # The preprocessor evaluates this entire expression to the constant value 120.
 RESULT = FACTORIAL(5) 
 ```
 
-Note that in this example, the expression `(n) - 1` is passed unevaluated at each step, accumulating into a large final expression `((5) * ((4) * ...))`. This is acceptable for simple arithmetic, but will fail if a step inside the recursion requires a single evaluated number (e.g., for token pasting). See [Next Section](#283-forcing-step-by-step-evaluation-in-recursive-macros) for how to force evaluation at each step.
+> [!NOTE]
+> Parentheses around parameters are essential to avoid operator precedence issues.
+
+> [!NOTE]
+> In this example, the expression `(n) - 1` is passed unevaluated at each step, accumulating into a large final expression `((5) * ((4) * ...))`. This is acceptable for simple arithmetic, but will fail if a step inside the recursion requires a single evaluated number (e.g., for token pasting). See [Next Section](#283-forcing-step-by-step-evaluation-in-recursive-macros) for how to force evaluation at each step.
 
 #### 2.8.3. Forcing Step-by-Step Evaluation in Recursive Macros
 
@@ -381,6 +386,9 @@ These are defined by the VapourSynth filter when it invokes the transpiler.
 | `__INPUT_SUBSAMPLE_H_N__` | Vertical chroma subsampling of the (N+1)-th input clip. (**`SingleExpr` mode only**)               |
 | `__PLANE_NO__`            | Current plane being processed (`0`, `1`, or `2`). (**`Expr` mode only**)                           |
 
+> [!NOTE]
+> For dynamic access to input clip formats (e.g., when the clip index is a variable), use the functions in the [`std` library](#123-the-std-library).
+
 ### 2.10. Debugging Macros
 
 The cli tool `infix2postfix` includes a `-E` option that outputs the preprocessed code and a trace of macro expansions.
@@ -411,7 +419,9 @@ Identifiers are used for naming variables and functions.
 
 - **Rules:** Must begin with a letter (`a-z`, `A-Z`) or an underscore (`_`) and can be followed by any number of letters, digits, or underscores. The pattern is `[a-zA-Z_]\w*`.
 - **Case-Sensitivity:** Identifiers are case-sensitive. `myVar` and `myvar` are different.
-- **Reserved Prefix:** Identifiers starting with `__internal_` are reserved for internal use by the transpiler and must not be used in user code.
+
+> [!IMPORTANT]
+> **Reserved Prefix:** Identifiers starting with `__internal_` are reserved for internal use by the transpiler and must not be used in user code.
 
 ### 3.4. Literals
 
@@ -514,7 +524,8 @@ Constants represent fixed values and are **always** identified by a `$` prefix. 
 
 The language provides several built-in constants.
 
-**Note on Deprecation:** The `$width` and `$height` constants are deprecated and will be removed in a future version. Please use the corresponding macros provided by the `meta` standard library instead.
+> [!WARNING]
+> **Deprecation Notice:** The `$width` and `$height` constants are deprecated and will be removed in a future version. Please use the corresponding macros provided by the `meta` standard library instead.
 
 | Constant  | Description                                                                                                                                                | Availability |
 | :-------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------- |
@@ -563,9 +574,11 @@ Operators are left-associative, except for the unary and ternary operators. The 
 |            | `!`                  | Logical NOT              | Unary   | Right         |
 |            | `~`                  | Bitwise NOT              | Unary   | Right         |
 
-Note: Bitwise operators operate on integer values. When operating on floating-point values, operands are first rounded to the nearest integer.
+> [!NOTE]
+> Bitwise operators operate on integer values. When operating on floating-point values, operands are first rounded to the nearest integer.
 
-Note: All conditional contexts in the infix syntax use consistent `!= 0` semantics, which is different from that of the underlying RPN language.
+> [!NOTE]
+> All conditional contexts in the infix syntax use consistent `!= 0` semantics, which is different from that of the underlying RPN language.
 
 ## 7. Data Access
 
@@ -624,11 +637,13 @@ If a `set_prop` call is inside a conditional block (e.g., an `if` statement) and
 
 **Type Consistency**
 
-The compiler enforces type consistency at compile time. You cannot write to the same property using functions that imply different types (e.g., mixing `set_propi` and `set_propai` for `MyProp` will result in an error).
+> [!IMPORTANT]
+> The compiler enforces type consistency at compile time. You cannot write to the same property using functions that imply different types (e.g., mixing `set_propi` and `set_propai` for `MyProp` will result in an error).
 
-**Note on Type Conversion**
-
-The type conversion specified by functions like `set_propi` and `set_propai` applies to how the property is stored on the final output frame's properties. Within the same expression execution, reading a property after it has been written will always yield the original floating-point value that was passed to the `set_prop` function, before any rounding or conversion. The integer conversion happens only when the filter returns the new clip with its frame properties.
+> [!NOTE]
+> **Type Conversion Timing**
+>
+> The type conversion specified by functions like `set_propi` and `set_propai` applies to how the property is stored on the final output frame's properties. Within the same expression execution, reading a property after it has been written will always yield the original floating-point value that was passed to the `set_prop` function, before any rounding or conversion. The integer conversion happens only when the filter returns the new clip with its frame properties.
 
 > [!NOTE]
 > **Read-After-Write Behavior for Properties**
@@ -648,9 +663,11 @@ set_propi(MyInteger, 123);
 if ($N > 10) {
     set_propaf(MyAutoFloat, 99.9);
 }
-# Note: If N <= 10, MyAutoFloat will be initialized from the property
-# on the source frame of clip $x. If it doesn't exist there, the result is undefined.
+
 ```
+
+> [!NOTE]
+> If N <= 10, MyAutoFloat will be initialized from the property on the source frame of clip $x. If it doesn't exist there, the result is undefined.
 
 #### Deleting (`SingleExpr` only)
 
@@ -697,13 +714,17 @@ In `SingleExpr` mode, all data I/O is explicit and uses absolute coordinates.
 
 **Deprecated:** The `frame.width[N]` and `frame.height[N]` constructs are deprecated and will be removed in a future version. Please use the corresponding macros provided by the `meta` standard library instead.
 
+> [!WARNING]
+> **Deprecation Notice:** `frame.width[N]` and `frame.height[N]` are deprecated. Use the macros from the `meta` standard library instead.
+
 Access the width and height of specific planes using `frame.width[N]` and `frame.height[N]`.
 
 ```
 w0 = frame.width[0];   # Width of plane 0 (luma)
 h1 = frame.height[1];  # Height of plane 1 (chroma U)
 ```
-**Note:** The plane index `N` must be a literal constant. `frame.width` and `frame.height` are special built-in syntax forms, not member access on an object.
+> [!NOTE]
+> The plane index `N` must be a literal constant. `frame.width` and `frame.height` are special built-in syntax forms, not member access on an object.
 
 #### Absolute Pixel Reading
 
@@ -794,7 +815,9 @@ The `store()` function has different signatures for `Expr` and `SingleExpr` mode
     - `plane`: Plane index (must be a literal constant).
     - `value`: Value to write (can be an expression).
   - **Example:** `store(0, 0, 0, 255);`
-  - **Warning:** No boundary checking is performed. Writing outside valid frame dimensions causes undefined behavior.
+
+> [!WARNING]
+> No boundary checking is performed. Writing outside valid frame dimensions causes undefined behavior.
 
 #### `exit()` (`Expr` only)
 
@@ -835,6 +858,9 @@ function functionName(Type1 param1, Type2 param2) {
   3.  **Flexibility for Void Functions:** If a function does not return a value (it only contains empty `return;` statements or no `return` statements at all), it is not required for all paths to have a `return`. The function can simply "fall off" the end when its last statement is executed.
 
 - **Inlining:** Function calls are effectively inlined at compile time. Recursion is not supported.
+
+> [!IMPORTANT]
+> **Recursion Not Supported:** Function calls are inlined at compile time. Recursive function calls will cause compilation errors or undefined behavior.
 - **Nesting:** Function definitions cannot be nested.
 
 ### 8.5. Function Overloading
@@ -989,12 +1015,16 @@ Arrays are created by calling the built-in `new()` function and assigning the re
     ```
   - **Float to Integer Conversion:** If the size expression evaluates to a floating-point value, it will be **truncated toward zero**.
     - Examples: `new(10.9)` allocates size `10`, `new(3.1)` allocates size `3`, `new(-2.9)` allocates size `-2` (which would cause undefined behavior).
-    - **Note:** This is truncation, not rounding. `new(10.9)` will allocate 10 elements, not 11.
+
+> [!NOTE]
+> This is truncation, not rounding. `new(10.9)` will allocate 10 elements, not 11.
   - The `resize()` function can be used to change an array's size.
     ```
     pixel_buffer = resize(new_size);
     ```
-    Note: An array must be allocated using `new()` before it can be resized. The same float-to-integer truncation applies to `resize()`.
+
+> [!NOTE]
+> An array must be allocated using `new()` before it can be resized. The same float-to-integer truncation applies to `resize()`.
 
 ### 11.2. Element Access
 
@@ -1055,10 +1085,13 @@ The lifetime of an array depends on the execution mode:
 
 ### 11.5. Safety
 
-**Warning:** The language does not perform runtime bounds checking on array access. Accessing an index outside the allocated size (e.g., `my_array[-1]` or `my_array[size]`) will result in **undefined behavior**, which may include crashes or memory corruption. It is the script author's responsibility to ensure all access is within bounds.
+> [!WARNING]
+> The language does not perform runtime bounds checking on array access. Accessing an index outside the allocated size (e.g., `my_array[-1]` or `my_array[size]`) will result in **undefined behavior**, which may include crashes or memory corruption. It is the script author's responsibility to ensure all access is within bounds.
 
-**Floating-point indices:** While the language accepts floating-point values for array indices and sizes, they are truncated toward zero, not rounded. This may lead to unexpected behavior if you assume rounding. Use explicit rounding functions (`floor()`, `ceil()`, `round()`) if you need specific rounding behavior.
-**Negative sizes/indices:** Passing negative values to `new()` or `resize()`, or using negative array indices (which can result from truncating small negative floats like `-0.5` → `0` or larger ones like `-1.5` → `-1`), will cause undefined behavior.
+> [!CAUTION]
+> **Floating-point indices:** While the language accepts floating-point values for array indices and sizes, they are truncated toward zero, not rounded. This may lead to unexpected behavior if you assume rounding. Use explicit rounding functions (`floor()`, `ceil()`, `round()`) if you need specific rounding behavior.
+>
+> **Negative sizes/indices:** Passing negative values to `new()` or `resize()`, or using negative array indices (which can result from truncating small negative floats like `-0.5` → `0` or larger ones like `-1.5` → `-1`), will cause undefined behavior.
 
 ## 12. Standard Library Reference
 
@@ -1084,7 +1117,7 @@ To use this library, add the following to your code:
         -   `expression`: The compile-time expression to check.
         -   `context`: A token representing the context where the error occurred.
         -   `message`: A token describing the reason for the assertion failure.
-    -   **Example:** `ASSERT_CONST(__WIDTH__ > 1024, __WIDTH__, must_be_greater_than_1024)`
+    -   **Example:** `ASSERT_CONST(__WIDTH__ > 1024, Clip_width_, must_be_greater_than_1024)`
 
 -   `PASTE(token1, token2)`
     -   **Function:** Pastes two tokens into one. It uses a two-step macro expansion to ensure that `token1` and `token2` are fully expanded before pasting.
@@ -1144,3 +1177,55 @@ To use this library, add the following to your code:
     -   **Function:** Finds the k-th smallest element (0-indexed) in array `a` within the range `[begin, end)`. This operation is more efficient than a full sort, with an average time complexity of `O(N)`.
     -   **Parameters:** `k` is a 0-based index where `0 <= k < (end - begin)`.
     -   **Implementation:** This function uses a quickselect algorithm. In `Expr` mode, if the range size is not a compile-time constant, it falls back to a slower but correct implementation.
+
+### 12.3. The `std` Library
+
+The `std` library provides functions to access frame properties (width, height, bitdepth, format) of **input clips** using runtime values for clip index and plane index. This is particularly useful when the clip or plane index is not known at compile time. For information about the **output frame**, use the [Context Macros](#29-predefined-macros) instead.
+
+To use this library, add the following to your code:
+```
+@requires std
+```
+
+**Functions**
+
+-   `get_width(clip_idx, plane_idx)`
+    -   **Function:** Returns the width of the specified plane in the specified clip. Returns `-1` if the clip or plane index is invalid.
+    -   **Parameters:**
+        -   `clip_idx`: The index of the input clip (0-based).
+        -   `plane_idx`: The index of the plane (0, 1, or 2).
+    -   **Availability:**
+        -   `Expr` mode: Ignores `clip_idx` and returns the width of the output frame's plane (All clips have the same dimensions in Expr mode).
+        -   `SingleExpr` mode: Returns the width of the specified input clip's plane.
+
+-   `get_height(clip_idx, plane_idx)`
+    -   **Function:** Returns the height of the specified plane in the specified clip. Returns `-1` if the clip or plane index is invalid.
+    -   **Parameters:**
+        -   `clip_idx`: The index of the input clip (0-based).
+        -   `plane_idx`: The index of the plane (0, 1, or 2).
+    -   **Availability:**
+        -   `Expr` mode: Ignores `clip_idx` and returns the height of the output frame's plane (All clips have the same dimensions in Expr mode).
+        -   `SingleExpr` mode: Returns the height of the specified input clip's plane.
+
+-   `get_bitdepth(clip_idx)`
+    -   **Function:** Returns the bit depth of the specified clip. Returns `-1` if the clip index is invalid.
+    -   **Parameters:**
+        -   `clip_idx`: The index of the input clip (0-based).
+    -   **Availability:** Both modes.
+
+-   `get_fmt(clip_idx)`
+    -   **Function:** Returns the format type of the specified clip (`1` for float, `-1` for integer). Returns `0` if the clip index is invalid.
+    -   **Parameters:**
+        -   `clip_idx`: The index of the input clip (0-based).
+    -   **Availability:** Both modes.
+
+**Example:**
+```
+@requires std
+
+# Get the width of the luma plane (plane 0) of the first input clip (clip 0)
+w = get_width(0, 0)
+
+# Get the bitdepth of the second input clip (clip 1)
+bd = get_bitdepth(1)
+```
