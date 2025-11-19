@@ -630,6 +630,15 @@ The compiler enforces type consistency at compile time. You cannot write to the 
 
 The type conversion specified by functions like `set_propi` and `set_propai` applies to how the property is stored on the final output frame's properties. Within the same expression execution, reading a property after it has been written will always yield the original floating-point value that was passed to the `set_prop` function, before any rounding or conversion. The integer conversion happens only when the filter returns the new clip with its frame properties.
 
+> [!NOTE]
+> **Read-After-Write Behavior for Properties**
+>
+> In `SingleExpr` mode, writing a property via `set_prop` **immediately updates** the value returned by subsequent reads of that property from the **first source clip** (`$src0` or `$x`).
+>
+> *   `set_prop(MyProp, 100); val = $src0.MyProp;` -> `val` will be `100`.
+> *   This "shadowing" allows you to use properties as mutable variables during the execution.
+> *   This only applies to `$src0`. Properties from other clips (`$src1`, etc.) are read-only and independent.
+
 **Example:**
 ```
 # Write a simple integer value
@@ -703,6 +712,15 @@ Read pixels from specific coordinates and planes using the 4-argument version of
 #### Absolute Pixel Writing
 
 Write values to specific output frame locations using the 4-argument version of `store()`. See [section 8.3](#83-mode-specific-functions) for details.
+
+> [!IMPORTANT]
+> **Read-After-Write Behavior for Pixels**
+>
+> Pixel access in `llvmexpr` is **not atomic** in the sense of read-after-write visibility.
+> *   **Reading** (e.g., `dyn()`, `$src0[...]`) always reads from the **input frames**.
+> *   **Writing** (e.g., `store()`, `RESULT`) always writes to the **output frame**.
+>
+> Therefore, if you write a value to a pixel and then immediately read from the same coordinate, you will get the **original input value**, not the value you just wrote. To pass data between pixels or steps, use Arrays.
 
 ## 8. Functions
 

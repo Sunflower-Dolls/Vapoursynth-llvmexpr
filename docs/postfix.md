@@ -25,7 +25,8 @@
     - All output must be done explicitly by writing to absolute pixel coordinates or by writing to frame properties.
     - The stack must be empty at the end of execution.
 
-> **Note:** Throughout this document, features specific to one function will be explicitly marked. If not marked, the feature is available in both `Expr` and `SingleExpr`.
+> [!IMPORTANT]
+>  Throughout this document, features specific to one function will be explicitly marked. If not marked, the feature is available in both `Expr` and `SingleExpr`.
 
 #### **1.3. Reverse Polish Notation (RPN)**
 
@@ -327,6 +328,15 @@ Since `SingleExpr` has no concept of a "current pixel," all data I/O must be exp
   - **Example:** `255 0 0 @[]^0` writes the value `255` to the top-left pixel (0, 0) of the first plane.
   - **Important:** If a pixel is not explicitly written to, its value is copied from the first input clip (`src0`).
 
+> [!IMPORTANT]
+> **Read-After-Write Behavior for Pixels**
+>
+> Pixel access in `llvmexpr` is **not atomic** in the sense of read-after-write visibility.
+> *   **Reading** (e.g., `[]`) always reads from the **input frames**.
+> *   **Writing** (e.g., `@[]`) always writes to the **output frame**.
+>
+> Therefore, if you write a value to a pixel and then immediately read from the same coordinate, you will get the **original input value**, not the value you just wrote. To pass data between pixels or steps, use Arrays.
+
 ##### **4.4.3. Frame Property Access**
 
 - **Reading (Both `Expr` and `SingleExpr`):** `clip.PropertyName`
@@ -344,7 +354,7 @@ Since `SingleExpr` has no concept of a "current pixel," all data I/O must be exp
   - The `$` operator, suffixed with a property name and an optional type specifier, writes a value to a frame property on the output frame.
   - It pops one value from the stack and assigns it to the property `prop_name`.
   - If the property already exists, it is overwritten. This is useful for calculating and passing metadata. For deleting properties, see the dedicated section below.
-  - **Atomicity:** Property writes are atomic. A subsequent read within the same expression will see the newly written value.
+  - **Atomicity:** Property writes are atomic. A subsequent read within the same expression will see the newly written value. **Important:** This applies to reads from the first source clip (`src0` or `x`). Writing a property effectively "shadows" the property of the same name on `src0`. Properties on other clips (`src1`, etc.) are unaffected and remain read-only.
   - **Type Suffixes:** You can control the output property's type using a suffix.
 
 | Suffix      | Type         | Description                                                                                                                                        |
@@ -360,6 +370,15 @@ Since `SingleExpr` has no concept of a "current pixel," all data I/O must be exp
   - **Type Consistency:** All write operations to the same property within a single expression must use a consistent type (e.g., you cannot mix `$f` and `$i` for the same property name). This check also applies to auto-types (`$af`, `$ai`).
 
   - **Note on Type Conversion:** The type conversion specified by suffixes like `$i` and `$ai` applies to how the property is stored on the final output frame's properties. Within the same expression execution, reading a property after it has been written will always yield the original floating-point value that was on the stack, before any rounding or conversion. The integer conversion happens only when the filter returns the new clip with its frame properties. For example, after `123.7 MyIntProp$i`, a subsequent read with `MyIntProp` in the same expression will push `123.7` back onto the stack, not `124`.
+
+> [!NOTE]
+> **Read-After-Write Behavior for Properties**
+>
+> In `SingleExpr` mode, writing a property via `prop$` **immediately updates** the value returned by subsequent reads of that property from the **first source clip** (`src0` or `x`).
+>
+> *   `100 MyProp$ drop src0.MyProp` -> The stack will contain `100`.
+> *   This "shadowing" allows you to use properties as mutable variables during the execution.
+> *   This only applies to `src0`. Properties from other clips (`src1`, etc.) are read-only and independent.
 
   - **Examples:**
     - `x.PlaneStatsMax 2 / MyNewProp$f`: Writes the result as a float.
