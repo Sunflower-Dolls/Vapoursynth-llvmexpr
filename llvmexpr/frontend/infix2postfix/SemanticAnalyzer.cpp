@@ -174,6 +174,11 @@ bool SemanticAnalyzer::analyze(const Program* program) {
 
             function_signatures[sig.name].push_back(sig);
             function_defs[sig.name].push_back(func_def);
+
+            auto func_symbol = defineSymbol(SymbolKind::FUNCTION, sig.name,
+                                            Type::Value, sig.range);
+            func_symbol->signature = &function_signatures[sig.name].back();
+            func_def->symbol = func_symbol;
         }
     }
 
@@ -1133,11 +1138,6 @@ void SemanticAnalyzer::analyze(FunctionDef& stmt) {
                 stmt.range);
         }
     }
-
-    auto func_symbol = defineSymbol(SymbolKind::FUNCTION, stmt.name.value,
-                                    Type::Value, stmt.range);
-    func_symbol->signature = sig;
-    stmt.symbol = func_symbol;
 
     // Analyze function body with proper scope
     const auto* saved_current_function = current_function;
