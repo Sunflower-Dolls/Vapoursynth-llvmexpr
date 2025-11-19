@@ -1690,15 +1690,44 @@ class Expander {
                 break;
             }
 
-            if (it == result.begin() || (it + 1) == result.end()) {
-                result.erase(it);
-                continue;
+            auto is_skippable = [](const Token& t) {
+                return t.type == TokenType::WHITESPACE ||
+                       t.type == TokenType::COMMENT ||
+                       t.type == TokenType::BEGIN_MACRO_EXPANSION ||
+                       t.type == TokenType::END_MACRO_EXPANSION;
+            };
+
+            auto lhs_it = it;
+            bool left_has_value = false;
+
+            if (lhs_it != result.begin()) {
+                auto search_it = lhs_it - 1;
+                while (true) {
+                    if (!is_skippable(*search_it)) {
+                        lhs_it = search_it;
+                        left_has_value = true;
+                        break;
+                    }
+                    if (search_it == result.begin()) {
+                        lhs_it = search_it;
+                        left_has_value = false;
+                        break;
+                    }
+                    search_it--;
+                }
+            } else {
+                left_has_value = false;
             }
 
-            auto lhs_it = it - 1;
             auto rhs_it = it + 1;
+            while (rhs_it != result.end() && is_skippable(*rhs_it)) {
+                rhs_it++;
+            }
 
-            std::string newText = lhs_it->text + rhs_it->text;
+            std::string lhs_text = left_has_value ? lhs_it->text : "";
+            std::string rhs_text = (rhs_it != result.end()) ? rhs_it->text : "";
+
+            std::string newText = lhs_text + rhs_text;
 
             PreprocessorTokenizer tokenizer(newText);
             auto newTokens = tokenizer.tokenize();
@@ -1710,7 +1739,10 @@ class Expander {
                                 .begin(),
                             newTokens.end());
 
-            auto insert_pos = result.erase(lhs_it, rhs_it + 1);
+            auto erase_end =
+                (rhs_it == result.end()) ? result.end() : (rhs_it + 1);
+
+            auto insert_pos = result.erase(lhs_it, erase_end);
             result.insert(insert_pos, newTokens.begin(), newTokens.end());
         }
 
