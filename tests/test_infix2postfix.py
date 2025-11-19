@@ -296,6 +296,18 @@ RESULT = -result
         assert ">" in output
         assert "neg" in output
 
+    def test_is_prop_exist(self):
+        """Test is_prop_exist() builtin function."""
+        infix = """
+RESULT = 0
+if (is_prop_exist($x, MyProp)) {
+    RESULT = 1
+}
+"""
+        success, output = run_infix2postfix(infix, "expr")
+        assert success, f"Failed to convert: {output}"
+        assert "x.MyProp?" in output
+
 
 class TestModeChecking:
     """Test mode-specific restrictions."""

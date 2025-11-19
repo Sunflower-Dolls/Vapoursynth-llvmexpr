@@ -580,6 +580,16 @@ Read a property from a clip's frame properties using `clip.propname` syntax.
 - **Syntax:** `clip.propname`
 - `clip` must be a valid source clip identifier (e.g., `$a`, `$src1`). The `$` prefix is required. For example: `$a.propname` or `$src1._Matrix`.
 
+#### Checking Existence (Both Modes)
+
+Check if a frame property exists using the `is_prop_exist` built-in function.
+
+- **Signature:** `is_prop_exist(clip, property_name)`
+- **Parameters:**
+  - `clip`: A source clip constant (e.g., `$a`, `$src1`).
+  - `property_name`: Property name as an identifier.
+- **Returns:** `1.0` if the property exists, `0.0` otherwise.
+
 #### Writing (`SingleExpr` only)
 
 Write a frame property using the `set_prop` family of built-in functions. These functions allow you to specify the data type of the property being written.

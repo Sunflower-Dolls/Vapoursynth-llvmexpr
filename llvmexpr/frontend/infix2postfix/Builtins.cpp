@@ -161,6 +161,19 @@ PostfixBuilder handle_exit([[maybe_unused]] CodeGenerator* codegen,
     return b;
 }
 
+PostfixBuilder handle_is_prop_exist(CodeGenerator* codegen,
+                                    const CallExpr& expr) {
+    // is_prop_exist(clip, prop_name)
+    auto clip_res = codegen->generate_expr(expr.args[0].get());
+    std::string clip_name = clip_res.postfix.get_expression();
+
+    auto* prop_name_expr = get_if<VariableExpr>(expr.args[1].get());
+
+    PostfixBuilder b;
+    b.add_prop_exist(clip_name, prop_name_expr->name.value);
+    return b;
+}
+
 // nth_N functions are not handled here
 const std::map<std::string, std::vector<BuiltinFunction>> builtin_functions = {
     // Standard math
@@ -329,6 +342,12 @@ const std::map<std::string, std::vector<BuiltinFunction>> builtin_functions = {
                       .param_types = {Type::Literal_string},
                       .special_handler = handle_remove_prop,
                       .returns_value = false}}},
+    {"is_prop_exist",
+     {BuiltinFunction{.name = "is_prop_exist",
+                      .arity = 2,
+                      .mode_restriction = std::nullopt,
+                      .param_types = {Type::Clip, Type::Literal_string},
+                      .special_handler = handle_is_prop_exist}}},
     {"dyn",
      {
          BuiltinFunction{.name = "dyn",
