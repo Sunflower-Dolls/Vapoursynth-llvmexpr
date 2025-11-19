@@ -846,6 +846,125 @@ RESULT = dup(4)
         assert "Duplicate function signature" in output
 
 
+class TestRecursionDetection:
+    """Test detection of recursive function calls."""
+
+    def test_direct_recursion(self):
+        """Test that direct recursion is detected and reported."""
+        infix = """
+function factorial(Value n) {
+    if (n <= 1) {
+        return 1
+    }
+    return n * factorial(n - 1)
+}
+RESULT = factorial(5)
+"""
+        success, output = run_infix2postfix(infix, "expr")
+        assert not success, "Should fail due to direct recursion"
+        assert "Recursion is not allowed" in output
+        assert "factorial" in output
+
+    def test_indirect_recursion_two_functions(self):
+        """Test that indirect recursion between two functions is detected."""
+        infix = """
+function test1(Value n) {
+    if (n <= 0) {
+        return 0
+    }
+    return test2(n - 1)
+}
+
+function test2(Value n) {
+    if (n <= 0) {
+        return 0
+    }
+    return test1(n - 1)
+}
+
+RESULT = test1(5)
+"""
+        success, output = run_infix2postfix(infix, "expr")
+        assert not success, "Should fail due to indirect recursion"
+        assert "Recursion is not allowed" in output
+        assert "test1" in output
+        assert "test2" in output
+
+    def test_indirect_recursion_three_functions(self):
+        """Test that indirect recursion among three functions is detected."""
+        infix = """
+function a(Value n) {
+    return b(n)
+}
+
+function b(Value n) {
+    return c(n)
+}
+
+function c(Value n) {
+    return a(n)
+}
+
+RESULT = a(1)
+"""
+        success, output = run_infix2postfix(infix, "expr")
+        assert not success, "Should fail due to indirect recursion"
+        assert "Recursion is not allowed" in output
+
+    def test_non_recursive_functions(self):
+        """Test that non-recursive functions work correctly."""
+        infix = """
+function add(Value a, Value b) {
+    return a + b
+}
+
+function multiply(Value a, Value b) {
+    return a * b
+}
+
+RESULT = multiply(add(2, 3), 4)
+"""
+        success, output = run_infix2postfix(infix, "expr")
+        assert success, f"Non-recursive functions should work: {output}"
+
+    def test_function_calling_itself_conditionally(self):
+        """Test that conditional recursion is detected."""
+        infix = """
+function fib(Value n) {
+    if (n <= 1) {
+        return n
+    }
+    return fib(n - 1) + fib(n - 2)
+}
+
+RESULT = fib(10)
+"""
+        success, output = run_infix2postfix(infix, "expr")
+        assert not success, "Should fail due to recursion in fib"
+        assert "Recursion is not allowed" in output
+        assert "fib" in output
+
+    def test_multiple_independent_functions(self):
+        """Test that multiple independent functions don't trigger false positives."""
+        infix = """
+function helper1(Value x) {
+    return x * 2
+}
+
+function helper2(Value x) {
+    return x + 10
+}
+
+function main_func(Value x) {
+    return helper1(x) + helper2(x)
+}
+
+RESULT = main_func(5)
+"""
+        success, output = run_infix2postfix(infix, "expr")
+        assert success, f"Independent functions should work: {output}"
+
+
 class TestStatementTermination:
     """Tests for statement termination rules (newlines and semicolons)."""
 

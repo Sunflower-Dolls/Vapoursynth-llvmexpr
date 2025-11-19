@@ -195,6 +195,46 @@ bool SemanticAnalyzer::analyze(const Program* program) {
         }
     }
 
+    // Check for recursion in function call graph
+    std::set<std::string> visited;
+    for (const auto& [func_name, _] : function_call_graph) {
+        std::set<std::string> visiting;
+        std::vector<std::string> cycle_path;
+
+        if (detectCycleInCallGraph(func_name, visiting, visited, cycle_path)) {
+
+            std::string cycle_str;
+            for (size_t i = 0; i < cycle_path.size(); ++i) {
+                cycle_str += cycle_path[i];
+                if (i < cycle_path.size() - 1) {
+                    cycle_str += " -> ";
+                }
+            }
+            cycle_str += " -> " + cycle_path[0];
+
+            Range first_range;
+            if (function_signatures.contains(cycle_path[0])) {
+                first_range = function_signatures.at(cycle_path[0])[0].range;
+            }
+
+            reportError(std::format("Recursion is not allowed: {}", cycle_str),
+                        first_range);
+
+            for (const auto& fn : cycle_path) {
+                if (function_signatures.contains(fn)) {
+                    const auto& sig = function_signatures.at(fn)[0];
+                    reportError(
+                        std::format(
+                            "  Function '{}' is part of the recursion cycle",
+                            fn),
+                        sig.range);
+                }
+            }
+
+            break;
+        }
+    }
+
     // Check for unused global variables and functions
     for (const auto& [name, symbol] : global_scope->get_symbols()) {
         if (!symbol->is_used) {
@@ -241,6 +281,39 @@ void SemanticAnalyzer::reportError(const std::string& message,
 void SemanticAnalyzer::reportWarning(const std::string& message,
                                      const Range& range) {
     diagnostics.emplace_back(DiagnosticSeverity::WARNING, message, range);
+}
+
+bool SemanticAnalyzer::detectCycleInCallGraph(
+    const std::string& func_name, std::set<std::string>& visiting,
+    std::set<std::string>& visited, std::vector<std::string>& cycle_path) {
+
+    if (visited.contains(func_name)) {
+        return false;
+    }
+
+    if (visiting.contains(func_name)) {
+        cycle_path.push_back(func_name);
+        return true;
+    }
+
+    visiting.insert(func_name);
+    cycle_path.push_back(func_name);
+
+    if (function_call_graph.contains(func_name)) {
+        for (const auto& callee : function_call_graph.at(func_name)) {
+            if (detectCycleInCallGraph(callee, visiting, visited, cycle_path)) {
+                if (cycle_path.front() == func_name) {
+                    return true;
+                }
+                return true;
+            }
+        }
+    }
+
+    visiting.erase(func_name);
+    cycle_path.pop_back();
+    visited.insert(func_name);
+    return false;
 }
 
 // Symbol table management
@@ -466,6 +539,11 @@ Type SemanticAnalyzer::analyze(CallExpr& expr) {
     const auto* signature =
         resolveOverload(expr.callee, expr.args, expr.range, &expr);
     expr.resolved_signature = signature;
+
+    if (signature != nullptr && !function_call_stack.empty()) {
+        const std::string& caller = function_call_stack.back();
+        function_call_graph[caller].insert(expr.callee);
+    }
 
     if (expr.callee == "set_prop" || expr.callee == "set_propf" ||
         expr.callee == "set_propi" || expr.callee == "set_propaf" ||
@@ -1143,6 +1221,9 @@ void SemanticAnalyzer::analyze(FunctionDef& stmt) {
     const auto* saved_current_function = current_function;
     current_function = sig;
 
+    // Push function onto call stack to detect recursion
+    function_call_stack.push_back(stmt.name.value);
+
     {
         ScopeGuard scope_guard(this);
 
@@ -1170,6 +1251,9 @@ void SemanticAnalyzer::analyze(FunctionDef& stmt) {
             }
         }
     }
+
+    // Pop function from call stack
+    function_call_stack.pop_back();
 
     // Restore context
     current_function = saved_current_function;

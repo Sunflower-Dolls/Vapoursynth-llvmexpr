@@ -170,6 +170,15 @@ class SemanticAnalyzer {
     std::map<std::string, std::pair<std::string, Range>> written_properties;
 
     const FunctionSignature* current_function = nullptr;
+
+    std::vector<std::string> function_call_stack;
+
+    std::map<std::string, std::set<std::string>> function_call_graph;
+
+    bool detectCycleInCallGraph(const std::string& func_name,
+                                std::set<std::string>& visiting,
+                                std::set<std::string>& visited,
+                                std::vector<std::string>& cycle_path);
 };
 
 } // namespace infix2postfix
