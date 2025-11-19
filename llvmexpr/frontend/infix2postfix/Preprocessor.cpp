@@ -2261,14 +2261,32 @@ class Preprocessor::Impl {
                         libNameUpper += static_cast<char>(std::toupper(c));
                     }
 
+                    bool isExpr = macros.contains("__EXPR__");
+                    bool isSingleExpr = macros.contains("__SINGLEEXPR__");
+
                     for (const auto& exported : *exportsOpt) {
+                        if (exported.mode == stdlib::ExportMode::Expr &&
+                            !isExpr) {
+                            continue;
+                        }
+                        if (exported.mode == stdlib::ExportMode::SingleExpr &&
+                            !isSingleExpr) {
+                            continue;
+                        }
+
                         preprocessor::Macro aliasMacro;
                         aliasMacro.name = std::string(exported.name);
 
                         if (exported.param_count == 0) {
-                            std::string bodyStr =
-                                std::format("___STDLIB_{}_{}", libNameUpper,
-                                            std::string(exported.name));
+                            std::string bodyStr;
+                            if (!exported.internal_name_override.empty()) {
+                                bodyStr = std::string(
+                                    exported.internal_name_override);
+                            } else {
+                                bodyStr =
+                                    std::format("___STDLIB_{}_{}", libNameUpper,
+                                                std::string(exported.name));
+                            }
                             PreprocessorTokenizer tokenizer(bodyStr);
                             aliasMacro.body = tokenizer.tokenize();
                             std::erase_if(aliasMacro.body, [](const Token& t) {
@@ -2276,9 +2294,15 @@ class Preprocessor::Impl {
                             });
                             aliasMacro.is_function_like = false;
                         } else {
-                            std::string internalName =
-                                std::format("___stdlib_{}_{}", std::string(lib),
-                                            std::string(exported.name));
+                            std::string internalName;
+                            if (!exported.internal_name_override.empty()) {
+                                internalName = std::string(
+                                    exported.internal_name_override);
+                            } else {
+                                internalName = std::format(
+                                    "___stdlib_{}_{}", std::string(lib),
+                                    std::string(exported.name));
+                            }
 
                             aliasMacro.is_function_like = true;
                             for (int i = 0; i < exported.param_count; ++i) {

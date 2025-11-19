@@ -525,7 +525,7 @@ Constants represent fixed values and are **always** identified by a `$` prefix. 
 The language provides several built-in constants.
 
 > [!WARNING]
-> **Deprecation Notice:** The `$width` and `$height` constants are deprecated and will be removed in a future version. Please use the corresponding macros provided by the `meta` standard library instead.
+> **Deprecation Notice:** The `$width` and `$height` constants are deprecated and will be removed in a future version. Please use the corresponding functions provided by the `std` standard library instead.
 
 | Constant  | Description                                                                                                                                                | Availability |
 | :-------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------- |
@@ -712,10 +712,8 @@ In `SingleExpr` mode, all data I/O is explicit and uses absolute coordinates.
 
 #### Plane-Specific Dimensions
 
-**Deprecated:** The `frame.width[N]` and `frame.height[N]` constructs are deprecated and will be removed in a future version. Please use the corresponding macros provided by the `meta` standard library instead.
-
 > [!WARNING]
-> **Deprecation Notice:** `frame.width[N]` and `frame.height[N]` are deprecated. Use the macros from the `meta` standard library instead.
+> **Deprecation Notice:** `frame.width[N]` and `frame.height[N]` are deprecated. Use the functions from the `std` standard library instead.
 
 Access the width and height of specific planes using `frame.width[N]` and `frame.height[N]`.
 
@@ -1189,35 +1187,43 @@ To use this library, add the following to your code:
 
 **Functions**
 
+-   `get_width(plane_idx)`
+    -   **Mode:** `Expr`
+    -   **Function:** Returns the width of the specified plane.
+    -   **Parameters:**
+        -   `plane_idx`: The index of the plane (0, 1, or 2).
+
 -   `get_width(clip_idx, plane_idx)`
-    -   **Function:** Returns the width of the specified plane in the specified clip. Returns `-1` if the clip or plane index is invalid.
+    -   **Mode:** `SingleExpr`
+    -   **Function:** Returns the width of the specified plane of the specified clip.
     -   **Parameters:**
         -   `clip_idx`: The index of the input clip (0-based).
         -   `plane_idx`: The index of the plane (0, 1, or 2).
-    -   **Availability:**
-        -   `Expr` mode: Ignores `clip_idx` and returns the width of the output frame's plane (All clips have the same dimensions in Expr mode).
-        -   `SingleExpr` mode: Returns the width of the specified input clip's plane.
+
+-   `get_height(plane_idx)`
+    -   **Mode:** `Expr`
+    -   **Function:** Returns the height of the specified plane.
+    -   **Parameters:**
+        -   `plane_idx`: The index of the plane (0, 1, or 2).
 
 -   `get_height(clip_idx, plane_idx)`
-    -   **Function:** Returns the height of the specified plane in the specified clip. Returns `-1` if the clip or plane index is invalid.
+    -   **Mode:** `SingleExpr`
+    -   **Function:** Returns the height of the specified plane of the specified clip.
     -   **Parameters:**
         -   `clip_idx`: The index of the input clip (0-based).
         -   `plane_idx`: The index of the plane (0, 1, or 2).
-    -   **Availability:**
-        -   `Expr` mode: Ignores `clip_idx` and returns the height of the output frame's plane (All clips have the same dimensions in Expr mode).
-        -   `SingleExpr` mode: Returns the height of the specified input clip's plane.
 
 -   `get_bitdepth(clip_idx)`
+    -   **Mode:** Both
     -   **Function:** Returns the bit depth of the specified clip. Returns `-1` if the clip index is invalid.
     -   **Parameters:**
         -   `clip_idx`: The index of the input clip (0-based).
-    -   **Availability:** Both modes.
 
 -   `get_fmt(clip_idx)`
+    -   **Mode:** Both
     -   **Function:** Returns the format type of the specified clip (`1` for float, `-1` for integer). Returns `0` if the clip index is invalid.
     -   **Parameters:**
         -   `clip_idx`: The index of the input clip (0-based).
-    -   **Availability:** Both modes.
 
 **Example:**
 ```

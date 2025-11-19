@@ -137,7 +137,7 @@ def test_expr_width_height(
     test_clip = core.std.BlankClip(width=width, height=height, format=format_id)
 
     # Test width
-    expr_w = f"@requires std\nRESULT = get_width(0, {plane_idx});"
+    expr_w = f"@requires std\nRESULT = get_width({plane_idx});"
     res_w = core.llvmexpr.Expr(
         test_clip, expr_w if format_id in [vs.GRAYS] else [expr_w, "", ""], infix=True
     )
@@ -145,7 +145,7 @@ def test_expr_width_height(
     assert f_w[0][0, 0] == pytest.approx(expected_width)
 
     # Test height
-    expr_h = f"@requires std\nRESULT = get_height(0, {plane_idx});"
+    expr_h = f"@requires std\nRESULT = get_height({plane_idx});"
     res_h = core.llvmexpr.Expr(
         test_clip, expr_h if format_id in [vs.GRAYS] else [expr_h, "", ""], infix=True
     )

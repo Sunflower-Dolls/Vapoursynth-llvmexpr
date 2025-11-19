@@ -25,9 +25,14 @@
 
 namespace infix2postfix::stdlib {
 
+enum class ExportMode : std::uint8_t { All, Expr, SingleExpr };
+
 struct ExportedFunction {
     std::string_view name; /// User-visible name
     int param_count;
+    ExportMode mode = ExportMode::All;
+    // NOLINTNEXTLINE(readability-redundant-string-init)
+    std::string_view internal_name_override = "";
 };
 
 template <typename T>

@@ -38,6 +38,8 @@ concept IsLibrary = requires {
 struct ExportedFunction {
     std::string_view name; // User-visible alias
     int param_count;       // 0 for constants, >0 for functions
+    ExportMode mode = ExportMode::All; // ExportMode::All, ::Expr, or ::SingleExpr
+    std::string_view internal_name_override = ""; // Optional override for internal function name
 };
 
 } // namespace infix2postfix::stdlib
@@ -173,6 +175,21 @@ Specify which internal symbols should be exposed to the user. This is crucial fo
 static constexpr std::array<ExportedFunction, 2> exports = {{
     ExportedFunction{"do_something", 2},
     ExportedFunction{"MY_CONSTANT", 0},
+}};
+```
+
+### Mode-Specific Exports
+
+You can restrict a function to a specific compilation mode (`Expr` or `SingleExpr`) using the `mode` field. You can also map the same user-facing name to different internal functions using `internal_name_override`.
+
+**Example:**
+```cpp
+static constexpr std::array<ExportedFunction, 2> exports = {{
+    // Available only in Expr mode, maps to ___stdlib_mylib_get_width_expr
+    ExportedFunction{.name = "get_width", .param_count = 1, .mode = ExportMode::Expr, .internal_name_override = "___stdlib_mylib_get_width_expr"},
+    
+    // Available only in SingleExpr mode, maps to ___stdlib_mylib_get_width_single
+    ExportedFunction{.name = "get_width", .param_count = 2, .mode = ExportMode::SingleExpr, .internal_name_override = "___stdlib_mylib_get_width_single"},
 }};
 ```
 
