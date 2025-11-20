@@ -23,7 +23,7 @@ struct std {
 
     using dependencies = ::std::tuple<meta>;
 
-    static constexpr ::std::array<ExportedFunction, 6> exports = {{
+    static constexpr ::std::array<ExportedFunction, 15> exports = {{
         ExportedFunction{.name = "get_width",
                          .param_count = 1,
                          .mode = ExportMode::Expr,
@@ -45,7 +45,14 @@ struct std {
                          .internal_name_override =
                              "___stdlib_std_get_height_single"},
         ExportedFunction{.name = "get_bitdepth", .param_count = 1},
-        ExportedFunction{.name = "get_fmt", .param_count = 1},
+        ExportedFunction{.name = "get_sampletype", .param_count = 1},
+        ExportedFunction{.name = "get_colorfamily", .param_count = 1},
+        ExportedFunction{.name = "cfUndefined", .param_count = 0},
+        ExportedFunction{.name = "cfGray", .param_count = 0},
+        ExportedFunction{.name = "cfRGB", .param_count = 0},
+        ExportedFunction{.name = "cfYUV", .param_count = 0},
+        ExportedFunction{.name = "stInteger", .param_count = 0},
+        ExportedFunction{.name = "stFloat", .param_count = 0},
     }};
 };
 

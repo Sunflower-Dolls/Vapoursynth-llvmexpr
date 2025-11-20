@@ -53,8 +53,22 @@ function ___stdlib_std_get_bitdepth(Value clip_idx) {
     return ___stdlib_std_GET_BD_LOOP(0, clip_idx)
 }
 
-@define ___stdlib_std_FMT_OF(i) ___stdlib_meta_PASTE(___stdlib_meta_PASTE(__INPUT_FMT_, i), __)
-@define ___stdlib_std_GET_FMT_LOOP(i, c) (((i) >= __INPUT_NUM__ || (i) < 0) ? 0 : ((c) == (i) ? ___stdlib_std_FMT_OF(i) : ___stdlib_std_GET_FMT_LOOP(___stdlib_std_INC(i), c)))
-function ___stdlib_std_get_fmt(Value clip_idx) {
-    return ___stdlib_std_GET_FMT_LOOP(0, clip_idx)
+@define ___STDLIB_STD_cfUndefined 0
+@define ___STDLIB_STD_cfGray 1
+@define ___STDLIB_STD_cfRGB 2
+@define ___STDLIB_STD_cfYUV 3
+
+@define ___STDLIB_STD_stInteger 0
+@define ___STDLIB_STD_stFloat 1
+
+@define ___stdlib_std_SAMPLETYPE_OF(i) ___stdlib_meta_PASTE(___stdlib_meta_PASTE(__INPUT_SAMPLETYPE_, i), __)
+@define ___stdlib_std_GET_SAMPLETYPE_LOOP(i, c) (((i) >= __INPUT_NUM__ || (i) < 0) ? -1 : ((c) == (i) ? ___stdlib_std_SAMPLETYPE_OF(i) : ___stdlib_std_GET_SAMPLETYPE_LOOP(___stdlib_std_INC(i), c)))
+function ___stdlib_std_get_sampletype(Value clip_idx) {
+    return ___stdlib_std_GET_SAMPLETYPE_LOOP(0, clip_idx)
+}
+
+@define ___stdlib_std_CF_OF(i) ___stdlib_meta_PASTE(___stdlib_meta_PASTE(__INPUT_COLORFAMILY_, i), __)
+@define ___stdlib_std_GET_CF_LOOP(i, c) (((i) >= __INPUT_NUM__ || (i) < 0) ? -1 : ((c) == (i) ? ___stdlib_std_CF_OF(i) : ___stdlib_std_GET_CF_LOOP(___stdlib_std_INC(i), c)))
+function ___stdlib_std_get_colorfamily(Value clip_idx) {
+    return ___stdlib_std_GET_CF_LOOP(0, clip_idx)
 }

@@ -96,18 +96,18 @@ def test_singleexpr_bitdepth(test_clips, prop_name, clip_idx, expected):
 @pytest.mark.parametrize(
     "prop_name, clip_idx, expected",
     [
-        ("fmt0", 0, -1),
-        ("fmt1", 1, 1),
-        ("fmt2", 2, -1),
-        ("fmt_invalid", 10, 0),
+        ("st0", 0, "stInteger"),
+        ("st1", 1, "stFloat"),
+        ("st2", 2, "stInteger"),
+        ("st_invalid", 10, -1),
     ],
 )
-def test_singleexpr_format(test_clips, prop_name, clip_idx, expected):
-    """Test get_fmt in SingleExpr mode."""
+def test_singleexpr_sampletype(test_clips, prop_name, clip_idx, expected):
+    """Test get_sampletype in SingleExpr mode."""
     expr_code = f"""
     @requires std
     n = {clip_idx}
-    set_propi({prop_name}, get_fmt(n));
+    set_propi({prop_name}, (get_sampletype(n) == {expected}));
     """
 
     r_single = core.llvmexpr.SingleExpr(
@@ -115,7 +115,7 @@ def test_singleexpr_format(test_clips, prop_name, clip_idx, expected):
     )
 
     f_single = r_single.get_frame(0)
-    assert f_single.props[prop_name] == expected
+    assert f_single.props[prop_name] == 1
 
 
 @pytest.mark.parametrize(
@@ -151,3 +151,28 @@ def test_expr_width_height(
     )
     f_h = res_h.get_frame(0)
     assert f_h[0][0, 0] == pytest.approx(expected_height)
+
+
+@pytest.mark.parametrize(
+    "prop_name, clip_idx, expected",
+    [
+        ("cf0", 0, "cfYUV"),
+        ("cf1", 1, "cfRGB"),
+        ("cf2", 2, "cfGray"),
+        ("cf_invalid", 10, -1),
+    ],
+)
+def test_singleexpr_colorfamily(test_clips, prop_name, clip_idx, expected):
+    """Test get_colorfamily in SingleExpr mode."""
+    expr_code = f"""
+    @requires std
+    n = {clip_idx}
+    set_propi({prop_name}, (get_colorfamily(n) == {expected}));
+    """
+
+    r_single = core.llvmexpr.SingleExpr(
+        test_clips, expr_code, format=vs.YUV420P8, infix=True
+    )
+
+    f_single = r_single.get_frame(0)
+    assert f_single.props[prop_name] == 1

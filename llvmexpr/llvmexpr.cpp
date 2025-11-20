@@ -409,21 +409,26 @@ exprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
                 macros["__INPUT_NUM__"] = std::to_string(d->num_inputs);
                 macros["__OUTPUT_BITDEPTH__"] =
                     std::to_string(d->vi.format.bitsPerSample);
+                macros["__OUTPUT_COLORFAMILY__"] =
+                    std::to_string(d->vi.format.colorFamily);
                 macros["__SUBSAMPLE_W__"] =
                     std::to_string(d->vi.format.subSamplingW);
                 macros["__SUBSAMPLE_H__"] =
                     std::to_string(d->vi.format.subSamplingH);
                 macros["__PLANE_NO__"] = std::to_string(i);
-                macros["__OUTPUT_FMT__"] = std::to_string(
-                    (d->vi.format.sampleType == stFloat) ? 1 : -1);
+                macros["__OUTPUT_SAMPLETYPE__"] = std::to_string(
+                    (d->vi.format.sampleType == stFloat) ? 1 : 0);
 
                 for (int j = 0; j < d->num_inputs; ++j) {
                     const VSVideoInfo* input_vi =
                         vsapi->getVideoInfo(d->nodes[j]);
                     macros[std::format("__INPUT_BITDEPTH_{}__", j)] =
                         std::to_string(input_vi->format.bitsPerSample);
-                    macros[std::format("__INPUT_FMT_{}__", j)] = std::to_string(
-                        (input_vi->format.sampleType == stFloat) ? 1 : -1);
+                    macros[std::format("__INPUT_COLORFAMILY_{}__", j)] =
+                        std::to_string(input_vi->format.colorFamily);
+                    macros[std::format("__INPUT_SAMPLETYPE_{}__", j)] =
+                        std::to_string(
+                            (input_vi->format.sampleType == stFloat) ? 1 : 0);
                 }
 
                 expr_strs.at(i) =
@@ -707,19 +712,24 @@ singleExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
             macros["__INPUT_NUM__"] = std::to_string(d->num_inputs);
             macros["__OUTPUT_BITDEPTH__"] =
                 std::to_string(d->vi.format.bitsPerSample);
+            macros["__OUTPUT_COLORFAMILY__"] =
+                std::to_string(d->vi.format.colorFamily);
             macros["__SUBSAMPLE_W__"] =
                 std::to_string(d->vi.format.subSamplingW);
             macros["__SUBSAMPLE_H__"] =
                 std::to_string(d->vi.format.subSamplingH);
-            macros["__OUTPUT_FMT__"] =
-                std::to_string((d->vi.format.sampleType == stFloat) ? 1 : -1);
+            macros["__OUTPUT_SAMPLETYPE__"] =
+                std::to_string((d->vi.format.sampleType == stFloat) ? 1 : 0);
 
             for (int i = 0; i < d->num_inputs; ++i) {
                 const VSVideoInfo* input_vi = vsapi->getVideoInfo(d->nodes[i]);
                 macros[std::format("__INPUT_BITDEPTH_{}__", i)] =
                     std::to_string(input_vi->format.bitsPerSample);
-                macros[std::format("__INPUT_FMT_{}__", i)] = std::to_string(
-                    (input_vi->format.sampleType == stFloat) ? 1 : -1);
+                macros[std::format("__INPUT_COLORFAMILY_{}__", i)] =
+                    std::to_string(input_vi->format.colorFamily);
+                macros[std::format("__INPUT_SAMPLETYPE_{}__", i)] =
+                    std::to_string(
+                        (input_vi->format.sampleType == stFloat) ? 1 : 0);
                 macros[std::format("__INPUT_WIDTH_{}__", i)] =
                     std::to_string(input_vi->width);
                 macros[std::format("__INPUT_HEIGHT_{}__", i)] =

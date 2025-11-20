@@ -369,22 +369,24 @@ The preprocessor provides several built-in macros that expose information about 
 #### Context Macros (when `infix=1` is used)
 These are defined by the VapourSynth filter when it invokes the transpiler.
 
-| Macro                     | Description                                                                                        |
-| :------------------------ | :------------------------------------------------------------------------------------------------- |
-| `__WIDTH__`               | Output frame width (integer, sub-sampling not counted).                                            |
-| `__HEIGHT__`              | Output frame height (integer, sub-sampling not counted).                                           |
-| `__INPUT_NUM__`           | Number of input clips (integer).                                                                   |
-| `__OUTPUT_BITDEPTH__`     | Output bit depth.                                                                                  |
-| `__OUTPUT_FMT__`          | Output format type (`1` for float, `-1` for integer).                                              |
-| `__SUBSAMPLE_W__`         | Horizontal chroma subsampling of the output (`1` for 4:2:x, `0` otherwise).                        |
-| `__SUBSAMPLE_H__`         | Vertical chroma subsampling of the output (`1` for 4:2:0, `0` otherwise).                          |
-| `__INPUT_BITDEPTH_N__`    | Bit depth of the (N+1)-th input clip (e.g., `__INPUT_BITDEPTH_0__`).                               |
-| `__INPUT_FMT_N__`         | Format type of the (N+1)-th input clip (e.g., `__INPUT_FMT_0__`). `1` for float, `-1` for integer. |
-| `__INPUT_WIDTH_N__`       | Width of the (N+1)-th input clip's luma plane. (**`SingleExpr` mode only**)                        |
-| `__INPUT_HEIGHT_N__`      | Height of the (N+1)-th input clip's luma plane. (**`SingleExpr` mode only**)                       |
-| `__INPUT_SUBSAMPLE_W_N__` | Horizontal chroma subsampling of the (N+1)-th input clip. (**`SingleExpr` mode only**)             |
-| `__INPUT_SUBSAMPLE_H_N__` | Vertical chroma subsampling of the (N+1)-th input clip. (**`SingleExpr` mode only**)               |
-| `__PLANE_NO__`            | Current plane being processed (`0`, `1`, or `2`). (**`Expr` mode only**)                           |
+| Macro                     | Description                                                                                          |
+| :------------------------ | :--------------------------------------------------------------------------------------------------- |
+| `__WIDTH__`               | Output frame width (integer, sub-sampling not counted).                                              |
+| `__HEIGHT__`              | Output frame height (integer, sub-sampling not counted).                                             |
+| `__INPUT_NUM__`           | Number of input clips (integer).                                                                     |
+| `__OUTPUT_BITDEPTH__`     | Output bit depth.                                                                                    |
+| `__OUTPUT_COLORFAMILY__`  | Output ColorFamily (`0`=cfUndefined, `1`=cfGray, `2`=cfRGB, `3`=cfYUV).                              |
+| `__OUTPUT_SAMPLETYPE__`   | Output sample type (`0`=stInteger, `1`=stFloat).                                                     |
+| `__SUBSAMPLE_W__`         | Horizontal chroma subsampling of the output (`1` for 4:2:x, `0` otherwise).                          |
+| `__SUBSAMPLE_H__`         | Vertical chroma subsampling of the output (`1` for 4:2:0, `0` otherwise).                            |
+| `__INPUT_BITDEPTH_N__`    | Bit depth of the (N+1)-th input clip (e.g., `__INPUT_BITDEPTH_0__`).                                 |
+| `__INPUT_COLORFAMILY_N__` | ColorFamily of the (N+1)-th input clip (e.g., `__INPUT_COLORFAMILY_0__`).                            |
+| `__INPUT_SAMPLETYPE_N__`  | Sample type of the (N+1)-th input clip (e.g., `__INPUT_SAMPLETYPE_0__`). `0`=stInteger, `1`=stFloat. |
+| `__INPUT_WIDTH_N__`       | Width of the (N+1)-th input clip's luma plane. (**`SingleExpr` mode only**)                          |
+| `__INPUT_HEIGHT_N__`      | Height of the (N+1)-th input clip's luma plane. (**`SingleExpr` mode only**)                         |
+| `__INPUT_SUBSAMPLE_W_N__` | Horizontal chroma subsampling of the (N+1)-th input clip. (**`SingleExpr` mode only**)               |
+| `__INPUT_SUBSAMPLE_H_N__` | Vertical chroma subsampling of the (N+1)-th input clip. (**`SingleExpr` mode only**)                 |
+| `__PLANE_NO__`            | Current plane being processed (`0`, `1`, or `2`). (**`Expr` mode only**)                             |
 
 > [!NOTE]
 > For dynamic access to input clip formats (e.g., when the clip index is a variable), use the functions in the [`std` library](#123-the-std-library).
@@ -1218,11 +1220,31 @@ To use this library, add the following to your code:
     -   **Parameters:**
         -   `clip_idx`: The index of the input clip (0-based).
 
--   `get_fmt(clip_idx)`
+-   `get_sampletype(clip_idx)`
     -   **Mode:** Both
-    -   **Function:** Returns the format type of the specified clip (`1` for float, `-1` for integer). Returns `0` if the clip index is invalid.
+    -   **Function:** Returns the sample type of the specified clip (`0` for integer/stInteger, `1` for float/stFloat). Returns `-1` if the clip index is invalid.
     -   **Parameters:**
         -   `clip_idx`: The index of the input clip (0-based).
+
+-   `get_colorfamily(clip_idx)`
+    -   **Mode:** Both
+    -   **Function:** Returns the ColorFamily of the specified clip (`0`=cfUndefined, `1`=cfGray, `2`=cfRGB, `3`=cfYUV). Returns `-1` if the clip index is invalid.
+    -   **Parameters:**
+        -   `clip_idx`: The index of the input clip (0-based).
+
+**Constants**
+
+The `std` library provides helpful constants for ColorFamily and SampleType comparisons:
+
+-   **ColorFamily Constants:**
+    -   `cfUndefined` = `0`
+    -   `cfGray` = `1`
+    -   `cfRGB` = `2`
+    -   `cfYUV` = `3`
+
+-   **SampleType Constants:**
+    -   `stInteger` = `0`
+    -   `stFloat` = `1`
 
 **Example:**
 ```

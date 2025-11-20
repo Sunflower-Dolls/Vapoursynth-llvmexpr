@@ -150,7 +150,7 @@
         },
         {
           "name": "constant.language.predefined-macro.context.llvmexpr-infix",
-          "match": "\\b(__WIDTH__|__HEIGHT__|__INPUT_NUM__|__OUTPUT_BITDEPTH__|__INPUT_BITDEPTH_\\d+__|__OUTPUT_FMT__|__INPUT_FMT_\\d+__|__SUBSAMPLE_W__|__SUBSAMPLE_H__|__PLANE_NO__)\\b"
+          "match": "\\b(__WIDTH__|__HEIGHT__|__INPUT_NUM__|__OUTPUT_BITDEPTH__|__OUTPUT_COLORFAMILY__|__OUTPUT_SAMPLETYPE__|__SUBSAMPLE_W__|__SUBSAMPLE_H__|__INPUT_BITDEPTH_\\d+__|__INPUT_COLORFAMILY_\\d+__|__INPUT_SAMPLETYPE_\\d+__|__INPUT_WIDTH_\\d+__|__INPUT_HEIGHT_\\d+__|__INPUT_SUBSAMPLE_W_\\d+__|__INPUT_SUBSAMPLE_H_\\d+__|__PLANE_NO__)\\b"
         }
       ]
     },
