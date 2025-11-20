@@ -932,7 +932,7 @@ RESULT = useGlobal(5) # Evaluates to 105
 
 ## 10. Control Flow (if/else/while and Labels)
 
-The infix syntax supports structured conditionals, loops, and low-level jumps at both global and function scope. These compile to RPN labels and jumps.
+The infix syntax supports structured conditionals, loops, and low-level jumps at both global and function scope.
 
 ### 10.1. If / Else Blocks
 
@@ -977,7 +977,6 @@ while (condition) {
 
 - The `condition` is any valid expression; any non-zero value (including negative values) is treated as true, and zero is treated as false.
 - The loop continues to execute as long as the condition evaluates to true.
-- This is syntactic sugar for a structure using labels and conditional `goto`.
 
 **Example:**
 
