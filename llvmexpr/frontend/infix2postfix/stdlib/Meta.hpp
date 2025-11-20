@@ -41,12 +41,13 @@ struct meta {
 
     using dependencies = std::tuple<>;
 
-    static constexpr std::array<ExportedFunction, 5> exports = {
-        {ExportedFunction{.name = "ASSERT_CONST", .param_count = 3},
-         ExportedFunction{.name = "ERROR", .param_count = 1},
-         ExportedFunction{.name = "JOIN", .param_count = 3},
-         ExportedFunction{.name = "PASTE", .param_count = 2},
-         ExportedFunction{.name = "UNROLL", .param_count = 2}}};
+    static constexpr std::array<ExportedFunction, 5> exports = {{
+        ExportedFunction{.name = "ASSERT_CONST", .param_count = 3},
+        ExportedFunction{.name = "ERROR", .param_count = 1},
+        ExportedFunction{.name = "JOIN", .param_count = 3},
+        ExportedFunction{.name = "PASTE", .param_count = 2},
+        ExportedFunction{.name = "UNROLL", .param_count = 2},
+    }};
 };
 
 } // namespace infix2postfix::stdlib

@@ -631,27 +631,28 @@ def test_prop_write_safety_pass_if_else():
     frame2 = res.get_frame(15)
     assert frame2.props["MyProp"] == 200.0
 
-    def test_conditional_prop_write_copy_fallback():
-        """Test that a conditionally-written prop falls back to copying from src0."""
-        clip = core.std.BlankClip().std.SetFrameProps(MyProp=100)
-        expr = """
-            N 5 = if_true#
-            999 MyProp$
-            1 endif#
-        #if_true
-        #endif
-        """
-        res = core.llvmexpr.SingleExpr(clip, expr)
 
-        # Frame 5: N == 5, prop is NOT written by expr. Should be copied from source.
-        frame1 = res.get_frame(5)
-        assert "MyProp" in frame1.props
-        assert frame1.props["MyProp"] == 100
+def test_conditional_prop_write_copy_fallback():
+    """Test that a conditionally-written prop falls back to copying from src0."""
+    clip = core.std.BlankClip().std.SetFrameProps(MyProp=100)
+    expr = """
+        N 5 = if_true#
+        999 MyProp$
+        1 endif#
+    #if_true
+    #endif
+    """
+    res = core.llvmexpr.SingleExpr(clip, expr)
 
-        # Frame 10: N != 5, prop IS written by expr. Should be the new value.
-        frame2 = res.get_frame(10)
-        assert "MyProp" in frame2.props
-        assert frame2.props["MyProp"] == 999
+    # Frame 5: N == 5, prop is NOT written by expr. Should be copied from source.
+    frame1 = res.get_frame(5)
+    assert "MyProp" in frame1.props
+    assert frame1.props["MyProp"] == 100
+
+    # Frame 10: N != 5, prop IS written by expr. Should be the new value.
+    frame2 = res.get_frame(10)
+    assert "MyProp" in frame2.props
+    assert frame2.props["MyProp"] == 999
 
 
 def test_property_deletion():
