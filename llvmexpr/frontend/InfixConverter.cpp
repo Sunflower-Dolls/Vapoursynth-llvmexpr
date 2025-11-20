@@ -25,72 +25,19 @@
 #include "infix2postfix/Preprocessor.hpp"
 #include "infix2postfix/Tokenizer.hpp"
 
-std::string convertInfixToPostfix(const std::string& infix_expr, int num_inputs,
-                                  infix2postfix::Mode mode,
-                                  const InfixConversionContext* context) {
+std::string convertInfixToPostfix(
+    const std::string& infix_expr, int num_inputs, infix2postfix::Mode mode,
+    const std::map<std::string, std::string>* predefined_macros) {
     try {
         std::string preprocessed_source = infix_expr;
         std::vector<infix2postfix::LineMapping> line_map;
         int library_line_count = 0;
 
-        if (context != nullptr) {
+        if (predefined_macros != nullptr) {
             infix2postfix::Preprocessor preprocessor(infix_expr);
 
-            if (mode == infix2postfix::Mode::Expr) {
-                preprocessor.addPredefinedMacro("__EXPR__", "");
-            } else {
-                preprocessor.addPredefinedMacro("__SINGLEEXPR__", "");
-            }
-
-            preprocessor.addPredefinedMacro("__WIDTH__",
-                                            std::to_string(context->width));
-            preprocessor.addPredefinedMacro("__HEIGHT__",
-                                            std::to_string(context->height));
-            preprocessor.addPredefinedMacro(
-                "__INPUT_NUM__", std::to_string(context->num_inputs));
-            preprocessor.addPredefinedMacro(
-                "__OUTPUT_BITDEPTH__",
-                std::to_string(context->output_bitdepth));
-
-            for (size_t i = 0; i < context->input_bitdepths.size(); ++i) {
-                std::string macro_name =
-                    std::format("__INPUT_BITDEPTH_{}__", i);
-                preprocessor.addPredefinedMacro(
-                    macro_name, std::to_string(context->input_bitdepths[i]));
-            }
-
-            for (size_t i = 0; i < context->input_formats.size(); ++i) {
-                std::string macro_name = std::format("__INPUT_FMT_{}__", i);
-                preprocessor.addPredefinedMacro(
-                    macro_name, std::to_string(context->input_formats[i]));
-            }
-
-            for (size_t i = 0; i < context->input_widths.size(); ++i) {
-                preprocessor.addPredefinedMacro(
-                    std::format("__INPUT_WIDTH_{}__", i),
-                    std::to_string(context->input_widths[i]));
-                preprocessor.addPredefinedMacro(
-                    std::format("__INPUT_HEIGHT_{}__", i),
-                    std::to_string(context->input_heights[i]));
-                preprocessor.addPredefinedMacro(
-                    std::format("__INPUT_SUBSAMPLE_W_{}__", i),
-                    std::to_string(context->input_subsample_ws[i]));
-                preprocessor.addPredefinedMacro(
-                    std::format("__INPUT_SUBSAMPLE_H_{}__", i),
-                    std::to_string(context->input_subsample_hs[i]));
-            }
-
-            preprocessor.addPredefinedMacro(
-                "__OUTPUT_FMT__", std::to_string(context->output_format));
-
-            preprocessor.addPredefinedMacro(
-                "__SUBSAMPLE_W__", std::to_string(context->subsample_w));
-            preprocessor.addPredefinedMacro(
-                "__SUBSAMPLE_H__", std::to_string(context->subsample_h));
-
-            if (mode == infix2postfix::Mode::Expr && context->plane_no >= 0) {
-                preprocessor.addPredefinedMacro(
-                    "__PLANE_NO__", std::to_string(context->plane_no));
+            for (const auto& [name, value] : *predefined_macros) {
+                preprocessor.addPredefinedMacro(name, value);
             }
 
             auto preprocess_result = preprocessor.process();

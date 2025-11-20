@@ -402,27 +402,33 @@ exprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
         for (int i = 0; i < nexpr; ++i) {
             std::string input_expr = vsapi->mapGetData(in, "expr", i, &err);
             if (use_infix && !input_expr.empty()) {
-                InfixConversionContext ctx;
-                ctx.width = d->vi.width;
-                ctx.height = d->vi.height;
-                ctx.num_inputs = d->num_inputs;
-                ctx.output_bitdepth = d->vi.format.bitsPerSample;
-                ctx.subsample_w = d->vi.format.subSamplingW;
-                ctx.subsample_h = d->vi.format.subSamplingH;
-                ctx.plane_no = i;
-                ctx.output_format =
-                    (d->vi.format.sampleType == stFloat) ? 1 : -1;
-                ctx.input_bitdepths.resize(d->num_inputs);
-                ctx.input_formats.resize(d->num_inputs);
+                std::map<std::string, std::string> macros;
+                macros["__EXPR__"] = "";
+                macros["__WIDTH__"] = std::to_string(d->vi.width);
+                macros["__HEIGHT__"] = std::to_string(d->vi.height);
+                macros["__INPUT_NUM__"] = std::to_string(d->num_inputs);
+                macros["__OUTPUT_BITDEPTH__"] =
+                    std::to_string(d->vi.format.bitsPerSample);
+                macros["__SUBSAMPLE_W__"] =
+                    std::to_string(d->vi.format.subSamplingW);
+                macros["__SUBSAMPLE_H__"] =
+                    std::to_string(d->vi.format.subSamplingH);
+                macros["__PLANE_NO__"] = std::to_string(i);
+                macros["__OUTPUT_FMT__"] = std::to_string(
+                    (d->vi.format.sampleType == stFloat) ? 1 : -1);
+
                 for (int j = 0; j < d->num_inputs; ++j) {
                     const VSVideoInfo* input_vi =
                         vsapi->getVideoInfo(d->nodes[j]);
-                    ctx.input_bitdepths[j] = input_vi->format.bitsPerSample;
-                    ctx.input_formats[j] =
-                        (input_vi->format.sampleType == stFloat) ? 1 : -1;
+                    macros[std::format("__INPUT_BITDEPTH_{}__", j)] =
+                        std::to_string(input_vi->format.bitsPerSample);
+                    macros[std::format("__INPUT_FMT_{}__", j)] = std::to_string(
+                        (input_vi->format.sampleType == stFloat) ? 1 : -1);
                 }
-                expr_strs.at(i) = convertInfixToPostfix(
-                    input_expr, d->num_inputs, infix2postfix::Mode::Expr, &ctx);
+
+                expr_strs.at(i) =
+                    convertInfixToPostfix(input_expr, d->num_inputs,
+                                          infix2postfix::Mode::Expr, &macros);
             } else {
                 expr_strs.at(i) = input_expr;
             }
@@ -694,33 +700,38 @@ singleExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
 
         std::string processed_expr;
         if (use_infix) {
-            InfixConversionContext ctx;
-            ctx.width = d->vi.width;
-            ctx.height = d->vi.height;
-            ctx.num_inputs = d->num_inputs;
-            ctx.output_bitdepth = d->vi.format.bitsPerSample;
-            ctx.subsample_w = d->vi.format.subSamplingW;
-            ctx.subsample_h = d->vi.format.subSamplingH;
-            ctx.plane_no = -1; // Not applicable
-            ctx.output_format = (d->vi.format.sampleType == stFloat) ? 1 : -1;
-            ctx.input_bitdepths.resize(d->num_inputs);
-            ctx.input_formats.resize(d->num_inputs);
-            ctx.input_widths.resize(d->num_inputs);
-            ctx.input_heights.resize(d->num_inputs);
-            ctx.input_subsample_ws.resize(d->num_inputs);
-            ctx.input_subsample_hs.resize(d->num_inputs);
+            std::map<std::string, std::string> macros;
+            macros["__SINGLEEXPR__"] = "";
+            macros["__WIDTH__"] = std::to_string(d->vi.width);
+            macros["__HEIGHT__"] = std::to_string(d->vi.height);
+            macros["__INPUT_NUM__"] = std::to_string(d->num_inputs);
+            macros["__OUTPUT_BITDEPTH__"] =
+                std::to_string(d->vi.format.bitsPerSample);
+            macros["__SUBSAMPLE_W__"] =
+                std::to_string(d->vi.format.subSamplingW);
+            macros["__SUBSAMPLE_H__"] =
+                std::to_string(d->vi.format.subSamplingH);
+            macros["__OUTPUT_FMT__"] =
+                std::to_string((d->vi.format.sampleType == stFloat) ? 1 : -1);
+
             for (int i = 0; i < d->num_inputs; ++i) {
                 const VSVideoInfo* input_vi = vsapi->getVideoInfo(d->nodes[i]);
-                ctx.input_bitdepths[i] = input_vi->format.bitsPerSample;
-                ctx.input_formats[i] =
-                    (input_vi->format.sampleType == stFloat) ? 1 : -1;
-                ctx.input_widths[i] = input_vi->width;
-                ctx.input_heights[i] = input_vi->height;
-                ctx.input_subsample_ws[i] = input_vi->format.subSamplingW;
-                ctx.input_subsample_hs[i] = input_vi->format.subSamplingH;
+                macros[std::format("__INPUT_BITDEPTH_{}__", i)] =
+                    std::to_string(input_vi->format.bitsPerSample);
+                macros[std::format("__INPUT_FMT_{}__", i)] = std::to_string(
+                    (input_vi->format.sampleType == stFloat) ? 1 : -1);
+                macros[std::format("__INPUT_WIDTH_{}__", i)] =
+                    std::to_string(input_vi->width);
+                macros[std::format("__INPUT_HEIGHT_{}__", i)] =
+                    std::to_string(input_vi->height);
+                macros[std::format("__INPUT_SUBSAMPLE_W_{}__", i)] =
+                    std::to_string(input_vi->format.subSamplingW);
+                macros[std::format("__INPUT_SUBSAMPLE_H_{}__", i)] =
+                    std::to_string(input_vi->format.subSamplingH);
             }
+
             processed_expr = convertInfixToPostfix(
-                expr_str, d->num_inputs, infix2postfix::Mode::Single, &ctx);
+                expr_str, d->num_inputs, infix2postfix::Mode::Single, &macros);
         } else {
             processed_expr = expr_str;
         }

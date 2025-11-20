@@ -21,30 +21,11 @@
 #define LLVMEXPR_INFIXCONVERTER_HPP
 
 #include "infix2postfix/types.hpp"
+#include <map>
 #include <string>
-#include <vector>
 
-//TODO: Expose these to postfix
-struct InfixConversionContext {
-    int width = 0;
-    int height = 0;
-    int num_inputs = 0;
-    int output_bitdepth = 0;
-    std::vector<int> input_bitdepths;
-    int subsample_w = 0;
-    int subsample_h = 0;
-    int plane_no = -1; // -1 = applicable
-    int output_format = 0; // 1 for float, -1 for int
-    std::vector<int> input_formats;
-    std::vector<int> input_widths;
-    std::vector<int> input_heights;
-    std::vector<int> input_subsample_ws;
-    std::vector<int> input_subsample_hs;
-};
-
-std::string
-convertInfixToPostfix(const std::string& infix_expr, int num_inputs,
-                      infix2postfix::Mode mode,
-                      const InfixConversionContext* context = nullptr);
+std::string convertInfixToPostfix(
+    const std::string& infix_expr, int num_inputs, infix2postfix::Mode mode,
+    const std::map<std::string, std::string>* predefined_macros = nullptr);
 
 #endif
