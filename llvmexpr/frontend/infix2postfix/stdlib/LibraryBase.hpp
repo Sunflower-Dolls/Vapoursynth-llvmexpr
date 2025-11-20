@@ -21,6 +21,7 @@
 #define LLVMEXPR_INFIX2POSTFIX_STDLIB_LIBRARYBASE_HPP
 
 #include <concepts>
+#include <cstdint>
 #include <string_view>
 
 namespace infix2postfix::stdlib {
