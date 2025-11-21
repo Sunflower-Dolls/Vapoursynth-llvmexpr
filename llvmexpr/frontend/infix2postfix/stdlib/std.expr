@@ -48,7 +48,6 @@ function ___stdlib_std_get_height_single(Value clip_idx, Value plane_idx) {
 
 @define ___stdlib_std_BD_OF(i) ___stdlib_meta_PASTE(___stdlib_meta_PASTE(__INPUT_BITDEPTH_, i), __)
 @define ___stdlib_std_GET_BD_LOOP(i, c) (((i) >= __INPUT_NUM__ || (i) < 0) ? -1 : ((c) == (i) ? ___stdlib_std_BD_OF(i) : ___stdlib_std_GET_BD_LOOP(___stdlib_std_INC(i), c)))
-@define ___stdlib_std_get_bitdepth_(c) ___stdlib_std_GET_BD_LOOP(0, c)
 function ___stdlib_std_get_bitdepth(Value clip_idx) {
     return ___stdlib_std_GET_BD_LOOP(0, clip_idx)
 }
