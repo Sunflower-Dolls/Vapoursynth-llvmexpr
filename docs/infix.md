@@ -512,7 +512,7 @@ The proof relies on the `step_safety_rule`, which posits that control flow canno
 Given this constraint, the **Definite Assignment Theorem** (`definition_dominates_use`) is proven to hold. Formally, for any valid execution path $\text{trace}$ starting from the beginning of the script ($\text{start}$) to a variable usage point ($\text{target}$):
 
 $$
-(\text{start} < \text{def\_pos}) \land (\text{InScope}(\text{target})) \implies \text{def\_pos} \in \text{trace}
+(\mathrm{start} < \mathrm{def\_pos}) \land (\mathrm{InScope}(\mathrm{target})) \implies \mathrm{def\_pos} \in \mathrm{trace}
 $$
 
 This theorem mathematically guarantees that the variable definition *dominates* its use; i.e., it is impossible to reach a usage point without executing the definition. For the rigorous formal proof, refer to [proof.v](./proof.v).
