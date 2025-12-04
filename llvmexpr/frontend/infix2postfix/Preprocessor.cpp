@@ -686,7 +686,7 @@ class Evaluator {
                     tok.text.find('E') != std::string::npos) {
                     return {std::stod(tok.text)};
                 }
-                return {std::stoll(tok.text, nullptr, 0)};
+                return {static_cast<int64_t>(std::stoll(tok.text, nullptr, 0))};
             } catch (...) {
                 throw std::runtime_error("Invalid number: " + tok.text);
             }
