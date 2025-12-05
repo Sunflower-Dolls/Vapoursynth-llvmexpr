@@ -669,7 +669,7 @@ if ($N > 10) {
 ```
 
 > [!NOTE]
-> If N <= 10, MyAutoFloat will be initialized from the property on the source frame of clip $x. If it doesn't exist there, the result is undefined.
+> If N <= 10, MyAutoFloat will be initialized from the property on the source frame of clip $x. If it doesn't exist there, the result frame won't contain this property.
 
 #### Deleting (`SingleExpr` only)
 
@@ -860,7 +860,7 @@ function functionName(Type1 param1, Type2 param2) {
 - **Inlining:** Function calls are effectively inlined at compile time. Recursion is not supported.
 
 > [!IMPORTANT]
-> **Recursion Not Supported:** Function calls are inlined at compile time. Recursive function calls will cause compilation errors or undefined behavior.
+> **Recursion Not Supported:** Function calls are inlined at compile time. Recursive function calls will cause compilation errors.
 - **Nesting:** Function definitions cannot be nested.
 
 ### 8.5. Function Overloading
