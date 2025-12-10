@@ -233,7 +233,7 @@ void IRGeneratorBase::generate_pixel_store(llvm::Value* value_to_store,
                                            llvm::Value* x, llvm::Value* y) {
     const VSVideoFormat& format = vo->format;
     int bpp = format.bytesPerSample;
-    int dst_idx = 0;
+    constexpr int dst_idx = 0;
 
     llvm::Value* base_ptr = preloaded_base_ptrs[dst_idx];
     llvm::Value* stride = preloaded_strides[dst_idx];

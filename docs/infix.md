@@ -687,12 +687,22 @@ Delete a frame property using the `remove_prop` built-in function.
 remove_prop(MyOldProp);
 ```
 
+### 7.2. Pixel and Data I/O
 
-### 7.2. Pixel Access (`Expr` mode)
+> [!IMPORTANT]
+> **Read-After-Write Behavior for Pixels**
+>
+> Pixel access in `llvmexpr` (both `Expr` and `SingleExpr` modes) is **not atomic** in the sense of read-after-write visibility.
+> *   **Reading** (e.g., `dyn()`, `$src0[...]`, `[]`) always reads from the **input frames**.
+> *   **Writing** (e.g., `@[]`, `store()`, `RESULT`) always writes to the **output frame**.
+>
+> Therefore, if you write a value to a pixel and then immediately read from the same coordinate, you will get the **original input value**, not the value you just wrote. To pass data between steps, use Arrays.
+
+#### 7.2.1 `Expr` mode
 
 In `Expr` mode, you can access pixels from source clips relative to the current pixel or at absolute coordinates.
 
-#### Static Relative Pixel Access
+##### Static Relative Pixel Access
 
 Access a pixel at a fixed, constant offset from the current coordinate (`$X`, `$Y`).
 
@@ -704,15 +714,15 @@ Access a pixel at a fixed, constant offset from the current coordinate (`$X`, `$
   - `:m`: Forces mirrored boundary.
   - If omitted, the filter's global boundary parameter is used.
 
-#### Dynamic Absolute Pixel Access
+##### Dynamic Absolute Pixel Access
 
 Access a pixel at a dynamically calculated coordinate using the 3-argument `dyn()` function. See [section 8.3](#83-mode-specific-functions) for details.
 
-### 7.3. Pixel and Data I/O (`SingleExpr` mode)
+#### 7.2.2 `SingleExpr` mode
 
 In `SingleExpr` mode, all data I/O is explicit and uses absolute coordinates.
 
-#### Plane-Specific Dimensions
+##### Plane-Specific Dimensions
 
 > [!WARNING]
 > **Deprecation Notice:** `frame.width[N]` and `frame.height[N]` are deprecated. Use the functions from the `std` standard library instead.
@@ -726,22 +736,13 @@ h1 = frame.height[1];  # Height of plane 1 (chroma U)
 > [!NOTE]
 > The plane index `N` must be a literal constant. `frame.width` and `frame.height` are special built-in syntax forms, not member access on an object.
 
-#### Absolute Pixel Reading
+##### Absolute Pixel Reading
 
 Read pixels from specific coordinates and planes using the 4-argument version of `dyn()`. See [section 8.3](#83-mode-specific-functions) for details.
 
-#### Absolute Pixel Writing
+##### Absolute Pixel Writing
 
 Write values to specific output frame locations using the 4-argument version of `store()`. See [section 8.3](#83-mode-specific-functions) for details.
-
-> [!IMPORTANT]
-> **Read-After-Write Behavior for Pixels**
->
-> Pixel access in `llvmexpr` is **not atomic** in the sense of read-after-write visibility.
-> *   **Reading** (e.g., `dyn()`, `$src0[...]`) always reads from the **input frames**.
-> *   **Writing** (e.g., `store()`, `RESULT`) always writes to the **output frame**.
->
-> Therefore, if you write a value to a pixel and then immediately read from the same coordinate, you will get the **original input value**, not the value you just wrote. To pass data between pixels or steps, use Arrays.
 
 ## 8. Functions
 

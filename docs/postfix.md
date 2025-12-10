@@ -296,6 +296,15 @@ Arrays must be allocated before use. The allocation method depends on whether th
 
 Both `Expr` and `SingleExpr` can read pixel data and frame properties. However, their methods and capabilities differ significantly due to their execution models.
 
+> [!IMPORTANT]
+> **Read-After-Write Behavior for Pixels**
+>
+> Pixel access in `llvmexpr` (both `Expr` and `SingleExpr` modes) is **not atomic** in the sense of read-after-write visibility.
+> *   **Reading** (e.g., relative access, `[]`) always reads from the **input frames**.
+> *   **Writing** (e.g., implicit output, `@[]`) always writes to the **output frame**.
+>
+> Therefore, if you write a value to a pixel and then immediately read from the same coordinate, you will get the **original input value**, not the value you just wrote. To pass data between steps, use Arrays.
+
 ##### **4.4.1. Pixel Access (`Expr` only)**
 
 In `Expr`, there are three ways to access pixel values from input clips, all of which are specific to this mode.
@@ -343,15 +352,6 @@ Since `SingleExpr` has no concept of a "current pixel," all data I/O must be exp
 
 > [!IMPORTANT]
 > If a pixel is not explicitly written to, its value is copied from the first input clip (`src0`).
-
-> [!IMPORTANT]
-> **Read-After-Write Behavior for Pixels**
->
-> Pixel access in `llvmexpr` is **not atomic** in the sense of read-after-write visibility.
-> *   **Reading** (e.g., `[]`) always reads from the **input frames**.
-> *   **Writing** (e.g., `@[]`) always writes to the **output frame**.
->
-> Therefore, if you write a value to a pixel and then immediately read from the same coordinate, you will get the **original input value**, not the value you just wrote. To pass data between pixels or steps, use Arrays.
 
 ##### **4.4.3. Frame Property Access**
 
