@@ -472,6 +472,12 @@ std::vector<Token> trimTokens(const std::vector<Token>& tokens) {
             tokens.begin() + static_cast<std::ptrdiff_t>(end)};
 }
 
+bool isSkippable(const Token& t) {
+    return t.type == TokenType::WHITESPACE || t.type == TokenType::COMMENT ||
+           t.type == TokenType::BEGIN_MACRO_EXPANSION ||
+           t.type == TokenType::END_MACRO_EXPANSION;
+}
+
 } // namespace preprocessor_detail
 
 using Token = preprocessor_detail::Token;
@@ -546,10 +552,7 @@ class TokenStream {
     }
 
     void skipWhitespace() {
-        while (!is_eof() && (peek().type == TokenType::WHITESPACE ||
-                             peek().type == TokenType::COMMENT ||
-                             peek().type == TokenType::BEGIN_MACRO_EXPANSION ||
-                             peek().type == TokenType::END_MACRO_EXPANSION)) {
+        while (!is_eof() && preprocessor_detail::isSkippable(peek())) {
             consume();
         }
     }
@@ -662,10 +665,7 @@ class Evaluator {
     }
 
     void skipWhitespace() {
-        while (!is_eof() && (peek().type == TokenType::WHITESPACE ||
-                             peek().type == TokenType::COMMENT ||
-                             peek().type == TokenType::BEGIN_MACRO_EXPANSION ||
-                             peek().type == TokenType::END_MACRO_EXPANSION)) {
+        while (!is_eof() && preprocessor_detail::isSkippable(peek())) {
             consume();
         }
     }
@@ -1690,20 +1690,13 @@ class Expander {
                 break;
             }
 
-            auto is_skippable = [](const Token& t) {
-                return t.type == TokenType::WHITESPACE ||
-                       t.type == TokenType::COMMENT ||
-                       t.type == TokenType::BEGIN_MACRO_EXPANSION ||
-                       t.type == TokenType::END_MACRO_EXPANSION;
-            };
-
             auto lhs_it = it;
             bool left_has_value = false;
 
             if (lhs_it != result.begin()) {
                 auto search_it = lhs_it - 1;
                 while (true) {
-                    if (!is_skippable(*search_it)) {
+                    if (!preprocessor_detail::isSkippable(*search_it)) {
                         lhs_it = search_it;
                         left_has_value = true;
                         break;
@@ -1720,7 +1713,8 @@ class Expander {
             }
 
             auto rhs_it = it + 1;
-            while (rhs_it != result.end() && is_skippable(*rhs_it)) {
+            while (rhs_it != result.end() &&
+                   preprocessor_detail::isSkippable(*rhs_it)) {
                 rhs_it++;
             }
 
