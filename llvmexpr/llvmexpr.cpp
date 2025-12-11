@@ -41,6 +41,9 @@
 #include "frontend/Tokenizer.hpp"
 #include "runtime/llvm/Compiler.hpp"
 #include "runtime/llvm/Jit.hpp"
+#include "runtime/vulkan/VulkanComputePipeline.hpp"
+#include "runtime/vulkan/VulkanContext.hpp"
+#include "runtime/vulkan/VulkanMemory.hpp"
 
 constexpr uint32_t PROP_READ_NAN_PAYLOAD =
     0x7FC0BEEF; // qNaN with payload 0xBEEF
@@ -824,6 +827,344 @@ singleExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
                              static_cast<int>(deps.size()), d.release(), core);
 }
 
+struct VkExprData {
+    std::vector<VSNode*> nodes;
+    VSVideoInfo vi = {};
+    int num_inputs = 0;
+    std::array<PlaneOp, 3> plane_op = {};
+    std::array<std::vector<Token>, 3> tokens;
+    bool glsl_mode = false;
+    std::array<std::string, 3>
+        glsl_shaders; // Direct GLSL shader source per plane
+
+    std::vector<std::pair<int, std::string>> required_props;
+    std::map<std::pair<int, std::string>, int> prop_map;
+    std::unique_ptr<llvmexpr::VulkanMemory> memory;
+    std::array<std::unique_ptr<llvmexpr::VulkanComputePipeline>, 3> pipelines;
+};
+
+const VSFrame*
+    VS_CC // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+    vkExprGetFrame(int n, int activationReason, void* instanceData,
+                   [[maybe_unused]] void** frameData, VSFrameContext* frameCtx,
+                   VSCore* core, const VSAPI* vsapi) {
+    auto* d = static_cast<VkExprData*>(instanceData);
+
+    if (activationReason == arInitial) {
+        for (int i = 0; i < d->num_inputs; ++i) {
+            vsapi->requestFrameFilter(n, d->nodes[i], frameCtx);
+        }
+    } else if (activationReason == arAllFramesReady) {
+        std::vector<const VSFrame*> src_frames(d->num_inputs);
+        for (int i = 0; i < d->num_inputs; ++i) {
+            src_frames[i] = vsapi->getFrameFilter(n, d->nodes[i], frameCtx);
+        }
+
+        std::array<const VSFrame*, 3> plane_src = {
+            d->plane_op.at(0) == PlaneOp::PO_COPY ? src_frames[0] : nullptr,
+            d->plane_op.at(1) == PlaneOp::PO_COPY ? src_frames[0] : nullptr,
+            d->plane_op.at(2) == PlaneOp::PO_COPY ? src_frames[0] : nullptr};
+        std::array<int, 3> planes = {0, 1, 2};
+        VSFrame* dst_frame = vsapi->newVideoFrame2(
+            &d->vi.format, d->vi.width, d->vi.height, plane_src.data(),
+            planes.data(), src_frames[0], core);
+
+        std::vector<float> props(1 + d->required_props.size());
+        readFrameProperties(props, src_frames, d->required_props, n, vsapi);
+
+        for (int plane = 0; plane < d->vi.format.numPlanes; ++plane) {
+            if (d->plane_op.at(plane) != PlaneOp::PO_PROCESS) {
+                continue;
+            }
+
+            int width = vsapi->getFrameWidth(dst_frame, plane);
+            int height = vsapi->getFrameHeight(dst_frame, plane);
+            VkDeviceSize bufferSize = static_cast<VkDeviceSize>(width) *
+                                      static_cast<VkDeviceSize>(height) *
+                                      sizeof(float);
+
+            try {
+                // TODO: Optimize Buffers
+                std::vector<llvmexpr::VulkanBuffer> srcBuffers(d->num_inputs);
+                std::vector<llvmexpr::VulkanBuffer*> srcBufferPtrs(
+                    d->num_inputs);
+
+                for (int i = 0; i < d->num_inputs; ++i) {
+                    srcBuffers[i] = d->memory->createGPUBuffer(bufferSize);
+                    srcBufferPtrs[i] = &srcBuffers[i];
+
+                    const uint8_t* srcPtr =
+                        vsapi->getReadPtr(src_frames[i], plane);
+                    ptrdiff_t srcStride =
+                        vsapi->getStride(src_frames[i], plane);
+
+                    if (srcStride ==
+                        static_cast<ptrdiff_t>(width * sizeof(float))) {
+                        d->memory->uploadToBuffer(srcBuffers[i], srcPtr,
+                                                  bufferSize);
+                    } else {
+                        std::vector<float> tempBuffer(
+                            static_cast<size_t>(width) *
+                            static_cast<size_t>(height));
+                        for (int y = 0; y < height; ++y) {
+                            std::memcpy(tempBuffer.data() +
+                                            (static_cast<size_t>(y) *
+                                             static_cast<size_t>(width)),
+                                        srcPtr + (y * srcStride),
+                                        static_cast<size_t>(width) *
+                                            sizeof(float));
+                        }
+                        d->memory->uploadToBuffer(
+                            srcBuffers[i], tempBuffer.data(), bufferSize);
+                    }
+                }
+
+                auto dstBuffer = d->memory->createGPUBuffer(bufferSize);
+
+                d->pipelines.at(plane)->dispatch(
+                    *d->memory, srcBufferPtrs, dstBuffer, props,
+                    static_cast<uint32_t>(width), static_cast<uint32_t>(height),
+                    n);
+
+                uint8_t* dstPtr = vsapi->getWritePtr(dst_frame, plane);
+                ptrdiff_t dstStride = vsapi->getStride(dst_frame, plane);
+
+                if (dstStride ==
+                    static_cast<ptrdiff_t>(width * sizeof(float))) {
+                    d->memory->downloadFromBuffer(dstBuffer, dstPtr,
+                                                  bufferSize);
+                } else {
+                    std::vector<float> tempBuffer(static_cast<size_t>(width) *
+                                                  static_cast<size_t>(height));
+                    d->memory->downloadFromBuffer(dstBuffer, tempBuffer.data(),
+                                                  bufferSize);
+                    for (int y = 0; y < height; ++y) {
+                        std::memcpy(dstPtr + (y * dstStride),
+                                    tempBuffer.data() +
+                                        (static_cast<size_t>(y) *
+                                         static_cast<size_t>(width)),
+                                    static_cast<size_t>(width) * sizeof(float));
+                    }
+                }
+
+                for (int i = 0; i < d->num_inputs; ++i) {
+                    d->memory->destroyBuffer(srcBuffers[i]);
+                }
+                d->memory->destroyBuffer(dstBuffer);
+
+            } catch (const std::exception& e) {
+                for (const auto& frame : src_frames) {
+                    vsapi->freeFrame(frame);
+                }
+                vsapi->freeFrame(dst_frame);
+                vsapi->setFilterError(
+                    std::format("VkExpr: GPU error: {}", e.what()).c_str(),
+                    frameCtx);
+                return nullptr;
+            }
+        }
+
+        for (const auto& frame : src_frames) {
+            vsapi->freeFrame(frame);
+        }
+        return dst_frame;
+    }
+
+    return nullptr;
+}
+
+void VS_CC // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+vkExprFree(void* instanceData, [[maybe_unused]] VSCore* core,
+           const VSAPI* vsapi) {
+    std::unique_ptr<VkExprData> d(static_cast<VkExprData*>(instanceData));
+    for (auto* node : d->nodes) {
+        vsapi->freeNode(node);
+    }
+}
+
+void VS_CC // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
+             VSCore* core, const VSAPI* vsapi) {
+    auto d = std::make_unique<VkExprData>();
+    int err = 0;
+
+    try {
+        // Validate and initialize clips
+        d->num_inputs = vsapi->mapNumElements(in, "clips");
+        if (d->num_inputs == 0) {
+            throw std::runtime_error("At least one clip must be provided.");
+        }
+
+        d->nodes.resize(d->num_inputs);
+        for (int i = 0; i < d->num_inputs; ++i) {
+            d->nodes[i] = vsapi->mapGetNode(in, "clips", i, &err);
+        }
+
+        std::vector<const VSVideoInfo*> vi(d->num_inputs);
+        for (int i = 0; i < d->num_inputs; ++i) {
+            vi[i] = vsapi->getVideoInfo(d->nodes[i]);
+            if (!vsh::isConstantVideoFormat(vi[i])) {
+                throw std::runtime_error(
+                    "Only constant format clips are supported.");
+            }
+        }
+
+        for (int i = 1; i < d->num_inputs; ++i) {
+            if (vi[i]->width != vi[0]->width ||
+                vi[i]->height != vi[0]->height) {
+                throw std::runtime_error(
+                    "All clips must have the same dimensions.");
+            }
+        }
+
+        d->vi = *vi[0];
+
+        if (d->vi.format.sampleType != stFloat ||
+            d->vi.format.bitsPerSample != 32) {
+            throw std::runtime_error(
+                "VkExpr currently only supports 32-bit float format. ");
+        }
+
+        const int nexpr = vsapi->mapNumElements(in, "expr");
+        if (nexpr == 0) {
+            throw std::runtime_error(
+                "At least one expression must be provided.");
+        }
+
+        std::array<std::string, 3> expr_strs;
+        for (int i = 0; i < nexpr && i < 3; ++i) {
+            expr_strs.at(i) = vsapi->mapGetData(in, "expr", i, &err);
+        }
+        for (int i = nexpr; i < d->vi.format.numPlanes; ++i) {
+            expr_strs.at(i) = expr_strs.at(nexpr - 1);
+        }
+
+        d->glsl_mode = vsapi->mapGetInt(in, "glsl", 0, &err) != 0;
+        if (err != 0) {
+            d->glsl_mode = false;
+        }
+
+        if (d->glsl_mode) {
+            for (int i = 0; i < d->vi.format.numPlanes; ++i) {
+                if (expr_strs.at(i).empty()) {
+                    d->plane_op.at(i) = PlaneOp::PO_COPY;
+                } else {
+                    d->plane_op.at(i) = PlaneOp::PO_PROCESS;
+                    d->glsl_shaders.at(i) = expr_strs.at(i);
+                }
+            }
+        } else {
+            for (int i = 0; i < d->vi.format.numPlanes; ++i) {
+                if (expr_strs.at(i).empty()) {
+                    d->plane_op.at(i) = PlaneOp::PO_COPY;
+                } else {
+                    d->plane_op.at(i) = PlaneOp::PO_PROCESS;
+                    d->tokens.at(i) = tokenize(expr_strs.at(i), d->num_inputs,
+                                               ExprMode::EXPR);
+
+                    for (const auto& token : d->tokens.at(i)) {
+                        if (token.type == TokenType::PROP_ACCESS ||
+                            token.type == TokenType::PROP_EXISTS) {
+                            const auto& payload =
+                                std::get<TokenPayload_PropAccess>(
+                                    token.payload);
+                            auto key = std::make_pair(payload.clip_idx,
+                                                      payload.prop_name);
+                            if (!d->prop_map.contains(key)) {
+                                d->prop_map[key] = static_cast<int>(
+                                    1 + d->required_props.size()); // 0 is for N
+                                d->required_props.push_back(key);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        auto& ctx = llvmexpr::VulkanContext::getInstance();
+
+        d->memory = std::make_unique<llvmexpr::VulkanMemory>(ctx);
+
+        uint32_t numPropsFloats =
+            static_cast<uint32_t>(1 + d->required_props.size()); // N + props
+
+        for (int i = 0; i < d->vi.format.numPlanes; ++i) {
+            if (d->plane_op.at(i) != PlaneOp::PO_PROCESS) {
+                continue;
+            }
+
+            std::string shaderSrc;
+            if (d->glsl_mode) {
+                shaderSrc = d->glsl_shaders.at(i);
+            } else {
+                // TODO: Use GLSL generation from tokens
+                shaderSrc = R"(
+#version 450
+#extension GL_EXT_scalar_block_layout : enable
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(push_constant) uniform PushConstants {
+    uint width;
+    uint height;
+    uint numInputs;
+    int frameNumber;
+} pc;
+
+layout(std430, set = 0, binding = 0) readonly buffer InputBuffer0 {
+    float data[];
+} src0;
+
+layout(std430, set = 0, binding = 1) writeonly buffer OutputBuffer {
+    float data[];
+} dst;
+
+layout(std430, set = 0, binding = 2) readonly buffer PropsBuffer {
+    float props[];
+} propsData;
+
+void main() {
+    uint gid = gl_GlobalInvocationID.x;
+    uint totalPixels = pc.width * pc.height;
+    
+    if (gid >= totalPixels) {
+        return;
+    }
+    
+    dst.data[gid] = src0.data[gid];
+}
+)";
+            }
+
+            d->pipelines.at(i) =
+                std::make_unique<llvmexpr::VulkanComputePipeline>(
+                    ctx, shaderSrc, static_cast<uint32_t>(d->num_inputs),
+                    numPropsFloats);
+        }
+
+    } catch (const std::exception& e) {
+        for (auto* node : d->nodes) {
+            if (node != nullptr) {
+                vsapi->freeNode(node);
+            }
+        }
+        vsapi->mapSetError(out, std::format("VkExpr: {}", e.what()).c_str());
+        return;
+    }
+
+    std::vector<VSFilterDependency> deps;
+    deps.reserve(d->nodes.size());
+    for (auto* node : d->nodes) {
+        deps.push_back({node, rpStrictSpatial});
+    }
+
+    VSVideoInfo* vi_ptr = &d->vi;
+
+    vsapi->createVideoFilter(out, "VkExpr", vi_ptr, vkExprGetFrame, vkExprFree,
+                             fmParallel, deps.data(),
+                             static_cast<int>(deps.size()), d.release(), core);
+}
+
 } // anonymous namespace
 
 // Host API for JIT code to manage dynamic arrays
@@ -863,4 +1204,8 @@ VapourSynthPluginInit2(VSPlugin* plugin, const VSPLUGINAPI* vspapi) {
                              "int:opt;dump_ir:data:opt;opt_"
                              "level:int:opt;approx_math:int:opt;infix:int:opt;",
                              "clip:vnode;", singleExprCreate, nullptr, plugin);
+
+    vspapi->registerFunction("VkExpr",
+                             "clips:vnode[];expr:data[];glsl:int:opt;",
+                             "clip:vnode;", vkExprCreate, nullptr, plugin);
 }

@@ -1,0 +1,8 @@
+[wrap-git]
+url = https://github.com/zeux/volk.git
+revision = head
+depth = 1
+patch_directory = volk
+
+[provide]
+volk = volk_dep

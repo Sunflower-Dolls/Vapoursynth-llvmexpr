@@ -128,7 +128,19 @@ sources = [
   'llvmexpr/runtime/llvm/Compiler.cpp',
   'llvmexpr/runtime/llvm/Jit.cpp',
   'llvmexpr/codegen/llvm/Diagnostics.cpp',
+  'llvmexpr/codegen/glsl/GLSLGenerator.cpp',
+  'llvmexpr/runtime/vulkan/VulkanContext.cpp',
+  'llvmexpr/runtime/vulkan/VulkanMemory.cpp',
+  'llvmexpr/runtime/vulkan/VulkanComputePipeline.cpp',
 ]
+
+vulkan_headers_dep = dependency('vulkan-headers', fallback: ['vulkan-headers', 'vulkan_headers_dep'])
+vulkan_dep = dependency('vulkan') 
+volk_dep = dependency('volk', fallback: ['volk', 'volk_dep'])
+vma_dep = dependency('vulkan-memory-allocator', fallback: ['vulkan-memory-allocator', 'vma_dep'])
+shaderc_dep = dependency('shaderc')
+
+dependencies += [vulkan_headers_dep, volk_dep, vma_dep, shaderc_dep]
 
 llvmexpr_module = shared_module('llvmexpr', sources,
   dependencies: dependencies,
