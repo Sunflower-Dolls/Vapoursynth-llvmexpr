@@ -39,8 +39,8 @@
 #include "analysis/passes/StaticArrayOptPass.hpp"
 #include "frontend/InfixConverter.hpp"
 #include "frontend/Tokenizer.hpp"
-#include "jit/Compiler.hpp"
-#include "jit/Jit.hpp"
+#include "runtime/llvm/Compiler.hpp"
+#include "runtime/llvm/Jit.hpp"
 
 constexpr uint32_t PROP_READ_NAN_PAYLOAD =
     0x7FC0BEEF; // qNaN with payload 0xBEEF

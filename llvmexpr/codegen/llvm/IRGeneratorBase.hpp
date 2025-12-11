@@ -31,9 +31,9 @@
 #include "llvm/IR/MDBuilder.h"
 #include "llvm/IR/Module.h"
 
-#include "../analysis/AnalysisResults.hpp"
-#include "../frontend/Tokenizer.hpp"
-#include "../utils/Math.hpp"
+#include "../../analysis/AnalysisResults.hpp"
+#include "../../frontend/Tokenizer.hpp"
+#include "Math.hpp"
 
 class IRGeneratorBase {
   public:

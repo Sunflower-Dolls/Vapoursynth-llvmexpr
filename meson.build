@@ -122,12 +122,12 @@ sources = [
   'llvmexpr/analysis/passes/RelAccessAnalysisPass.cpp',
   'llvmexpr/analysis/passes/CoordinateUsagePass.cpp',
   'llvmexpr/analysis/passes/VariableUsagePass.cpp',
-  'llvmexpr/ir/ExprIRGenerator.cpp',
-  'llvmexpr/ir/SingleExprIRGenerator.cpp',
-  'llvmexpr/ir/IRGeneratorBase.cpp',
-  'llvmexpr/jit/Compiler.cpp',
-  'llvmexpr/jit/Jit.cpp',
-  'llvmexpr/utils/Diagnostics.cpp',
+  'llvmexpr/codegen/llvm/LLVMGenerator.cpp',
+  'llvmexpr/codegen/llvm/SingleExprIRGenerator.cpp',
+  'llvmexpr/codegen/llvm/IRGeneratorBase.cpp',
+  'llvmexpr/runtime/llvm/Compiler.cpp',
+  'llvmexpr/runtime/llvm/Jit.cpp',
+  'llvmexpr/codegen/llvm/Diagnostics.cpp',
 ]
 
 llvmexpr_module = shared_module('llvmexpr', sources,
