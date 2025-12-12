@@ -1217,6 +1217,7 @@ vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
             if (use_infix && !input_expr.empty()) {
                 std::map<std::string, std::string> macros;
                 macros["__GPU__"] = "";
+                macros["__EXPR__"] = "";
                 macros["__WIDTH__"] = std::to_string(d->vi.width);
                 macros["__HEIGHT__"] = std::to_string(d->vi.height);
                 macros["__INPUT_NUM__"] = std::to_string(d->num_inputs);

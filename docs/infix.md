@@ -8,7 +8,7 @@ The infix transpiler supports two distinct execution models, corresponding to Va
 
 ### 1.1. `Expr` Mode: Per-Pixel Execution
 
-This is the traditional model. The script is executed once for *every single pixel* of the output frame. It is ideal for standard image filtering, such as applying a brightness curve, combining clips, or spatial filtering.
+This is the traditional model, used by both `llvmexpr.Expr` (CPU) and `llvmexpr.VkExpr` (GPU). The script is executed once for *every single pixel* of the output frame. It is ideal for standard image filtering, such as applying a brightness curve, combining clips, or spatial filtering.
 
 - **Key Characteristics:**
     - Operates on a "current pixel" concept, with `$X` and `$Y` coordinates available.
@@ -361,10 +361,11 @@ This technique is essential for writing complex recursive macros that perform op
 The preprocessor provides several built-in macros that expose information about the execution context.
 
 #### Mode-Specific Macros
-| Macro            | Description                                              |
-| :--------------- | :------------------------------------------------------- |
-| `__EXPR__`       | Defined when compiling in `Expr` mode (per-pixel).       |
-| `__SINGLEEXPR__` | Defined when compiling in `SingleExpr` mode (per-frame). |
+| Macro            | Description                                                                                                                          |
+| :--------------- | :----------------------------------------------------------------------------------------------------------------------------------- |
+| `__EXPR__`       | Defined when compiling in `Expr` mode (per-pixel).                                                                                   |
+| `__SINGLEEXPR__` | Defined when compiling in `SingleExpr` mode (per-frame).                                                                             |
+| `__GPU__`        | Defined when the code is executed by `VkExpr`. This is the only semantic difference between running on `Expr` and `VkExpr` backends. |
 
 #### Context Macros (when `infix=1` is used)
 These are defined by the VapourSynth filter when it invokes the transpiler.

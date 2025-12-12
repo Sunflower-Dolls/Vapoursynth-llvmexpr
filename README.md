@@ -2,48 +2,23 @@
 
 A [VapourSynth](https://www.vapoursynth.com/) filter for evaluating complex mathematical or logical expressions. It utilizes an LLVM-based JIT (Just-In-Time) compiler to translate expressions into native code.
 
-The plugin provides two main functions:
+The plugin provides two main logical functions:
 *   `llvmexpr.Expr`: Evaluates an expression for **every pixel** in a frame, ideal for spatial filtering and general image manipulation.
 *   `llvmexpr.SingleExpr`: Evaluates an expression only **once per frame**, designed for tasks like calculating frame-wide statistics, reading specific pixels, and writing to frame properties or arbitrary pixel locations.
 
+For the `Expr` mode, two backends are available:
+1.  `llvmexpr.Expr`: The standard CPU-based backend.
+2.  `llvmexpr.VkExpr`: A Vulkan-based GPU backend.
+
 `llvmexpr.Expr` is designed to be a powerful and feature-rich alternative to `akarin.Expr`. It is (almost) fully compatible with `akarin`'s syntax and extends it with additional features, most notably **Turing-complete control flow**, **array and dynamic memory allocation**, **advanced math functions** and **C-style infix syntax**. See [Migrating From Akarin](docs/migrating_from_akarin.md) for a detailed comparison.
+
+`llvmexpr.VkExpr` is fully compatible with `llvmexpr.Expr`'s syntax (both postfix and infix) and semantics. It allows running the same expressions on the GPU. The only difference is that in infix mode, an additional `__GPU__` macro is defined.
 
 In terms of performance, `llvmexpr` may excel at complex mathematical computations. However, its performance can be limited by memory access patterns. In scenarios involving heavy random memory access or specific spatial operations (see `rotate clip` in benchmarks), `akarin.Expr` may offer better performance.
 
-## Benchmark
+> [!NOTE]
+> While `VkExpr` offers GPU acceleration, it is not automatically faster than the CPU `Expr`. For simple expressions, the driver submission overhead and memory transfer costs may outweight the computational benefits.
 
-[benchmarks/benchmark.py](benchmarks/benchmark.py)
-
-Benchmark on Apple M2 Pro with 32GB RAM.
-
-| Test Case                    | llvmexpr    | akarin         |
-| ---------------------------- | ----------- | -------------- |
-| simple arithmetic            | 3394.66 FPS | 3178.16 FPS    |
-| logical condition            | 3268.11 FPS | 3347.38 FPS    |
-| data range clamp             | 3354.53 FPS | 3304.06 FPS    |
-| complex math chain           | 1366.07 FPS | 1274.04 FPS    |
-| trigonometry coords          | 2090.50 FPS | FAILED (Error) |
-| power function               | 3238.64 FPS | 3138.22 FPS    |
-| stack dup                    | 3404.09 FPS | 3328.36 FPS    |
-| named variables              | 3349.18 FPS | 3271.53 FPS    |
-| static relative access       | 3026.66 FPS | 3085.37 FPS    |
-| dynamic absolute access      | 2980.11 FPS | 3015.62 FPS    |
-| bitwise and                  | 3314.40 FPS | 3254.09 FPS    |
-| gain                         | 1456.08 FPS | 1722.37 FPS    |
-| power with loop              | 3275.87 FPS | FAILED (Error) |
-| 3D rendering                 | 371.87 FPS  | 192.80 FPS     |
-| 3D rendering 2 (icosahedron) | 552.66 FPS  | 324.18 FPS     |
-| rotate clip                  | 215.35 FPS  | 347.64 FPS     |
-| 8x8 dct                      | 180.91 FPS  | 183.51 FPS     |
-| 8x8 idct                     | 192.42 FPS  | 164.70 FPS     |
-
-Geometric mean FPS (common successful tests only):
-  llvmexpr: 1352.85 FPS
-  akarin: 1280.74 FPS
-
-Performance ratios (relative to 'llvmexpr'): 
-  llvmexpr: 1.000x
-  akarin: 0.947x
 
 ## Core Components
 
@@ -76,6 +51,25 @@ llvmexpr.Expr(clip[] clips, string[] expr[, int format, int boundary=0, string d
 - `infix`: Expression format (default: 0)
   - `0`: Postfix notation (RPN)
   - `1`: Infix notation (C-style) - automatically converted to postfix
+
+### `llvmexpr.VkExpr` (Per-Pixel, GPU Backend)
+
+This function is a Vulkan-based GPU accelerated backend for `Expr`. It accepts the same parameters and syntax as `Expr` (excluding CPU-specific optimization flags like `dump_ir` or `opt_level`).
+
+**Function Signature:**
+```
+llvmexpr.VkExpr(clip[] clips, string[] expr[, int format, int boundary=0, int infix=0, int num_streams=8])
+```
+
+**Parameters:**
+- `clips`: Input video clips
+- `expr`: Expression strings (one per plane). Format depends on `infix` parameter
+- `format`: Output format (optional). Same behavior as `Expr`.
+- `boundary`: Boundary handling mode (0=clamp, 1=mirror)
+- `infix`: Expression format (default: 0)
+  - `0`: Postfix notation (RPN)
+  - `1`: Infix notation (C-style) - automatically converted to postfix. In this mode, a specialized `__GPU__` macro is defined.
+- `num_streams`: Number of concurrent Vulkan streams (default: 8). Increase this for better parallelism if you have a powerful GPU, or decrease it if you run into insufficient vram.
 
 ### `llvmexpr.SingleExpr` (Per-Frame)
 

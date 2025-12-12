@@ -2,6 +2,8 @@
 
 `llvmexpr` provides two powerful VapourSynth functions that evaluate mathematical or logical expressions: `Expr` and `SingleExpr`. Their core is the `expr` string, which uses Reverse Polish Notation (RPN). This guide details the syntax of that string, highlighting the differences between the two functions.
 
+Note that `Expr` has two backends: the standard CPU `llvmexpr.Expr` and the GPU-accelerated `llvmexpr.VkExpr`. Both share the same syntax and semantics described here.
+
 ---
 
 ### **1. Core Concepts & Execution Models**
