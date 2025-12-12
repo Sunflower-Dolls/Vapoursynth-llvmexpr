@@ -98,9 +98,6 @@ jobs:
           export REQUESTS_CA_BUNDLE=/tmp/cacert.pem
           export CURL_CA_BUNDLE=/tmp/cacert.pem
           
-          # Configure Git SSL backend
-          git config --system http.sslBackend schannel || true
-          
           # Configure Meson
           CC="clang -fuse-ld=lld" CXX="clang++ -fuse-ld=lld" meson setup builddir \
             -Dstatic-llvm=true \
@@ -365,9 +362,6 @@ jobs:
           export SSL_CERT_FILE=/tmp/cacert.pem
           export REQUESTS_CA_BUNDLE=/tmp/cacert.pem
           export CURL_CA_BUNDLE=/tmp/cacert.pem
-          
-          # Configure Git SSL backend
-          git config --system http.sslBackend schannel || true
           
           # Configure Meson
           CC="clang -fuse-ld=lld" CXX="clang++ -fuse-ld=lld" meson setup builddir \
