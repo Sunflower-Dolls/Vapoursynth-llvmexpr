@@ -25,6 +25,8 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <queue>
+#include <semaphore>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -37,10 +39,14 @@
 #include "analysis/ExpressionAnalyzer.hpp"
 #include "analysis/passes/DynamicArrayAllocOptPass.hpp"
 #include "analysis/passes/StaticArrayOptPass.hpp"
+#include "codegen/glsl/GLSLGenerator.hpp"
 #include "frontend/InfixConverter.hpp"
 #include "frontend/Tokenizer.hpp"
-#include "jit/Compiler.hpp"
-#include "jit/Jit.hpp"
+#include "runtime/llvm/Compiler.hpp"
+#include "runtime/llvm/Jit.hpp"
+#include "runtime/vulkan/VulkanComputePipeline.hpp"
+#include "runtime/vulkan/VulkanContext.hpp"
+#include "runtime/vulkan/VulkanMemory.hpp"
 
 constexpr uint32_t PROP_READ_NAN_PAYLOAD =
     0x7FC0BEEF; // qNaN with payload 0xBEEF
@@ -824,6 +830,529 @@ singleExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
                              static_cast<int>(deps.size()), d.release(), core);
 }
 
+struct VkStream {
+    std::unique_ptr<llvmexpr::VulkanMemory> memory;
+    std::array<std::unique_ptr<llvmexpr::VulkanComputePipeline>, 3> pipelines;
+};
+
+struct VkExprData : BaseExprData {
+    std::array<PlaneOp, 3> plane_op = {};
+    std::array<std::vector<Token>, 3> tokens;
+    std::array<std::unique_ptr<analysis::AnalysisManager>, 3> analysis_managers;
+
+    int num_streams = 8;
+    std::vector<std::unique_ptr<VkStream>> streams;
+    std::unique_ptr<std::counting_semaphore<>> semaphore;
+    std::queue<int> free_stream_indices;
+    std::mutex stream_mutex;
+
+    // Format info for CPU-side conversion
+    std::vector<VSVideoFormat> input_formats;
+};
+
+const VSFrame*
+    VS_CC // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+    vkExprGetFrame(int n, int activationReason, void* instanceData,
+                   [[maybe_unused]] void** frameData, VSFrameContext* frameCtx,
+                   VSCore* core, const VSAPI* vsapi) {
+    auto* d = static_cast<VkExprData*>(instanceData);
+
+    if (activationReason == arInitial) {
+        for (int i = 0; i < d->num_inputs; ++i) {
+            vsapi->requestFrameFilter(n, d->nodes[i], frameCtx);
+        }
+    } else if (activationReason == arAllFramesReady) {
+        std::vector<const VSFrame*> src_frames(d->num_inputs);
+        for (int i = 0; i < d->num_inputs; ++i) {
+            src_frames[i] = vsapi->getFrameFilter(n, d->nodes[i], frameCtx);
+        }
+
+        std::array<const VSFrame*, 3> plane_src = {
+            d->plane_op.at(0) == PlaneOp::PO_COPY ? src_frames[0] : nullptr,
+            d->plane_op.at(1) == PlaneOp::PO_COPY ? src_frames[0] : nullptr,
+            d->plane_op.at(2) == PlaneOp::PO_COPY ? src_frames[0] : nullptr};
+        std::array<int, 3> planes = {0, 1, 2};
+        VSFrame* dst_frame = vsapi->newVideoFrame2(
+            &d->vi.format, d->vi.width, d->vi.height, plane_src.data(),
+            planes.data(), src_frames[0], core);
+
+        std::vector<float> props(1 + d->required_props.size());
+        readFrameProperties(props, src_frames, d->required_props, n, vsapi);
+
+        for (int plane = 0; plane < d->vi.format.numPlanes; ++plane) {
+            if (d->plane_op.at(plane) != PlaneOp::PO_PROCESS) {
+                continue;
+            }
+
+            int width = vsapi->getFrameWidth(dst_frame, plane);
+            int height = vsapi->getFrameHeight(dst_frame, plane);
+            VkDeviceSize bufferSize = static_cast<VkDeviceSize>(width) *
+                                      static_cast<VkDeviceSize>(height) *
+                                      sizeof(float);
+
+            try {
+                int stream_idx = 0;
+                d->semaphore->acquire();
+                {
+                    std::lock_guard<std::mutex> lock(d->stream_mutex);
+                    stream_idx = d->free_stream_indices.front();
+                    d->free_stream_indices.pop();
+                }
+
+                struct StreamReleaser {
+                    VkExprData* d;
+                    int idx;
+
+                    StreamReleaser(VkExprData* d, int idx) : d(d), idx(idx) {}
+
+                    StreamReleaser(const StreamReleaser&) = delete;
+                    StreamReleaser& operator=(const StreamReleaser&) = delete;
+                    StreamReleaser(StreamReleaser&&) = delete;
+                    StreamReleaser& operator=(StreamReleaser&&) = delete;
+
+                    ~StreamReleaser() {
+                        {
+                            std::lock_guard<std::mutex> lock(d->stream_mutex);
+                            d->free_stream_indices.push(idx);
+                        }
+                        d->semaphore->release();
+                    }
+                } releaser(d, stream_idx);
+
+                auto& stream = *d->streams[stream_idx];
+
+                // TODO: Optimize Buffers
+                std::vector<llvmexpr::VulkanBuffer> srcBuffers(d->num_inputs);
+                std::vector<llvmexpr::VulkanBuffer*> srcBufferPtrs(
+                    d->num_inputs);
+
+                for (int i = 0; i < d->num_inputs; ++i) {
+                    srcBuffers[i] = stream.memory->createGPUBuffer(bufferSize);
+                    srcBufferPtrs[i] = &srcBuffers[i];
+
+                    const uint8_t* srcPtr =
+                        vsapi->getReadPtr(src_frames[i], plane);
+                    ptrdiff_t srcStride =
+                        vsapi->getStride(src_frames[i], plane);
+
+                    // Convert input to float32 for GPU processing
+                    // TODO: Handle conversion using GPU
+                    // NOLINTBEGIN
+                    const VSVideoFormat& inFmt = d->input_formats[i];
+                    int bpp = inFmt.bytesPerSample;
+
+                    std::vector<float> tempBuffer(static_cast<size_t>(width) *
+                                                  static_cast<size_t>(height));
+
+                    if (inFmt.sampleType == stInteger) {
+                        // Integer to float conversion
+                        for (int row = 0; row < height; ++row) {
+                            const uint8_t* rowPtr = srcPtr + (row * srcStride);
+                            float* outRow = tempBuffer.data() +
+                                            (static_cast<size_t>(row) *
+                                             static_cast<size_t>(width));
+                            for (int col = 0; col < width; ++col) {
+                                if (bpp == 1) {
+                                    outRow[col] =
+                                        static_cast<float>(rowPtr[col]);
+                                } else if (bpp == 2) {
+                                    outRow[col] = static_cast<float>(
+                                        reinterpret_cast<const uint16_t*>(
+                                            rowPtr)[col]);
+                                } else {
+                                    outRow[col] = static_cast<float>(
+                                        reinterpret_cast<const uint32_t*>(
+                                            rowPtr)[col]);
+                                }
+                            }
+                        }
+                    } else {
+                        // Float input
+                        if (bpp == 4) {
+                            for (int row = 0; row < height; ++row) {
+                                const uint8_t* rowPtr =
+                                    srcPtr + (row * srcStride);
+                                float* outRow = tempBuffer.data() +
+                                                (static_cast<size_t>(row) *
+                                                 static_cast<size_t>(width));
+                                std::memcpy(outRow, rowPtr,
+                                            static_cast<size_t>(width) *
+                                                sizeof(float));
+                            }
+                        } else if (bpp == 2) {
+                            for (int row = 0; row < height; ++row) {
+                                const uint8_t* rowPtr =
+                                    srcPtr + (row * srcStride);
+                                float* outRow = tempBuffer.data() +
+                                                (static_cast<size_t>(row) *
+                                                 static_cast<size_t>(width));
+                                for (int col = 0; col < width; ++col) {
+                                    uint16_t halfBits =
+                                        reinterpret_cast<const uint16_t*>(
+                                            rowPtr)[col];
+                                    uint32_t sign = (halfBits >> 15) & 0x1;
+                                    uint32_t exp = (halfBits >> 10) & 0x1F;
+                                    uint32_t mant = halfBits & 0x3FF;
+                                    uint32_t floatBits;
+                                    if (exp == 0) {
+                                        if (mant == 0) {
+                                            floatBits = sign << 31;
+                                        } else {
+                                            // Denormalized
+                                            exp = 1;
+                                            while ((mant & 0x400) == 0) {
+                                                mant <<= 1;
+                                                exp--;
+                                            }
+                                            mant &= 0x3FF;
+                                            floatBits =
+                                                (sign << 31) |
+                                                ((exp + 127 - 15) << 23) |
+                                                (mant << 13);
+                                        }
+                                    } else if (exp == 31) {
+                                        // Inf or NaN
+                                        floatBits = (sign << 31) | 0x7F800000 |
+                                                    (mant << 13);
+                                    } else {
+                                        floatBits = (sign << 31) |
+                                                    ((exp + 127 - 15) << 23) |
+                                                    (mant << 13);
+                                    }
+                                    outRow[col] =
+                                        std::bit_cast<float>(floatBits);
+                                }
+                            }
+                        } else {
+                            throw std::runtime_error(
+                                "Unsupported float sample size.");
+                        }
+                    }
+                    stream.memory->uploadToBuffer(
+                        srcBuffers[i], tempBuffer.data(), bufferSize);
+                }
+
+                auto dstBuffer = stream.memory->createGPUBuffer(bufferSize);
+
+                stream.pipelines.at(plane)->dispatch(
+                    *stream.memory, srcBufferPtrs, dstBuffer, props,
+                    static_cast<uint32_t>(width), static_cast<uint32_t>(height),
+                    n);
+
+                uint8_t* dstPtr = vsapi->getWritePtr(dst_frame, plane);
+                ptrdiff_t dstStride = vsapi->getStride(dst_frame, plane);
+
+                // Download and convert from float32 to output format
+                const VSVideoFormat& outFmt = d->vi.format;
+                int outBpp = outFmt.bytesPerSample;
+
+                std::vector<float> tempBuffer(static_cast<size_t>(width) *
+                                              static_cast<size_t>(height));
+                stream.memory->downloadFromBuffer(dstBuffer, tempBuffer.data(),
+                                                  bufferSize);
+
+                if (outFmt.sampleType == stInteger) {
+                    // Float to integer with clamping
+                    int maxVal = (1 << outFmt.bitsPerSample) - 1;
+                    for (int row = 0; row < height; ++row) {
+                        uint8_t* outRowPtr = dstPtr + (row * dstStride);
+                        const float* inRow =
+                            tempBuffer.data() + (static_cast<size_t>(row) *
+                                                 static_cast<size_t>(width));
+                        for (int col = 0; col < width; ++col) {
+                            float val = inRow[col];
+                            float clamped = std::clamp(
+                                val, 0.0f, static_cast<float>(maxVal));
+                            int intVal =
+                                static_cast<int>(std::nearbyint(clamped));
+                            if (outBpp == 1) {
+                                outRowPtr[col] = static_cast<uint8_t>(intVal);
+                            } else if (outBpp == 2) {
+                                reinterpret_cast<uint16_t*>(outRowPtr)[col] =
+                                    static_cast<uint16_t>(intVal);
+                            } else {
+                                reinterpret_cast<uint32_t*>(outRowPtr)[col] =
+                                    static_cast<uint32_t>(intVal);
+                            }
+                        }
+                    }
+                } else {
+                    // Float output
+                    if (outBpp == 4) {
+                        for (int row = 0; row < height; ++row) {
+                            uint8_t* outRowPtr = dstPtr + (row * dstStride);
+                            const float* inRow = tempBuffer.data() +
+                                                 (static_cast<size_t>(row) *
+                                                  static_cast<size_t>(width));
+                            std::memcpy(outRowPtr, inRow,
+                                        static_cast<size_t>(width) *
+                                            sizeof(float));
+                        }
+                    } else if (outBpp == 2) {
+                        for (int row = 0; row < height; ++row) {
+                            uint8_t* outRowPtr = dstPtr + (row * dstStride);
+                            const float* inRow = tempBuffer.data() +
+                                                 (static_cast<size_t>(row) *
+                                                  static_cast<size_t>(width));
+                            for (int col = 0; col < width; ++col) {
+                                float val = inRow[col];
+                                auto floatBits = std::bit_cast<uint32_t>(val);
+                                uint32_t sign = (floatBits >> 31) & 0x1;
+                                int32_t exp =
+                                    ((floatBits >> 23) & 0xFF) - 127 + 15;
+                                uint32_t mant = (floatBits >> 13) & 0x3FF;
+                                uint16_t halfBits;
+                                if (std::isnan(val)) {
+                                    halfBits = static_cast<uint16_t>(
+                                        (sign << 15) | 0x7C00 |
+                                        (mant ? mant : 1));
+                                } else if (std::isinf(val)) {
+                                    halfBits = static_cast<uint16_t>(
+                                        (sign << 15) | 0x7C00);
+                                } else if (exp <= 0) {
+                                    // Underflow to zero or denormal
+                                    if (exp < -10) {
+                                        halfBits =
+                                            static_cast<uint16_t>(sign << 15);
+                                    } else {
+                                        mant = (mant | 0x400) >> (1 - exp);
+                                        halfBits = static_cast<uint16_t>(
+                                            (sign << 15) | mant);
+                                    }
+                                } else if (exp >= 31) {
+                                    // Overflow to infinity
+                                    halfBits = static_cast<uint16_t>(
+                                        (sign << 15) | 0x7C00);
+                                } else {
+                                    halfBits = static_cast<uint16_t>(
+                                        (sign << 15) |
+                                        (static_cast<uint32_t>(exp) << 10) |
+                                        mant);
+                                }
+                                reinterpret_cast<uint16_t*>(outRowPtr)[col] =
+                                    halfBits;
+                            }
+                        }
+                    } else {
+                        throw std::runtime_error(
+                            "Unsupported float sample size.");
+                    }
+                    // NOLINTEND
+                }
+
+                for (int i = 0; i < d->num_inputs; ++i) {
+                    stream.memory->destroyBuffer(srcBuffers[i]);
+                }
+                stream.memory->destroyBuffer(dstBuffer);
+
+            } catch (const std::exception& e) {
+                for (const auto& frame : src_frames) {
+                    vsapi->freeFrame(frame);
+                }
+                vsapi->freeFrame(dst_frame);
+                vsapi->setFilterError(
+                    std::format("VkExpr: GPU error: {}", e.what()).c_str(),
+                    frameCtx);
+                return nullptr;
+            }
+        }
+
+        for (const auto& frame : src_frames) {
+            vsapi->freeFrame(frame);
+        }
+        return dst_frame;
+    }
+
+    return nullptr;
+}
+
+void VS_CC // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+vkExprFree(void* instanceData, [[maybe_unused]] VSCore* core,
+           const VSAPI* vsapi) {
+    std::unique_ptr<VkExprData> d(static_cast<VkExprData*>(instanceData));
+    for (auto* node : d->nodes) {
+        vsapi->freeNode(node);
+    }
+}
+
+void VS_CC // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
+             VSCore* core, const VSAPI* vsapi) {
+    auto d = std::make_unique<VkExprData>();
+    int err = 0;
+
+    try {
+        // Validate and initialize clips
+        validateAndInitClips<true>(d.get(), in, vsapi);
+
+        // Store input formats for CPU-side conversion
+        d->input_formats.resize(d->num_inputs);
+        for (int i = 0; i < d->num_inputs; ++i) {
+            d->input_formats[i] = vsapi->getVideoInfo(d->nodes[i])->format;
+        }
+
+        parseFormatParam(d.get(), in, vsapi, core);
+
+        const int nexpr = vsapi->mapNumElements(in, "expr");
+        if (nexpr == 0) {
+            throw std::runtime_error(
+                "At least one expression must be provided.");
+        }
+
+        std::array<std::string, 3> expr_strs;
+        for (int i = 0; i < nexpr && i < 3; ++i) {
+            expr_strs.at(i) = vsapi->mapGetData(in, "expr", i, &err);
+        }
+        for (int i = nexpr; i < d->vi.format.numPlanes; ++i) {
+            expr_strs.at(i) = expr_strs.at(nexpr - 1);
+        }
+
+        d->mirror_boundary = vsapi->mapGetInt(in, "boundary", 0, &err) != 0;
+
+        bool use_infix = vsapi->mapGetInt(in, "infix", 0, &err) != 0;
+
+        std::array<std::string, 3> processed_exprs;
+        for (int i = 0; i < nexpr && i < 3; ++i) {
+            const std::string& input_expr = expr_strs.at(i);
+            if (use_infix && !input_expr.empty()) {
+                std::map<std::string, std::string> macros;
+                macros["__GPU__"] = "";
+                macros["__EXPR__"] = "";
+                macros["__WIDTH__"] = std::to_string(d->vi.width);
+                macros["__HEIGHT__"] = std::to_string(d->vi.height);
+                macros["__INPUT_NUM__"] = std::to_string(d->num_inputs);
+                macros["__OUTPUT_BITDEPTH__"] =
+                    std::to_string(d->vi.format.bitsPerSample);
+                macros["__OUTPUT_COLORFAMILY__"] =
+                    std::to_string(d->vi.format.colorFamily);
+                macros["__SUBSAMPLE_W__"] =
+                    std::to_string(d->vi.format.subSamplingW);
+                macros["__SUBSAMPLE_H__"] =
+                    std::to_string(d->vi.format.subSamplingH);
+                macros["__PLANE_NO__"] = std::to_string(i);
+                macros["__OUTPUT_SAMPLETYPE__"] = std::to_string(
+                    (d->vi.format.sampleType == stFloat) ? 1 : 0);
+
+                for (int j = 0; j < d->num_inputs; ++j) {
+                    const VSVideoInfo* input_vi =
+                        vsapi->getVideoInfo(d->nodes[j]);
+                    macros[std::format("__INPUT_BITDEPTH_{}__", j)] =
+                        std::to_string(input_vi->format.bitsPerSample);
+                    macros[std::format("__INPUT_COLORFAMILY_{}__", j)] =
+                        std::to_string(input_vi->format.colorFamily);
+                    macros[std::format("__INPUT_SAMPLETYPE_{}__", j)] =
+                        std::to_string(
+                            (input_vi->format.sampleType == stFloat) ? 1 : 0);
+                }
+
+                processed_exprs.at(i) =
+                    convertInfixToPostfix(input_expr, d->num_inputs,
+                                          infix2postfix::Mode::Expr, &macros);
+            } else {
+                processed_exprs.at(i) = input_expr;
+            }
+        }
+        for (int i = nexpr; i < d->vi.format.numPlanes; ++i) {
+            processed_exprs.at(i) = processed_exprs.at(nexpr - 1);
+        }
+
+        for (int i = 0; i < d->vi.format.numPlanes; ++i) {
+            if (processed_exprs.at(i).empty()) {
+                d->plane_op.at(i) = PlaneOp::PO_COPY;
+            } else {
+                d->plane_op.at(i) = PlaneOp::PO_PROCESS;
+                d->tokens.at(i) = tokenize(processed_exprs.at(i), d->num_inputs,
+                                           ExprMode::EXPR);
+
+                for (const auto& token : d->tokens.at(i)) {
+                    if (token.type == TokenType::PROP_ACCESS ||
+                        token.type == TokenType::PROP_EXISTS) {
+                        const auto& payload =
+                            std::get<TokenPayload_PropAccess>(token.payload);
+                        auto key =
+                            std::make_pair(payload.clip_idx, payload.prop_name);
+                        if (!d->prop_map.contains(key)) {
+                            d->prop_map[key] = static_cast<int>(
+                                1 + d->required_props.size()); // 0 is for N
+                            d->required_props.push_back(key);
+                        }
+                    }
+                }
+
+                auto analyser = std::make_unique<analysis::AnalysisManager>(
+                    d->tokens.at(i), d->mirror_boundary);
+                analysis::ExpressionAnalyzer expr_analyzer(*analyser);
+                expr_analyzer.analyze();
+                d->analysis_managers.at(i) = std::move(analyser);
+            }
+        }
+
+        d->num_streams =
+            static_cast<int>(vsapi->mapGetInt(in, "num_streams", 0, &err));
+        if (err != 0 || d->num_streams < 1) {
+            d->num_streams = 8;
+        }
+
+        d->semaphore =
+            std::make_unique<std::counting_semaphore<>>(d->num_streams);
+        d->streams.resize(d->num_streams);
+
+        auto& ctx = llvmexpr::VulkanContext::getInstance();
+
+        for (int k = 0; k < d->num_streams; ++k) {
+            d->streams[k] = std::make_unique<VkStream>();
+            d->streams[k]->memory =
+                std::make_unique<llvmexpr::VulkanMemory>(ctx);
+            d->free_stream_indices.push(k);
+
+            auto numPropsFloats = static_cast<uint32_t>(
+                1 + d->required_props.size()); // N + props
+
+            for (int i = 0; i < d->vi.format.numPlanes; ++i) {
+                if (d->plane_op.at(i) != PlaneOp::PO_PROCESS) {
+                    continue;
+                }
+
+                analysis::ExpressionAnalysisResults analysis_results(
+                    *d->analysis_managers.at(i));
+                GLSLGenerator generator(
+                    d->tokens.at(i), d->num_inputs,
+                    d->vi.width / (i == 0 ? 1 : d->vi.format.subSamplingW),
+                    d->vi.height / (i == 0 ? 1 : d->vi.format.subSamplingH),
+                    d->mirror_boundary, d->prop_map, analysis_results);
+                std::string shader = generator.generate();
+                // printf("Generated GLSL:\n%s\n", shader.c_str());
+
+                d->streams[k]->pipelines.at(i) =
+                    std::make_unique<llvmexpr::VulkanComputePipeline>(
+                        ctx, shader, static_cast<uint32_t>(d->num_inputs),
+                        numPropsFloats);
+            }
+        }
+
+    } catch (const std::exception& e) {
+        for (auto* node : d->nodes) {
+            if (node != nullptr) {
+                vsapi->freeNode(node);
+            }
+        }
+        vsapi->mapSetError(out, std::format("VkExpr: {}", e.what()).c_str());
+        return;
+    }
+
+    std::vector<VSFilterDependency> deps;
+    deps.reserve(d->nodes.size());
+    for (auto* node : d->nodes) {
+        deps.push_back({node, rpStrictSpatial});
+    }
+
+    VSVideoInfo* vi_ptr = &d->vi;
+
+    vsapi->createVideoFilter(out, "VkExpr", vi_ptr, vkExprGetFrame, vkExprFree,
+                             fmParallel, deps.data(),
+                             static_cast<int>(deps.size()), d.release(), core);
+}
+
 } // anonymous namespace
 
 // Host API for JIT code to manage dynamic arrays
@@ -863,4 +1392,10 @@ VapourSynthPluginInit2(VSPlugin* plugin, const VSPLUGINAPI* vspapi) {
                              "int:opt;dump_ir:data:opt;opt_"
                              "level:int:opt;approx_math:int:opt;infix:int:opt;",
                              "clip:vnode;", singleExprCreate, nullptr, plugin);
+
+    vspapi->registerFunction(
+        "VkExpr",
+        "clips:vnode[];expr:data[];format:int:opt;"
+        "boundary:int:opt;num_streams:int:opt;infix:int:opt;",
+        "clip:vnode;", vkExprCreate, nullptr, plugin);
 }

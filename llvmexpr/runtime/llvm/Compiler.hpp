@@ -26,8 +26,8 @@
 
 #include "VapourSynth4.h"
 
-#include "../analysis/AnalysisResults.hpp"
-#include "../frontend/Tokenizer.hpp"
+#include "../../analysis/AnalysisResults.hpp"
+#include "../../frontend/Tokenizer.hpp"
 #include "Jit.hpp"
 
 class Compiler {

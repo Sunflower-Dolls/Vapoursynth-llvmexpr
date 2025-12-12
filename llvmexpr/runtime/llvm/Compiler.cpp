@@ -35,9 +35,9 @@
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include "../ir/ExprIRGenerator.hpp"
-#include "../ir/SingleExprIRGenerator.hpp"
-#include "../utils/Diagnostics.hpp"
+#include "../../codegen/llvm/Diagnostics.hpp"
+#include "../../codegen/llvm/ExprIRGenerator.hpp"
+#include "../../codegen/llvm/SingleExprIRGenerator.hpp"
 
 Compiler::Compiler(
     std::vector<Token> tokens_in, const VSVideoInfo* out_vi,

@@ -7,6 +7,7 @@ build/*
 *.ll
 *.s
 */__pycache__/*
+__pycache__/*
 tmp.py
 .test_ir_dumps/*
 ir_dumps/*
@@ -20,9 +21,13 @@ ARCHITECTURE.md
 subprojects/compile-time-regular-expressions-*
 subprojects/packagecache
 subprojects/.wraplock
+subprojects/volk/
+subprojects/vulkan-headers/
+subprojects/vulkan-memory-allocator/
 .codacy/codacy.yaml
 *.glob
 *.aux
 *.vo
 *.vok
 *.vos
+Todo/

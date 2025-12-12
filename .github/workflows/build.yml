@@ -22,7 +22,7 @@ jobs:
           - name: Windows x64
             os: windows-latest
             libc: ""
-            artifact_name: llvmexpr-windows-x64-static-llvm21
+            artifact_name: llvmexpr-windows-x64-static-llvm21-static-shaderc
             library_name: libllvmexpr.dll
 
     steps:
@@ -51,6 +51,11 @@ jobs:
             mingw-w64-x86_64-llvm
             mingw-w64-x86_64-vapoursynth
             mingw-w64-x86_64-zstd
+            mingw-w64-x86_64-shaderc
+            mingw-w64-x86_64-glslang
+            mingw-w64-x86_64-spirv-tools
+            mingw-w64-x86_64-vulkan-loader
+            mingw-w64-x86_64-vulkan-headers
 
       - name: Force static zstd linkage (Windows)
         shell: msys2 {0}
@@ -95,12 +100,10 @@ jobs:
           export REQUESTS_CA_BUNDLE=/tmp/cacert.pem
           export CURL_CA_BUNDLE=/tmp/cacert.pem
           
-          # Configure Git SSL backend
-          git config --system http.sslBackend schannel || true
-          
           # Configure Meson
           CC="clang -fuse-ld=lld" CXX="clang++ -fuse-ld=lld" meson setup builddir \
             -Dstatic-llvm=true \
+            -Dstatic-shaderc=true \
             --buildtype=release
 
       - name: Build (Windows)
@@ -153,18 +156,18 @@ jobs:
           - name: Linux x64-glibc
             os: ubuntu-latest
             libc: glibc
-            artifact_name: llvmexpr-linux-x64-glibc-static-llvm21
+            artifact_name: llvmexpr-linux-x64-glibc-static-llvm21-static-shaderc
             library_name: libllvmexpr.so
 
           - name: macOS arm64
             os: macos-latest
             libc: ""
-            artifact_name: llvmexpr-macos-arm64-static-llvm21
+            artifact_name: llvmexpr-macos-arm64-static-llvm21-static-shaderc
             library_name: libllvmexpr.dylib
           - name: Windows x64
             os: windows-latest
             libc: ""
-            artifact_name: llvmexpr-windows-x64-static-llvm21
+            artifact_name: llvmexpr-windows-x64-static-llvm21-static-shaderc
             library_name: libllvmexpr.dll
 
     steps:
@@ -187,14 +190,17 @@ jobs:
             zstd \
             liblzma-dev \
             libc++-dev \
-            libc++abi-dev
+            libc++abi-dev \
+            libshaderc-dev \
+            libvulkan-dev
+
           pip install meson ninja
 
       # macOS specific setup
       - name: Setup dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install meson ninja pkg-config llvm vapoursynth zstd zlib
+          brew install meson ninja pkg-config llvm vapoursynth zstd zlib shaderc vulkan-loader
 
       # Windows specific setup
       - name: Setup MSYS2 (Windows)
@@ -219,6 +225,11 @@ jobs:
             mingw-w64-x86_64-llvm
             mingw-w64-x86_64-vapoursynth
             mingw-w64-x86_64-zstd
+            mingw-w64-x86_64-shaderc
+            mingw-w64-x86_64-glslang
+            mingw-w64-x86_64-spirv-tools
+            mingw-w64-x86_64-vulkan-loader
+            mingw-w64-x86_64-vulkan-headers
 
       - name: Force static zstd linkage (Windows)
         if: runner.os == 'Windows'
@@ -357,12 +368,10 @@ jobs:
           export REQUESTS_CA_BUNDLE=/tmp/cacert.pem
           export CURL_CA_BUNDLE=/tmp/cacert.pem
           
-          # Configure Git SSL backend
-          git config --system http.sslBackend schannel || true
-          
           # Configure Meson
           CC="clang -fuse-ld=lld" CXX="clang++ -fuse-ld=lld" meson setup builddir \
             -Dstatic-llvm=true \
+            -Dstatic-shaderc=true \
             -Denable-sanitizers=true \
             --buildtype=debug
       - name: Configure (Meson) (Unix)
@@ -371,6 +380,7 @@ jobs:
         run: |
           CC=clang CXX="clang++ -stdlib=libc++" meson setup builddir \
             -Dstatic-llvm=true \
+            -Dstatic-shaderc=true \
             -Denable-sanitizers=true \
             --buildtype=debug
 

@@ -1,2 +1,3 @@
 option('static-llvm', type: 'boolean', value: false, description: 'Link LLVM statically')
+option('static-shaderc', type: 'boolean', value: false, description: 'Link Shaderc statically')
 option('enable-sanitizers', type: 'boolean', value: false, description: 'Enable additional debug flags for sanitizer builds (use with -Db_sanitize=address,undefined)')

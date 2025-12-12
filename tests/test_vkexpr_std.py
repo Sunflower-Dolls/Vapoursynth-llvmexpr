@@ -136,7 +136,7 @@ def test_expr_operations(
     else:
         clips = core.std.BlankClip(format=vs.GRAY8, color=initial_colors)
 
-    result_clip = core.llvmexpr.Expr(clips, expression)
+    result_clip = core.llvmexpr.VkExpr(clips, expression)
 
     assert get_pixel_value(result_clip) == expected_value
 

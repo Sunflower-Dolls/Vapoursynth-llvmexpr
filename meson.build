@@ -122,13 +122,73 @@ sources = [
   'llvmexpr/analysis/passes/RelAccessAnalysisPass.cpp',
   'llvmexpr/analysis/passes/CoordinateUsagePass.cpp',
   'llvmexpr/analysis/passes/VariableUsagePass.cpp',
-  'llvmexpr/ir/ExprIRGenerator.cpp',
-  'llvmexpr/ir/SingleExprIRGenerator.cpp',
-  'llvmexpr/ir/IRGeneratorBase.cpp',
-  'llvmexpr/jit/Compiler.cpp',
-  'llvmexpr/jit/Jit.cpp',
-  'llvmexpr/utils/Diagnostics.cpp',
+  'llvmexpr/codegen/llvm/ExprIRGenerator.cpp',
+  'llvmexpr/codegen/llvm/SingleExprIRGenerator.cpp',
+  'llvmexpr/codegen/llvm/IRGeneratorBase.cpp',
+  'llvmexpr/runtime/llvm/Compiler.cpp',
+  'llvmexpr/runtime/llvm/Jit.cpp',
+  'llvmexpr/codegen/llvm/Diagnostics.cpp',
+  'llvmexpr/codegen/glsl/GLSLGenerator.cpp',
+  'llvmexpr/runtime/vulkan/VulkanContext.cpp',
+  'llvmexpr/runtime/vulkan/VulkanMemory.cpp',
+  'llvmexpr/runtime/vulkan/VulkanComputePipeline.cpp',
 ]
+
+vulkan_headers_dep = dependency('vulkan-headers', fallback: ['vulkan-headers', 'vulkan_headers_dep'])
+vulkan_dep = dependency('vulkan') 
+volk_dep = dependency('volk', fallback: ['volk', 'volk_dep'])
+vma_dep = dependency('vulkan-memory-allocator', fallback: ['vulkan-memory-allocator', 'vma_dep'])
+shaderc_dep = dependency('shaderc', static: true)
+
+dependencies += [vulkan_headers_dep, volk_dep, vma_dep, shaderc_dep]
+
+static_shaderc = get_option('static-shaderc')
+if static_shaderc
+  shaderc_dep = dependency('shaderc', static: true)
+  # On Windows (MSYS2), libshaderc_combined.a depends on glslang and SPIRV-Tools
+  # but pkg-config doesn't properly expose these transitive dependencies.
+  # We need to link them explicitly.
+  if host_machine.system() == 'windows'
+    glslang_dep = dependency('glslang', static: true, required: false)
+    if glslang_dep.found()
+      dependencies += glslang_dep
+    else
+      # Fallback: manually link the required glslang libraries
+      glslang_libs = [
+        cxx.find_library('glslang', static: true, required: false),
+        cxx.find_library('MachineIndependent', static: true, required: false),
+        cxx.find_library('GenericCodeGen', static: true, required: false),
+        cxx.find_library('glslang-default-resource-limits', static: true, required: false),
+        cxx.find_library('OSDependent', static: true, required: false),
+        cxx.find_library('SPIRV', static: true, required: false),
+        cxx.find_library('SPVRemapper', static: true, required: false),
+      ]
+      foreach lib : glslang_libs
+        if lib.found()
+          dependencies += lib
+        endif
+      endforeach
+    endif
+    
+    spirv_tools_dep = dependency('SPIRV-Tools', static: true, required: false)
+    if spirv_tools_dep.found()
+      dependencies += spirv_tools_dep
+    else
+      # Fallback: manually link the required SPIRV-Tools libraries  
+      spirv_libs = [
+        cxx.find_library('SPIRV-Tools', static: true, required: false),
+        cxx.find_library('SPIRV-Tools-opt', static: true, required: false),
+      ]
+      foreach lib : spirv_libs
+        if lib.found()
+          dependencies += lib
+        endif
+      endforeach
+    endif
+  endif
+endif
+
+dependencies += [vulkan_headers_dep, volk_dep, vma_dep, shaderc_dep]
 
 llvmexpr_module = shared_module('llvmexpr', sources,
   dependencies: dependencies,

@@ -17,8 +17,8 @@
  * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef LLVMEXPR_EXPRIRGENERATOR_HPP
-#define LLVMEXPR_EXPRIRGENERATOR_HPP
+#ifndef LLVMEXPR_ExprIRGenerator_HPP
+#define LLVMEXPR_ExprIRGenerator_HPP
 
 #include "IRGeneratorBase.hpp"
 
@@ -56,4 +56,4 @@ class ExprIRGenerator : public IRGeneratorBase {
     std::map<std::string, llvm::Value*> named_arrays;
 };
 
-#endif // LLVMEXPR_EXPRIRGENERATOR_HPP
+#endif // LLVMEXPR_ExprIRGenerator_HPP
