@@ -844,6 +844,9 @@ struct VkExprData {
     std::map<std::pair<int, std::string>, int> prop_map;
     std::unique_ptr<llvmexpr::VulkanMemory> memory;
     std::array<std::unique_ptr<llvmexpr::VulkanComputePipeline>, 3> pipelines;
+
+    // Format info for CPU-side conversion
+    std::vector<VSVideoFormat> input_formats;
 };
 
 const VSFrame*
@@ -901,25 +904,101 @@ const VSFrame*
                     ptrdiff_t srcStride =
                         vsapi->getStride(src_frames[i], plane);
 
-                    if (srcStride ==
-                        static_cast<ptrdiff_t>(width * sizeof(float))) {
-                        d->memory->uploadToBuffer(srcBuffers[i], srcPtr,
-                                                  bufferSize);
-                    } else {
-                        std::vector<float> tempBuffer(
-                            static_cast<size_t>(width) *
-                            static_cast<size_t>(height));
-                        for (int y = 0; y < height; ++y) {
-                            std::memcpy(tempBuffer.data() +
-                                            (static_cast<size_t>(y) *
-                                             static_cast<size_t>(width)),
-                                        srcPtr + (y * srcStride),
-                                        static_cast<size_t>(width) *
-                                            sizeof(float));
+                    // Convert input to float32 for GPU processing
+                    // TODO: Handle conversion using GPU
+                    // NOLINTBEGIN
+                    const VSVideoFormat& inFmt = d->input_formats[i];
+                    int bpp = inFmt.bytesPerSample;
+
+                    std::vector<float> tempBuffer(static_cast<size_t>(width) *
+                                                  static_cast<size_t>(height));
+
+                    if (inFmt.sampleType == stInteger) {
+                        // Integer to float conversion
+                        for (int row = 0; row < height; ++row) {
+                            const uint8_t* rowPtr = srcPtr + (row * srcStride);
+                            float* outRow = tempBuffer.data() +
+                                            (static_cast<size_t>(row) *
+                                             static_cast<size_t>(width));
+                            for (int col = 0; col < width; ++col) {
+                                if (bpp == 1) {
+                                    outRow[col] =
+                                        static_cast<float>(rowPtr[col]);
+                                } else if (bpp == 2) {
+                                    outRow[col] = static_cast<float>(
+                                        reinterpret_cast<const uint16_t*>(
+                                            rowPtr)[col]);
+                                } else {
+                                    outRow[col] = static_cast<float>(
+                                        reinterpret_cast<const uint32_t*>(
+                                            rowPtr)[col]);
+                                }
+                            }
                         }
-                        d->memory->uploadToBuffer(
-                            srcBuffers[i], tempBuffer.data(), bufferSize);
+                    } else {
+                        // Float input
+                        if (bpp == 4) {
+                            for (int row = 0; row < height; ++row) {
+                                const uint8_t* rowPtr =
+                                    srcPtr + (row * srcStride);
+                                float* outRow = tempBuffer.data() +
+                                                (static_cast<size_t>(row) *
+                                                 static_cast<size_t>(width));
+                                std::memcpy(outRow, rowPtr,
+                                            static_cast<size_t>(width) *
+                                                sizeof(float));
+                            }
+                        } else if (bpp == 2) {
+                            for (int row = 0; row < height; ++row) {
+                                const uint8_t* rowPtr =
+                                    srcPtr + (row * srcStride);
+                                float* outRow = tempBuffer.data() +
+                                                (static_cast<size_t>(row) *
+                                                 static_cast<size_t>(width));
+                                for (int col = 0; col < width; ++col) {
+                                    uint16_t halfBits =
+                                        reinterpret_cast<const uint16_t*>(
+                                            rowPtr)[col];
+                                    uint32_t sign = (halfBits >> 15) & 0x1;
+                                    uint32_t exp = (halfBits >> 10) & 0x1F;
+                                    uint32_t mant = halfBits & 0x3FF;
+                                    uint32_t floatBits;
+                                    if (exp == 0) {
+                                        if (mant == 0) {
+                                            floatBits = sign << 31;
+                                        } else {
+                                            // Denormalized
+                                            exp = 1;
+                                            while ((mant & 0x400) == 0) {
+                                                mant <<= 1;
+                                                exp--;
+                                            }
+                                            mant &= 0x3FF;
+                                            floatBits =
+                                                (sign << 31) |
+                                                ((exp + 127 - 15) << 23) |
+                                                (mant << 13);
+                                        }
+                                    } else if (exp == 31) {
+                                        // Inf or NaN
+                                        floatBits = (sign << 31) | 0x7F800000 |
+                                                    (mant << 13);
+                                    } else {
+                                        floatBits = (sign << 31) |
+                                                    ((exp + 127 - 15) << 23) |
+                                                    (mant << 13);
+                                    }
+                                    outRow[col] =
+                                        std::bit_cast<float>(floatBits);
+                                }
+                            }
+                        } else {
+                            throw std::runtime_error(
+                                "Unsupported float sample size.");
+                        }
                     }
+                    d->memory->uploadToBuffer(srcBuffers[i], tempBuffer.data(),
+                                              bufferSize);
                 }
 
                 auto dstBuffer = d->memory->createGPUBuffer(bufferSize);
@@ -932,22 +1011,102 @@ const VSFrame*
                 uint8_t* dstPtr = vsapi->getWritePtr(dst_frame, plane);
                 ptrdiff_t dstStride = vsapi->getStride(dst_frame, plane);
 
-                if (dstStride ==
-                    static_cast<ptrdiff_t>(width * sizeof(float))) {
-                    d->memory->downloadFromBuffer(dstBuffer, dstPtr,
-                                                  bufferSize);
-                } else {
-                    std::vector<float> tempBuffer(static_cast<size_t>(width) *
-                                                  static_cast<size_t>(height));
-                    d->memory->downloadFromBuffer(dstBuffer, tempBuffer.data(),
-                                                  bufferSize);
-                    for (int y = 0; y < height; ++y) {
-                        std::memcpy(dstPtr + (y * dstStride),
-                                    tempBuffer.data() +
-                                        (static_cast<size_t>(y) *
-                                         static_cast<size_t>(width)),
-                                    static_cast<size_t>(width) * sizeof(float));
+                // Download and convert from float32 to output format
+                const VSVideoFormat& outFmt = d->vi.format;
+                int outBpp = outFmt.bytesPerSample;
+
+                std::vector<float> tempBuffer(static_cast<size_t>(width) *
+                                              static_cast<size_t>(height));
+                d->memory->downloadFromBuffer(dstBuffer, tempBuffer.data(),
+                                              bufferSize);
+
+                if (outFmt.sampleType == stInteger) {
+                    // Float to integer with clamping
+                    int maxVal = (1 << outFmt.bitsPerSample) - 1;
+                    for (int row = 0; row < height; ++row) {
+                        uint8_t* outRowPtr = dstPtr + (row * dstStride);
+                        const float* inRow =
+                            tempBuffer.data() + (static_cast<size_t>(row) *
+                                                 static_cast<size_t>(width));
+                        for (int col = 0; col < width; ++col) {
+                            float val = inRow[col];
+                            float clamped = std::clamp(
+                                val, 0.0f, static_cast<float>(maxVal));
+                            int intVal =
+                                static_cast<int>(std::nearbyint(clamped));
+                            if (outBpp == 1) {
+                                outRowPtr[col] = static_cast<uint8_t>(intVal);
+                            } else if (outBpp == 2) {
+                                reinterpret_cast<uint16_t*>(outRowPtr)[col] =
+                                    static_cast<uint16_t>(intVal);
+                            } else {
+                                reinterpret_cast<uint32_t*>(outRowPtr)[col] =
+                                    static_cast<uint32_t>(intVal);
+                            }
+                        }
                     }
+                } else {
+                    // Float output
+                    if (outBpp == 4) {
+                        for (int row = 0; row < height; ++row) {
+                            uint8_t* outRowPtr = dstPtr + (row * dstStride);
+                            const float* inRow = tempBuffer.data() +
+                                                 (static_cast<size_t>(row) *
+                                                  static_cast<size_t>(width));
+                            std::memcpy(outRowPtr, inRow,
+                                        static_cast<size_t>(width) *
+                                            sizeof(float));
+                        }
+                    } else if (outBpp == 2) {
+                        for (int row = 0; row < height; ++row) {
+                            uint8_t* outRowPtr = dstPtr + (row * dstStride);
+                            const float* inRow = tempBuffer.data() +
+                                                 (static_cast<size_t>(row) *
+                                                  static_cast<size_t>(width));
+                            for (int col = 0; col < width; ++col) {
+                                float val = inRow[col];
+                                auto floatBits = std::bit_cast<uint32_t>(val);
+                                uint32_t sign = (floatBits >> 31) & 0x1;
+                                int32_t exp =
+                                    ((floatBits >> 23) & 0xFF) - 127 + 15;
+                                uint32_t mant = (floatBits >> 13) & 0x3FF;
+                                uint16_t halfBits;
+                                if (std::isnan(val)) {
+                                    halfBits = static_cast<uint16_t>(
+                                        (sign << 15) | 0x7C00 |
+                                        (mant ? mant : 1));
+                                } else if (std::isinf(val)) {
+                                    halfBits = static_cast<uint16_t>(
+                                        (sign << 15) | 0x7C00);
+                                } else if (exp <= 0) {
+                                    // Underflow to zero or denormal
+                                    if (exp < -10) {
+                                        halfBits =
+                                            static_cast<uint16_t>(sign << 15);
+                                    } else {
+                                        mant = (mant | 0x400) >> (1 - exp);
+                                        halfBits = static_cast<uint16_t>(
+                                            (sign << 15) | mant);
+                                    }
+                                } else if (exp >= 31) {
+                                    // Overflow to infinity
+                                    halfBits = static_cast<uint16_t>(
+                                        (sign << 15) | 0x7C00);
+                                } else {
+                                    halfBits = static_cast<uint16_t>(
+                                        (sign << 15) |
+                                        (static_cast<uint32_t>(exp) << 10) |
+                                        mant);
+                                }
+                                reinterpret_cast<uint16_t*>(outRowPtr)[col] =
+                                    halfBits;
+                            }
+                        }
+                    } else {
+                        throw std::runtime_error(
+                            "Unsupported float sample size.");
+                    }
+                    // NOLINTEND
                 }
 
                 for (int i = 0; i < d->num_inputs; ++i) {
@@ -1022,11 +1181,38 @@ vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
 
         d->vi = *vi[0];
 
-        // TODO: Support other formats
-        if (d->vi.format.sampleType != stFloat ||
-            d->vi.format.bitsPerSample != 32) {
-            throw std::runtime_error(
-                "VkExpr currently only supports 32-bit float format. ");
+        // Store input formats for CPU-side conversion
+        d->input_formats.resize(d->num_inputs);
+        for (int i = 0; i < d->num_inputs; ++i) {
+            d->input_formats[i] = vi[i]->format;
+        }
+
+        // Parse format parameter for output format
+        {
+            int format_err = 0;
+            const int format_id = static_cast<int>(
+                vsapi->mapGetInt(in, "format", 0, &format_err));
+            if (format_err == 0) {
+                VSVideoFormat temp_format;
+                if (vsapi->getVideoFormatByID(&temp_format, format_id, core) !=
+                    0) {
+                    if (d->vi.format.numPlanes != temp_format.numPlanes) {
+                        throw std::runtime_error(
+                            "The number of planes in the "
+                            "inputs and output must match.");
+                    }
+                    VSVideoFormat new_format;
+                    if (vsapi->queryVideoFormat(
+                            &new_format, d->vi.format.colorFamily,
+                            temp_format.sampleType, temp_format.bitsPerSample,
+                            d->vi.format.subSamplingW,
+                            d->vi.format.subSamplingH, core) != 0) {
+                        d->vi.format = new_format;
+                    } else {
+                        throw std::runtime_error("Failed to query new format.");
+                    }
+                }
+            }
         }
 
         const int nexpr = vsapi->mapNumElements(in, "expr");
@@ -1042,6 +1228,8 @@ vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
         for (int i = nexpr; i < d->vi.format.numPlanes; ++i) {
             expr_strs.at(i) = expr_strs.at(nexpr - 1);
         }
+
+        d->mirror_boundary = vsapi->mapGetInt(in, "boundary", 0, &err) != 0;
 
         d->glsl_mode = vsapi->mapGetInt(in, "glsl", 0, &err) != 0;
         if (err != 0) {
@@ -1115,7 +1303,7 @@ vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
                     d->vi.height / (i == 0 ? 1 : d->vi.format.subSamplingH),
                     d->mirror_boundary, d->prop_map, analysis_results);
                 shader = generator.generate();
-                // printf("Generated GLSL:\n%s\n", shaderSrc.c_str());
+                // printf("Generated GLSL:\n%s\n", shader.c_str());
             }
 
             d->pipelines.at(i) =
@@ -1188,6 +1376,7 @@ VapourSynthPluginInit2(VSPlugin* plugin, const VSPLUGINAPI* vspapi) {
                              "clip:vnode;", singleExprCreate, nullptr, plugin);
 
     vspapi->registerFunction("VkExpr",
-                             "clips:vnode[];expr:data[];glsl:int:opt;",
+                             "clips:vnode[];expr:data[];format:int:opt;glsl:"
+                             "int:opt;boundary:int:opt;",
                              "clip:vnode;", vkExprCreate, nullptr, plugin);
 }

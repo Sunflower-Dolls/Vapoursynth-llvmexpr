@@ -27,5 +27,4 @@ subprojects/.wraplock
 *.vo
 *.vok
 *.vos
-test_vkexpr.py
 Todo/

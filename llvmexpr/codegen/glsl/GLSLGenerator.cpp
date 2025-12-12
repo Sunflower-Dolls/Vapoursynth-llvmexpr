@@ -144,10 +144,10 @@ std::string GLSLGenerator::emit_mirror_coord(const std::string& coord,
     emit_line(std::format("int {};", temp));
     emit_line("{");
     indent();
-    emit_line(std::format("int _period = 2 * {};", max_dim));
-    emit_line(std::format("int _mod = {} % _period;", coord));
-    emit_line("if (_mod < 0) _mod += _period;");
-    emit_line(std::format("if (_mod >= {}) {{ {} = _period - 1 - _mod; }}",
+    emit_line(std::format("int _period = 2 * ({});", max_dim));
+    emit_line(
+        std::format("int _mod = int(mod(float({}), float(_period)));", coord));
+    emit_line(std::format("if (_mod >= ({})) {{ {} = _period - 1 - _mod; }}",
                           max_dim, temp));
     emit_line(std::format("else {{ {} = _mod; }}", temp));
     dedent();
@@ -530,9 +530,8 @@ void GLSLGenerator::process_token(const Token& token) {
         std::string b = pop();
         std::string a = pop();
         std::string temp = new_temp();
-        emit_line(std::format("float {} = intBitsToFloat(floatBitsToInt({}) & "
-                              "floatBitsToInt({}));",
-                              temp, a, b));
+        emit_line(std::format(
+            "float {} = float(int(round({})) & int(round({})));", temp, a, b));
         push(temp);
         break;
     }
@@ -540,9 +539,8 @@ void GLSLGenerator::process_token(const Token& token) {
         std::string b = pop();
         std::string a = pop();
         std::string temp = new_temp();
-        emit_line(std::format("float {} = intBitsToFloat(floatBitsToInt({}) | "
-                              "floatBitsToInt({}));",
-                              temp, a, b));
+        emit_line(std::format(
+            "float {} = float(int(round({})) | int(round({})));", temp, a, b));
         push(temp);
         break;
     }
@@ -550,17 +548,15 @@ void GLSLGenerator::process_token(const Token& token) {
         std::string b = pop();
         std::string a = pop();
         std::string temp = new_temp();
-        emit_line(std::format("float {} = intBitsToFloat(floatBitsToInt({}) ^ "
-                              "floatBitsToInt({}));",
-                              temp, a, b));
+        emit_line(std::format(
+            "float {} = float(int(round({})) ^ int(round({})));", temp, a, b));
         push(temp);
         break;
     }
     case TokenType::BITNOT: {
         std::string a = pop();
         std::string temp = new_temp();
-        emit_line(std::format("float {} = intBitsToFloat(~floatBitsToInt({}));",
-                              temp, a));
+        emit_line(std::format("float {} = float(~int(round({})));", temp, a));
         push(temp);
         break;
     }
@@ -794,11 +790,11 @@ void GLSLGenerator::process_token(const Token& token) {
         bool use_mirror =
             payload.has_mode ? payload.use_mirror : mirror_boundary;
 
-        // Round to nearest integer
+        // Round to nearest even integer (matches CPU rint behavior)
         std::string x_int = new_temp();
         std::string y_int = new_temp();
-        emit_line(std::format("int {} = int(round({}));", x_int, coord_x));
-        emit_line(std::format("int {} = int(round({}));", y_int, coord_y));
+        emit_line(std::format("int {} = int(roundEven({}));", x_int, coord_x));
+        emit_line(std::format("int {} = int(roundEven({}));", y_int, coord_y));
 
         push(emit_pixel_load(payload.clip_idx, x_int, y_int, use_mirror));
         break;
