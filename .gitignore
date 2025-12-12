@@ -21,6 +21,9 @@ ARCHITECTURE.md
 subprojects/compile-time-regular-expressions-*
 subprojects/packagecache
 subprojects/.wraplock
+subprojects/volk/
+subprojects/vulkan-headers/
+subprojects/vulkan-memory-allocator/
 .codacy/codacy.yaml
 *.glob
 *.aux
