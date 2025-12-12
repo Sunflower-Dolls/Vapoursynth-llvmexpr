@@ -25,6 +25,8 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <queue>
+#include <semaphore>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -828,6 +830,11 @@ singleExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
                              static_cast<int>(deps.size()), d.release(), core);
 }
 
+struct VkStream {
+    std::unique_ptr<llvmexpr::VulkanMemory> memory;
+    std::array<std::unique_ptr<llvmexpr::VulkanComputePipeline>, 3> pipelines;
+};
+
 struct VkExprData {
     std::vector<VSNode*> nodes;
     VSVideoInfo vi = {};
@@ -842,8 +849,12 @@ struct VkExprData {
 
     std::vector<std::pair<int, std::string>> required_props;
     std::map<std::pair<int, std::string>, int> prop_map;
-    std::unique_ptr<llvmexpr::VulkanMemory> memory;
-    std::array<std::unique_ptr<llvmexpr::VulkanComputePipeline>, 3> pipelines;
+
+    int num_streams = 8;
+    std::vector<std::unique_ptr<VkStream>> streams;
+    std::unique_ptr<std::counting_semaphore<>> semaphore;
+    std::queue<int> free_stream_indices;
+    std::mutex stream_mutex;
 
     // Format info for CPU-side conversion
     std::vector<VSVideoFormat> input_formats;
@@ -890,13 +901,43 @@ const VSFrame*
                                       sizeof(float);
 
             try {
+                int stream_idx = 0;
+                d->semaphore->acquire();
+                {
+                    std::lock_guard<std::mutex> lock(d->stream_mutex);
+                    stream_idx = d->free_stream_indices.front();
+                    d->free_stream_indices.pop();
+                }
+
+                struct StreamReleaser {
+                    VkExprData* d;
+                    int idx;
+
+                    StreamReleaser(VkExprData* d, int idx) : d(d), idx(idx) {}
+
+                    StreamReleaser(const StreamReleaser&) = delete;
+                    StreamReleaser& operator=(const StreamReleaser&) = delete;
+                    StreamReleaser(StreamReleaser&&) = delete;
+                    StreamReleaser& operator=(StreamReleaser&&) = delete;
+
+                    ~StreamReleaser() {
+                        {
+                            std::lock_guard<std::mutex> lock(d->stream_mutex);
+                            d->free_stream_indices.push(idx);
+                        }
+                        d->semaphore->release();
+                    }
+                } releaser(d, stream_idx);
+
+                auto& stream = *d->streams[stream_idx];
+
                 // TODO: Optimize Buffers
                 std::vector<llvmexpr::VulkanBuffer> srcBuffers(d->num_inputs);
                 std::vector<llvmexpr::VulkanBuffer*> srcBufferPtrs(
                     d->num_inputs);
 
                 for (int i = 0; i < d->num_inputs; ++i) {
-                    srcBuffers[i] = d->memory->createGPUBuffer(bufferSize);
+                    srcBuffers[i] = stream.memory->createGPUBuffer(bufferSize);
                     srcBufferPtrs[i] = &srcBuffers[i];
 
                     const uint8_t* srcPtr =
@@ -997,14 +1038,14 @@ const VSFrame*
                                 "Unsupported float sample size.");
                         }
                     }
-                    d->memory->uploadToBuffer(srcBuffers[i], tempBuffer.data(),
-                                              bufferSize);
+                    stream.memory->uploadToBuffer(
+                        srcBuffers[i], tempBuffer.data(), bufferSize);
                 }
 
-                auto dstBuffer = d->memory->createGPUBuffer(bufferSize);
+                auto dstBuffer = stream.memory->createGPUBuffer(bufferSize);
 
-                d->pipelines.at(plane)->dispatch(
-                    *d->memory, srcBufferPtrs, dstBuffer, props,
+                stream.pipelines.at(plane)->dispatch(
+                    *stream.memory, srcBufferPtrs, dstBuffer, props,
                     static_cast<uint32_t>(width), static_cast<uint32_t>(height),
                     n);
 
@@ -1017,8 +1058,8 @@ const VSFrame*
 
                 std::vector<float> tempBuffer(static_cast<size_t>(width) *
                                               static_cast<size_t>(height));
-                d->memory->downloadFromBuffer(dstBuffer, tempBuffer.data(),
-                                              bufferSize);
+                stream.memory->downloadFromBuffer(dstBuffer, tempBuffer.data(),
+                                                  bufferSize);
 
                 if (outFmt.sampleType == stInteger) {
                     // Float to integer with clamping
@@ -1110,9 +1151,9 @@ const VSFrame*
                 }
 
                 for (int i = 0; i < d->num_inputs; ++i) {
-                    d->memory->destroyBuffer(srcBuffers[i]);
+                    stream.memory->destroyBuffer(srcBuffers[i]);
                 }
-                d->memory->destroyBuffer(dstBuffer);
+                stream.memory->destroyBuffer(dstBuffer);
 
             } catch (const std::exception& e) {
                 for (const auto& frame : src_frames) {
@@ -1279,37 +1320,52 @@ vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
             }
         }
 
+        d->num_streams =
+            static_cast<int>(vsapi->mapGetInt(in, "num_streams", 0, &err));
+        if (err != 0 || d->num_streams < 1) {
+            d->num_streams = 8;
+        }
+
+        d->semaphore =
+            std::make_unique<std::counting_semaphore<>>(d->num_streams);
+        d->streams.resize(d->num_streams);
+
         auto& ctx = llvmexpr::VulkanContext::getInstance();
 
-        d->memory = std::make_unique<llvmexpr::VulkanMemory>(ctx);
+        for (int k = 0; k < d->num_streams; ++k) {
+            d->streams[k] = std::make_unique<VkStream>();
+            d->streams[k]->memory =
+                std::make_unique<llvmexpr::VulkanMemory>(ctx);
+            d->free_stream_indices.push(k);
 
-        auto numPropsFloats =
-            static_cast<uint32_t>(1 + d->required_props.size()); // N + props
+            auto numPropsFloats = static_cast<uint32_t>(
+                1 + d->required_props.size()); // N + props
 
-        for (int i = 0; i < d->vi.format.numPlanes; ++i) {
-            if (d->plane_op.at(i) != PlaneOp::PO_PROCESS) {
-                continue;
+            for (int i = 0; i < d->vi.format.numPlanes; ++i) {
+                if (d->plane_op.at(i) != PlaneOp::PO_PROCESS) {
+                    continue;
+                }
+
+                std::string shader;
+                if (d->glsl_mode) {
+                    shader = d->glsl_shaders.at(i);
+                } else {
+                    analysis::ExpressionAnalysisResults analysis_results(
+                        *d->analysis_managers.at(i));
+                    GLSLGenerator generator(
+                        d->tokens.at(i), d->num_inputs,
+                        d->vi.width / (i == 0 ? 1 : d->vi.format.subSamplingW),
+                        d->vi.height / (i == 0 ? 1 : d->vi.format.subSamplingH),
+                        d->mirror_boundary, d->prop_map, analysis_results);
+                    shader = generator.generate();
+                    // printf("Generated GLSL:\n%s\n", shader.c_str());
+                }
+
+                d->streams[k]->pipelines.at(i) =
+                    std::make_unique<llvmexpr::VulkanComputePipeline>(
+                        ctx, shader, static_cast<uint32_t>(d->num_inputs),
+                        numPropsFloats);
             }
-
-            std::string shader;
-            if (d->glsl_mode) {
-                shader = d->glsl_shaders.at(i);
-            } else {
-                analysis::ExpressionAnalysisResults analysis_results(
-                    *d->analysis_managers.at(i));
-                GLSLGenerator generator(
-                    d->tokens.at(i), d->num_inputs,
-                    d->vi.width / (i == 0 ? 1 : d->vi.format.subSamplingW),
-                    d->vi.height / (i == 0 ? 1 : d->vi.format.subSamplingH),
-                    d->mirror_boundary, d->prop_map, analysis_results);
-                shader = generator.generate();
-                // printf("Generated GLSL:\n%s\n", shader.c_str());
-            }
-
-            d->pipelines.at(i) =
-                std::make_unique<llvmexpr::VulkanComputePipeline>(
-                    ctx, shader, static_cast<uint32_t>(d->num_inputs),
-                    numPropsFloats);
         }
 
     } catch (const std::exception& e) {
@@ -1377,6 +1433,6 @@ VapourSynthPluginInit2(VSPlugin* plugin, const VSPLUGINAPI* vspapi) {
 
     vspapi->registerFunction("VkExpr",
                              "clips:vnode[];expr:data[];format:int:opt;glsl:"
-                             "int:opt;boundary:int:opt;",
+                             "int:opt;boundary:int:opt;num_streams:int:opt;",
                              "clip:vnode;", vkExprCreate, nullptr, plugin);
 }
