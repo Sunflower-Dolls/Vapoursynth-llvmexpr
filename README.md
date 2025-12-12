@@ -120,6 +120,7 @@ See [examples](examples) for examples of infix code.
 *   [VapourSynth](https://www.vapoursynth.com/) SDK (headers)
 *   [LLVM](https://llvm.org/) development libraries (>= 20.0.0)
 *   [Meson](https://mesonbuild.com/) build system
+*   [Shaderc](https://github.com/google/shaderc)
 
 ## Building and installing
 

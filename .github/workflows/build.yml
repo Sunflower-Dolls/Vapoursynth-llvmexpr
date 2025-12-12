@@ -22,7 +22,7 @@ jobs:
           - name: Windows x64
             os: windows-latest
             libc: ""
-            artifact_name: llvmexpr-windows-x64-static-llvm21
+            artifact_name: llvmexpr-windows-x64-static-llvm21-static-shaderc
             library_name: libllvmexpr.dll
 
     steps:
@@ -101,6 +101,7 @@ jobs:
           # Configure Meson
           CC="clang -fuse-ld=lld" CXX="clang++ -fuse-ld=lld" meson setup builddir \
             -Dstatic-llvm=true \
+            -Dstatic-shaderc=true \
             --buildtype=release
 
       - name: Build (Windows)
@@ -153,18 +154,18 @@ jobs:
           - name: Linux x64-glibc
             os: ubuntu-latest
             libc: glibc
-            artifact_name: llvmexpr-linux-x64-glibc-static-llvm21
+            artifact_name: llvmexpr-linux-x64-glibc-static-llvm21-static-shaderc
             library_name: libllvmexpr.so
 
           - name: macOS arm64
             os: macos-latest
             libc: ""
-            artifact_name: llvmexpr-macos-arm64-static-llvm21
+            artifact_name: llvmexpr-macos-arm64-static-llvm21-static-shaderc
             library_name: libllvmexpr.dylib
           - name: Windows x64
             os: windows-latest
             libc: ""
-            artifact_name: llvmexpr-windows-x64-static-llvm21
+            artifact_name: llvmexpr-windows-x64-static-llvm21-static-shaderc
             library_name: libllvmexpr.dll
 
     steps:
@@ -366,6 +367,7 @@ jobs:
           # Configure Meson
           CC="clang -fuse-ld=lld" CXX="clang++ -fuse-ld=lld" meson setup builddir \
             -Dstatic-llvm=true \
+            -Dstatic-shaderc=true \
             -Denable-sanitizers=true \
             --buildtype=debug
       - name: Configure (Meson) (Unix)
@@ -374,6 +376,7 @@ jobs:
         run: |
           CC=clang CXX="clang++ -stdlib=libc++" meson setup builddir \
             -Dstatic-llvm=true \
+            -Dstatic-shaderc=true \
             -Denable-sanitizers=true \
             --buildtype=debug
 

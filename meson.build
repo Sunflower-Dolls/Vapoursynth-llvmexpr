@@ -138,7 +138,14 @@ vulkan_headers_dep = dependency('vulkan-headers', fallback: ['vulkan-headers', '
 vulkan_dep = dependency('vulkan') 
 volk_dep = dependency('volk', fallback: ['volk', 'volk_dep'])
 vma_dep = dependency('vulkan-memory-allocator', fallback: ['vulkan-memory-allocator', 'vma_dep'])
-shaderc_dep = dependency('shaderc')
+shaderc_dep = dependency('shaderc', static: true)
+
+dependencies += [vulkan_headers_dep, volk_dep, vma_dep, shaderc_dep]
+
+static_shaderc = get_option('static-shaderc')
+if static_shaderc
+  shaderc_dep = dependency('shaderc', static: true)
+endif
 
 dependencies += [vulkan_headers_dep, volk_dep, vma_dep, shaderc_dep]
 
