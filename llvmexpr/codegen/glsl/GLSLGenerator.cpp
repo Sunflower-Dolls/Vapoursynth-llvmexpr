@@ -19,6 +19,8 @@
 
 #include "GLSLGenerator.hpp"
 
+#include "../Sorting.hpp"
+
 #include <cmath>
 #include <format>
 #include <numbers>
@@ -712,18 +714,18 @@ void GLSLGenerator::process_token(const Token& token) {
             values[i] = pop();
         }
 
-        // TODO: Use sorting network
-        for (int i = 0; i < n - 1; ++i) {
-            for (int j = 0; j < n - i - 1; ++j) {
-                std::string temp_min = new_temp();
-                std::string temp_max = new_temp();
-                emit_line(std::format("float {} = min({}, {});", temp_min,
-                                      values[j], values[j + 1]));
-                emit_line(std::format("float {} = max({}, {});", temp_max,
-                                      values[j], values[j + 1]));
-                values[j] = temp_min;
-                values[j + 1] = temp_max;
-            }
+        auto network = get_sorting_network(n);
+        for (const auto& pair : network) {
+            std::string temp_min = new_temp();
+            std::string temp_max = new_temp();
+            int idx1 = pair.first;
+            int idx2 = pair.second;
+            emit_line(std::format("float {} = min({}, {});", temp_min,
+                                  values[idx1], values[idx2]));
+            emit_line(std::format("float {} = max({}, {});", temp_max,
+                                  values[idx1], values[idx2]));
+            values[idx1] = temp_min;
+            values[idx2] = temp_max;
         }
 
         // Push back in reverse order (smallest on top)

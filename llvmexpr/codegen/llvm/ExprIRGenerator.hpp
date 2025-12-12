@@ -17,14 +17,14 @@
  * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef LLVMEXPR_LLVMGENERATOR_HPP
-#define LLVMEXPR_LLVMGENERATOR_HPP
+#ifndef LLVMEXPR_ExprIRGenerator_HPP
+#define LLVMEXPR_ExprIRGenerator_HPP
 
 #include "IRGeneratorBase.hpp"
 
-class LLVMGenerator : public IRGeneratorBase {
+class ExprIRGenerator : public IRGeneratorBase {
   public:
-    LLVMGenerator(
+    ExprIRGenerator(
         const std::vector<Token>& tokens_in, const VSVideoInfo* out_vi,
         const std::vector<const VSVideoInfo*>& in_vi, int width_in,
         int height_in, bool mirror,
@@ -56,4 +56,4 @@ class LLVMGenerator : public IRGeneratorBase {
     std::map<std::string, llvm::Value*> named_arrays;
 };
 
-#endif // LLVMEXPR_LLVMGENERATOR_HPP
+#endif // LLVMEXPR_ExprIRGenerator_HPP

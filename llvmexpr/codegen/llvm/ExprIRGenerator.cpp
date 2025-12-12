@@ -17,7 +17,7 @@
  * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "LLVMGenerator.hpp"
+#include "ExprIRGenerator.hpp"
 
 #include <bit>
 #include <format>
@@ -31,7 +31,7 @@
 
 constexpr uint32_t EXIT_NAN_PAYLOAD = 0x7FC0E71F; // qNaN with payload 0xE71F
 
-LLVMGenerator::LLVMGenerator(
+ExprIRGenerator::ExprIRGenerator(
     const std::vector<Token>& tokens_in, const VSVideoInfo* out_vi,
     const std::vector<const VSVideoInfo*>& in_vi, int width_in, int height_in,
     bool mirror, const std::map<std::pair<int, std::string>, int>& p_map,
@@ -44,7 +44,7 @@ LLVMGenerator::LLVMGenerator(
                       builder_ref, math_mgr, std::move(func_name_in),
                       approx_math_in) {}
 
-void LLVMGenerator::define_function_signature() {
+void ExprIRGenerator::define_function_signature() {
     llvm::Type* void_ty = llvm::Type::getVoidTy(context);
     llvm::Type* ptr_ty = llvm::PointerType::get(context, 0);
     llvm::Type* context_ptr_ty = ptr_ty; // opaque pointer (void*)
@@ -72,7 +72,7 @@ void LLVMGenerator::define_function_signature() {
     func->addParamAttr(3, llvm::Attribute::ReadOnly); // props (float*)
 }
 
-void LLVMGenerator::generate_loops() {
+void ExprIRGenerator::generate_loops() {
     llvm::BasicBlock* entry_bb =
         llvm::BasicBlock::Create(context, "entry", func);
     builder.SetInsertPoint(entry_bb);
@@ -292,11 +292,11 @@ void LLVMGenerator::generate_loops() {
     builder.CreateRetVoid();
 }
 
-void LLVMGenerator::generate_x_loop_body(llvm::Value* x_var,
-                                         llvm::Value* x_fp_var,
-                                         llvm::Value* y_var,
-                                         llvm::Value* y_fp_var,
-                                         bool no_x_bounds_check) {
+void ExprIRGenerator::generate_x_loop_body(llvm::Value* x_var,
+                                           llvm::Value* x_fp_var,
+                                           llvm::Value* y_var,
+                                           llvm::Value* y_fp_var,
+                                           bool no_x_bounds_check) {
     const auto& coord_usage = analysis_results.getCoordinateUsageResult();
     llvm::Value* x_val = builder.CreateLoad(builder.getInt32Ty(), x_var, "x");
     llvm::Value* y_val =
@@ -322,7 +322,7 @@ void LLVMGenerator::generate_x_loop_body(llvm::Value* x_var,
     }
 }
 
-bool LLVMGenerator::process_mode_specific_token(
+bool ExprIRGenerator::process_mode_specific_token(
     const Token& token, std::vector<llvm::Value*>& rpn_stack, llvm::Value* x,
     [[maybe_unused]] llvm::Value* y, llvm::Value* x_fp, llvm::Value* y_fp,
     bool no_x_bounds_check) {
@@ -506,8 +506,9 @@ bool LLVMGenerator::process_mode_specific_token(
     }
 }
 
-void LLVMGenerator::finalize_and_store_result(llvm::Value* result_val,
-                                              llvm::Value* x, llvm::Value* y) {
+void ExprIRGenerator::finalize_and_store_result(llvm::Value* result_val,
+                                                llvm::Value* x,
+                                                llvm::Value* y) {
     bool has_exit = false;
     has_exit = std::ranges::any_of(tokens, [](const auto& token) {
         return token.type == TokenType::EXIT_NO_WRITE;

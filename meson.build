@@ -122,7 +122,7 @@ sources = [
   'llvmexpr/analysis/passes/RelAccessAnalysisPass.cpp',
   'llvmexpr/analysis/passes/CoordinateUsagePass.cpp',
   'llvmexpr/analysis/passes/VariableUsagePass.cpp',
-  'llvmexpr/codegen/llvm/LLVMGenerator.cpp',
+  'llvmexpr/codegen/llvm/ExprIRGenerator.cpp',
   'llvmexpr/codegen/llvm/SingleExprIRGenerator.cpp',
   'llvmexpr/codegen/llvm/IRGeneratorBase.cpp',
   'llvmexpr/runtime/llvm/Compiler.cpp',

@@ -36,7 +36,7 @@
 #include "llvm/Support/raw_ostream.h"
 
 #include "../../codegen/llvm/Diagnostics.hpp"
-#include "../../codegen/llvm/LLVMGenerator.hpp"
+#include "../../codegen/llvm/ExprIRGenerator.hpp"
 #include "../../codegen/llvm/SingleExprIRGenerator.hpp"
 
 Compiler::Compiler(
@@ -103,7 +103,7 @@ CompiledFunction Compiler::compile_with_approx_math(int actual_approx_math) {
     // Create IR generator and generate code
     std::unique_ptr<IRGeneratorBase> ir_gen;
     if (expr_mode == ExprMode::EXPR) {
-        ir_gen = std::make_unique<LLVMGenerator>(
+        ir_gen = std::make_unique<ExprIRGenerator>(
             tokens, vo, vi, width, height, mirror_boundary, prop_map,
             analysis_results, *context, *module, builder, math_manager,
             func_name, actual_approx_math);
