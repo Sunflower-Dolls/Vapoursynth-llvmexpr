@@ -128,6 +128,8 @@ def test_singleexpr_sampletype(test_clips, prop_name, clip_idx, expected):
         (1920, 1080, vs.YUV422P16, 1, 960.0, 1080.0),
         (1280, 720, vs.RGBS, 0, 1280.0, 720.0),
         (640, 480, vs.GRAYS, 0, 640.0, 480.0),
+        (640, 480, vs.GRAYS, 1, -1.0, -1.0),
+        (640, 480, vs.GRAYS, 2, -1.0, -1.0),
     ],
 )
 def test_expr_width_height(

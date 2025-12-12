@@ -380,6 +380,7 @@ These are defined by the VapourSynth filter when it invokes the transpiler.
 | `__OUTPUT_SAMPLETYPE__`   | Output sample type (`0`=stInteger, `1`=stFloat).                                                     |
 | `__SUBSAMPLE_W__`         | Horizontal chroma subsampling of the output (`1` for 4:2:x, `0` otherwise).                          |
 | `__SUBSAMPLE_H__`         | Vertical chroma subsampling of the output (`1` for 4:2:0, `0` otherwise).                            |
+| `__NUM_PLANES__`          | Number of planes in the output frame.                                                                |
 | `__INPUT_BITDEPTH_N__`    | Bit depth of the (N+1)-th input clip (e.g., `__INPUT_BITDEPTH_0__`).                                 |
 | `__INPUT_COLORFAMILY_N__` | ColorFamily of the (N+1)-th input clip (e.g., `__INPUT_COLORFAMILY_0__`).                            |
 | `__INPUT_SAMPLETYPE_N__`  | Sample type of the (N+1)-th input clip (e.g., `__INPUT_SAMPLETYPE_0__`). `0`=stInteger, `1`=stFloat. |
@@ -387,6 +388,7 @@ These are defined by the VapourSynth filter when it invokes the transpiler.
 | `__INPUT_HEIGHT_N__`      | Height of the (N+1)-th input clip's luma plane. (**`SingleExpr` mode only**)                         |
 | `__INPUT_SUBSAMPLE_W_N__` | Horizontal chroma subsampling of the (N+1)-th input clip. (**`SingleExpr` mode only**)               |
 | `__INPUT_SUBSAMPLE_H_N__` | Vertical chroma subsampling of the (N+1)-th input clip. (**`SingleExpr` mode only**)                 |
+| `__INPUT_NUM_PLANES_N__`  | Number of planes of the (N+1)-th input clip (e.g., `__INPUT_NUM_PLANES_0__`).                        |
 | `__PLANE_NO__`            | Current plane being processed (`0`, `1`, or `2`). (**`Expr` mode only**)                             |
 
 > [!NOTE]
@@ -1192,29 +1194,29 @@ To use this library, add the following to your code:
 
 -   `get_width(plane_idx)`
     -   **Mode:** `Expr`
-    -   **Function:** Returns the width of the specified plane.
+    -   **Function:** Returns the width of the specified plane. Returns `-1` if the clip index or plane index is invalid.
     -   **Parameters:**
-        -   `plane_idx`: The index of the plane (0, 1, or 2).
+        -   `plane_idx`: The index of the plane (0-based).
 
 -   `get_width(clip_idx, plane_idx)`
     -   **Mode:** `SingleExpr`
-    -   **Function:** Returns the width of the specified plane of the specified clip.
+    -   **Function:** Returns the width of the specified plane of the specified clip. Returns `-1` if the clip index or plane index is invalid.
     -   **Parameters:**
         -   `clip_idx`: The index of the input clip (0-based).
-        -   `plane_idx`: The index of the plane (0, 1, or 2).
+        -   `plane_idx`: The index of the plane (0-based).
 
 -   `get_height(plane_idx)`
     -   **Mode:** `Expr`
-    -   **Function:** Returns the height of the specified plane.
+    -   **Function:** Returns the height of the specified plane. Returns `-1` if the clip index or plane index is invalid.
     -   **Parameters:**
-        -   `plane_idx`: The index of the plane (0, 1, or 2).
+        -   `plane_idx`: The index of the plane (0-based).
 
 -   `get_height(clip_idx, plane_idx)`
     -   **Mode:** `SingleExpr`
-    -   **Function:** Returns the height of the specified plane of the specified clip.
+    -   **Function:** Returns the height of the specified plane of the specified clip. Returns `-1` if the clip index or plane index is invalid.
     -   **Parameters:**
         -   `clip_idx`: The index of the input clip (0-based).
-        -   `plane_idx`: The index of the plane (0, 1, or 2).
+        -   `plane_idx`: The index of the plane (0-based).
 
 -   `get_bitdepth(clip_idx)`
     -   **Mode:** Both

@@ -411,6 +411,8 @@ exprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
             if (use_infix && !input_expr.empty()) {
                 std::map<std::string, std::string> macros;
                 macros["__EXPR__"] = "";
+                macros["__NUM_PLANES__"] =
+                    std::to_string(d->vi.format.numPlanes);
                 macros["__WIDTH__"] = std::to_string(d->vi.width);
                 macros["__HEIGHT__"] = std::to_string(d->vi.height);
                 macros["__INPUT_NUM__"] = std::to_string(d->num_inputs);
@@ -433,6 +435,8 @@ exprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
                         std::to_string(input_vi->format.bitsPerSample);
                     macros[std::format("__INPUT_COLORFAMILY_{}__", j)] =
                         std::to_string(input_vi->format.colorFamily);
+                    macros[std::format("__INPUT_NUM_PLANES_{}__", j)] =
+                        std::to_string(input_vi->format.numPlanes);
                     macros[std::format("__INPUT_SAMPLETYPE_{}__", j)] =
                         std::to_string(
                             (input_vi->format.sampleType == stFloat) ? 1 : 0);
@@ -714,6 +718,7 @@ singleExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
         if (use_infix) {
             std::map<std::string, std::string> macros;
             macros["__SINGLEEXPR__"] = "";
+            macros["__NUM_PLANES__"] = std::to_string(d->vi.format.numPlanes);
             macros["__WIDTH__"] = std::to_string(d->vi.width);
             macros["__HEIGHT__"] = std::to_string(d->vi.height);
             macros["__INPUT_NUM__"] = std::to_string(d->num_inputs);
@@ -734,6 +739,8 @@ singleExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
                     std::to_string(input_vi->format.bitsPerSample);
                 macros[std::format("__INPUT_COLORFAMILY_{}__", i)] =
                     std::to_string(input_vi->format.colorFamily);
+                macros[std::format("__INPUT_NUM_PLANES_{}__", i)] =
+                    std::to_string(input_vi->format.numPlanes);
                 macros[std::format("__INPUT_SAMPLETYPE_{}__", i)] =
                     std::to_string(
                         (input_vi->format.sampleType == stFloat) ? 1 : 0);
@@ -1227,6 +1234,8 @@ vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
                 std::map<std::string, std::string> macros;
                 macros["__GPU__"] = "";
                 macros["__EXPR__"] = "";
+                macros["__NUM_PLANES__"] =
+                    std::to_string(d->vi.format.numPlanes);
                 macros["__WIDTH__"] = std::to_string(d->vi.width);
                 macros["__HEIGHT__"] = std::to_string(d->vi.height);
                 macros["__INPUT_NUM__"] = std::to_string(d->num_inputs);
@@ -1249,6 +1258,8 @@ vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
                         std::to_string(input_vi->format.bitsPerSample);
                     macros[std::format("__INPUT_COLORFAMILY_{}__", j)] =
                         std::to_string(input_vi->format.colorFamily);
+                    macros[std::format("__INPUT_NUM_PLANES_{}__", j)] =
+                        std::to_string(input_vi->format.numPlanes);
                     macros[std::format("__INPUT_SAMPLETYPE_{}__", j)] =
                         std::to_string(
                             (input_vi->format.sampleType == stFloat) ? 1 : 0);
