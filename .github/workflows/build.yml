@@ -52,6 +52,8 @@ jobs:
             mingw-w64-x86_64-vapoursynth
             mingw-w64-x86_64-zstd
             mingw-w64-x86_64-shaderc
+            mingw-w64-x86_64-glslang
+            mingw-w64-x86_64-spirv-tools
             mingw-w64-x86_64-vulkan-loader
             mingw-w64-x86_64-vulkan-headers
 
@@ -224,6 +226,8 @@ jobs:
             mingw-w64-x86_64-vapoursynth
             mingw-w64-x86_64-zstd
             mingw-w64-x86_64-shaderc
+            mingw-w64-x86_64-glslang
+            mingw-w64-x86_64-spirv-tools
             mingw-w64-x86_64-vulkan-loader
             mingw-w64-x86_64-vulkan-headers
 
