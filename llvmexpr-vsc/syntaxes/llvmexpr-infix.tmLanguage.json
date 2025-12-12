@@ -146,7 +146,7 @@
       "patterns": [
         {
           "name": "constant.language.predefined-macro.mode.llvmexpr-infix",
-          "match": "\\b(__EXPR__|__SINGLEEXPR__)\\b"
+          "match": "\\b(__EXPR__|__SINGLEEXPR__|__GPU__)\\b"
         },
         {
           "name": "constant.language.predefined-macro.context.llvmexpr-infix",
