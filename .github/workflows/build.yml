@@ -52,6 +52,7 @@ jobs:
             mingw-w64-x86_64-vapoursynth
             mingw-w64-x86_64-zstd
             mingw-w64-x86_64-shaderc
+            mingw-w64-x86_64-vulkan-loader
 
       - name: Force static zstd linkage (Windows)
         shell: msys2 {0}
@@ -189,7 +190,8 @@ jobs:
             liblzma-dev \
             libc++-dev \
             libc++abi-dev \
-            libshaderc-dev
+            libshaderc-dev \
+            libvulkan-dev
 
           pip install meson ninja
 
@@ -197,7 +199,7 @@ jobs:
       - name: Setup dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install meson ninja pkg-config llvm vapoursynth zstd zlib shaderc
+          brew install meson ninja pkg-config llvm vapoursynth zstd zlib shaderc vulkan-loader
 
       # Windows specific setup
       - name: Setup MSYS2 (Windows)
@@ -223,6 +225,7 @@ jobs:
             mingw-w64-x86_64-vapoursynth
             mingw-w64-x86_64-zstd
             mingw-w64-x86_64-shaderc
+            mingw-w64-x86_64-vulkan-loader
 
       - name: Force static zstd linkage (Windows)
         if: runner.os == 'Windows'
