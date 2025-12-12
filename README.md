@@ -1,6 +1,6 @@
 # Vapoursynth-llvmexpr
 
-A [VapourSynth](https://www.vapoursynth.com/) filter for evaluating complex mathematical or logical expressions. It utilizes an LLVM-based JIT (Just-In-Time) compiler to translate expressions into native code.
+A [VapourSynth](https://www.vapoursynth.com/) filter for evaluating complex mathematical or logical expressions. It utilizes multiple backends to accelerate computations, including an LLVM-based JIT (Just-In-Time) compiler for native CPU code and a Vulkan-based backend for GPU execution.
 
 The plugin provides two main logical functions:
 *   `llvmexpr.Expr`: Evaluates an expression for **every pixel** in a frame, ideal for spatial filtering and general image manipulation.
@@ -58,7 +58,7 @@ This function is a Vulkan-based GPU accelerated backend for `Expr`. It accepts t
 
 **Function Signature:**
 ```
-llvmexpr.VkExpr(clip[] clips, string[] expr[, int format, int boundary=0, int infix=0, int num_streams=8])
+llvmexpr.VkExpr(clip[] clips, string[] expr[, int format, int boundary=0, string dump_glsl="", int infix=0, int num_streams=8])
 ```
 
 **Parameters:**

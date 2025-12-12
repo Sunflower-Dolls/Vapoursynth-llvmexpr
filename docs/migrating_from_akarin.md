@@ -150,3 +150,9 @@ RESULT = sqrt(pow($x - $X, 2) + pow($y - $Y, 2))
     *   `dump_ir`: Dumps the intermediate LLVM IR for debugging and performance analysis.
     *   `opt_level`: Provides explicit control over the LLVM optimization level.
     *   `approx_math`: An intelligent mode for using fast, approximate math functions, with an automatic fallback to precise versions if the LLVM vectorizer fails.
+
+#### 5. GPU Acceleration (VkExpr)
+
+`llvmexpr` provides a dedicated Vulkan-based backend (`llvmexpr.VkExpr`) that enables expression evaluation on the GPU.
+
+*   **Seamless Portability:** `llvmexpr.VkExpr` supports the same syntax and semantics as `llvmexpr.Expr` (including both postfix and infix modes). This means expressions written for the CPU are directly runnable on the GPU without any modification.
