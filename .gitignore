@@ -7,6 +7,7 @@ build/*
 *.ll
 *.s
 */__pycache__/*
+__pycache__/*
 tmp.py
 .test_ir_dumps/*
 ir_dumps/*

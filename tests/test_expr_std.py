@@ -139,3 +139,4 @@ def test_expr_operations(
     result_clip = core.llvmexpr.Expr(clips, expression)
 
     assert get_pixel_value(result_clip) == expected_value
+

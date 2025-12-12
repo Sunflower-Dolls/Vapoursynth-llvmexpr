@@ -65,10 +65,10 @@ void VulkanContext::pickPhysicalDevice() {
     }
 
     // TODO: Finish device selection
-    std::cout << "Available Physical Devices:" << '\n';
+    // std::cout << "Available Physical Devices:" << '\n';
     for (const auto& dev : devices) {
-        auto props = dev.getProperties();
-        std::cout << "  - " << props.deviceName << '\n';
+        // auto props = dev.getProperties();
+        // std::cout << "  - " << props.deviceName << '\n';
 
         // Check for compute queue
         auto queueFamilies = dev.getQueueFamilyProperties();
@@ -82,7 +82,7 @@ void VulkanContext::pickPhysicalDevice() {
             i++;
         }
         if (*physicalDevice) {
-            std::cout << "    Selected Device: " << props.deviceName << '\n';
+            // std::cout << "    Selected Device: " << props.deviceName << '\n';
             break;
         }
     }

@@ -37,6 +37,7 @@
 #include "analysis/ExpressionAnalyzer.hpp"
 #include "analysis/passes/DynamicArrayAllocOptPass.hpp"
 #include "analysis/passes/StaticArrayOptPass.hpp"
+#include "codegen/glsl/GLSLGenerator.hpp"
 #include "frontend/InfixConverter.hpp"
 #include "frontend/Tokenizer.hpp"
 #include "runtime/llvm/Compiler.hpp"
@@ -833,7 +834,9 @@ struct VkExprData {
     int num_inputs = 0;
     std::array<PlaneOp, 3> plane_op = {};
     std::array<std::vector<Token>, 3> tokens;
+    std::array<std::unique_ptr<analysis::AnalysisManager>, 3> analysis_managers;
     bool glsl_mode = false;
+    bool mirror_boundary = false;
     std::array<std::string, 3>
         glsl_shaders; // Direct GLSL shader source per plane
 
@@ -1019,6 +1022,7 @@ vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
 
         d->vi = *vi[0];
 
+        // TODO: Support other formats
         if (d->vi.format.sampleType != stFloat ||
             d->vi.format.bitsPerSample != 32) {
             throw std::runtime_error(
@@ -1077,6 +1081,12 @@ vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
                             }
                         }
                     }
+
+                    auto analyser = std::make_unique<analysis::AnalysisManager>(
+                        d->tokens.at(i), d->mirror_boundary);
+                    analysis::ExpressionAnalyzer expr_analyzer(*analyser);
+                    expr_analyzer.analyze();
+                    d->analysis_managers.at(i) = std::move(analyser);
                 }
             }
         }
@@ -1085,7 +1095,7 @@ vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
 
         d->memory = std::make_unique<llvmexpr::VulkanMemory>(ctx);
 
-        uint32_t numPropsFloats =
+        auto numPropsFloats =
             static_cast<uint32_t>(1 + d->required_props.size()); // N + props
 
         for (int i = 0; i < d->vi.format.numPlanes; ++i) {
@@ -1093,52 +1103,24 @@ vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
                 continue;
             }
 
-            std::string shaderSrc;
+            std::string shader;
             if (d->glsl_mode) {
-                shaderSrc = d->glsl_shaders.at(i);
+                shader = d->glsl_shaders.at(i);
             } else {
-                // TODO: Use GLSL generation from tokens
-                shaderSrc = R"(
-#version 450
-#extension GL_EXT_scalar_block_layout : enable
-
-layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
-
-layout(push_constant) uniform PushConstants {
-    uint width;
-    uint height;
-    uint numInputs;
-    int frameNumber;
-} pc;
-
-layout(std430, set = 0, binding = 0) readonly buffer InputBuffer0 {
-    float data[];
-} src0;
-
-layout(std430, set = 0, binding = 1) writeonly buffer OutputBuffer {
-    float data[];
-} dst;
-
-layout(std430, set = 0, binding = 2) readonly buffer PropsBuffer {
-    float props[];
-} propsData;
-
-void main() {
-    uint gid = gl_GlobalInvocationID.x;
-    uint totalPixels = pc.width * pc.height;
-    
-    if (gid >= totalPixels) {
-        return;
-    }
-    
-    dst.data[gid] = src0.data[gid];
-}
-)";
+                analysis::ExpressionAnalysisResults analysis_results(
+                    *d->analysis_managers.at(i));
+                GLSLGenerator generator(
+                    d->tokens.at(i), d->num_inputs,
+                    d->vi.width / (i == 0 ? 1 : d->vi.format.subSamplingW),
+                    d->vi.height / (i == 0 ? 1 : d->vi.format.subSamplingH),
+                    d->mirror_boundary, d->prop_map, analysis_results);
+                shader = generator.generate();
+                // printf("Generated GLSL:\n%s\n", shaderSrc.c_str());
             }
 
             d->pipelines.at(i) =
                 std::make_unique<llvmexpr::VulkanComputePipeline>(
-                    ctx, shaderSrc, static_cast<uint32_t>(d->num_inputs),
+                    ctx, shader, static_cast<uint32_t>(d->num_inputs),
                     numPropsFloats);
         }
 
