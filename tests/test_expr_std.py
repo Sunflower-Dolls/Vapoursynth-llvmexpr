@@ -28,6 +28,7 @@ along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
 import pytest
 import vapoursynth as vs
 import numpy as np
+from conftest import get_expr_func
 
 
 def get_pixel_value(clip: vs.VideoNode) -> int:
@@ -129,14 +130,14 @@ EXPR_TEST_CASES = [
 
 @pytest.mark.parametrize("initial_colors, expression, expected_value", EXPR_TEST_CASES)
 def test_expr_operations(
-    core: vs.Core, initial_colors, expression: str, expected_value: int
+    backend: str, core: vs.Core, initial_colors, expression: str, expected_value: int
 ):
+    expr_func = get_expr_func(backend)
     if isinstance(initial_colors, tuple):
         clips = [core.std.BlankClip(format=vs.GRAY8, color=c) for c in initial_colors]
     else:
         clips = core.std.BlankClip(format=vs.GRAY8, color=initial_colors)
 
-    result_clip = core.llvmexpr.Expr(clips, expression)
+    result_clip = expr_func(clips, expression)
 
     assert get_pixel_value(result_clip) == expected_value
-

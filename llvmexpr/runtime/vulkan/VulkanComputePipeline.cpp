@@ -2,13 +2,22 @@
 #include "VulkanContext.hpp"
 #include "VulkanMemory.hpp"
 
+#include <mutex>
 #include <shaderc/shaderc.hpp>
 #include <stdexcept>
+#include <unordered_map>
 
 namespace llvmexpr {
 
 namespace {
 constexpr uint32_t WORKGROUP_SIZE = 256;
+
+// Key: GLSL source code, Value: SPIR-V binary
+std::unordered_map<std::string, std::vector<uint32_t>>
+    g_shader_cache; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+std::mutex
+    g_shader_cache_mutex; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+
 } // namespace
 
 VulkanComputePipeline::VulkanComputePipeline(VulkanContext& ctx,
@@ -26,23 +35,31 @@ VulkanComputePipeline::VulkanComputePipeline(VulkanContext& ctx,
 VulkanComputePipeline::~VulkanComputePipeline() = default;
 
 void VulkanComputePipeline::compileShader(const std::string& glslSource) {
-    shaderc::Compiler compiler;
-    shaderc::CompileOptions options;
+    std::lock_guard<std::mutex> lock(g_shader_cache_mutex);
 
-    options.SetOptimizationLevel(shaderc_optimization_level_performance);
-    options.SetTargetEnvironment(shaderc_target_env_vulkan,
-                                 shaderc_env_version_vulkan_1_3);
-    options.SetTargetSpirv(shaderc_spirv_version_1_6);
+    if (g_shader_cache.contains(glslSource)) {
+        spirvCode = g_shader_cache[glslSource];
+    } else {
+        shaderc::Compiler compiler;
+        shaderc::CompileOptions options;
 
-    auto result = compiler.CompileGlslToSpv(
-        glslSource, shaderc_glsl_compute_shader, "compute.glsl", options);
+        options.SetOptimizationLevel(shaderc_optimization_level_performance);
+        options.SetTargetEnvironment(shaderc_target_env_vulkan,
+                                     shaderc_env_version_vulkan_1_3);
+        options.SetTargetSpirv(shaderc_spirv_version_1_6);
 
-    if (result.GetCompilationStatus() != shaderc_compilation_status_success) {
-        throw std::runtime_error("Shader compilation failed: " +
-                                 std::string(result.GetErrorMessage()));
+        auto result = compiler.CompileGlslToSpv(
+            glslSource, shaderc_glsl_compute_shader, "compute.glsl", options);
+
+        if (result.GetCompilationStatus() !=
+            shaderc_compilation_status_success) {
+            throw std::runtime_error("Shader compilation failed: " +
+                                     std::string(result.GetErrorMessage()));
+        }
+
+        spirvCode = {result.cbegin(), result.cend()};
+        g_shader_cache[glslSource] = spirvCode;
     }
-
-    spirvCode = {result.cbegin(), result.cend()};
 
     vk::ShaderModuleCreateInfo moduleInfo;
     moduleInfo.setCode(spirvCode);
