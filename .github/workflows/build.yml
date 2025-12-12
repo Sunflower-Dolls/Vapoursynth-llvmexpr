@@ -53,6 +53,7 @@ jobs:
             mingw-w64-x86_64-zstd
             mingw-w64-x86_64-shaderc
             mingw-w64-x86_64-vulkan-loader
+            mingw-w64-x86_64-vulkan-headers
 
       - name: Force static zstd linkage (Windows)
         shell: msys2 {0}
@@ -226,6 +227,7 @@ jobs:
             mingw-w64-x86_64-zstd
             mingw-w64-x86_64-shaderc
             mingw-w64-x86_64-vulkan-loader
+            mingw-w64-x86_64-vulkan-headers
 
       - name: Force static zstd linkage (Windows)
         if: runner.os == 'Windows'
