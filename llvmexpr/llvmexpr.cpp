@@ -835,20 +835,10 @@ struct VkStream {
     std::array<std::unique_ptr<llvmexpr::VulkanComputePipeline>, 3> pipelines;
 };
 
-struct VkExprData {
-    std::vector<VSNode*> nodes;
-    VSVideoInfo vi = {};
-    int num_inputs = 0;
+struct VkExprData : BaseExprData {
     std::array<PlaneOp, 3> plane_op = {};
     std::array<std::vector<Token>, 3> tokens;
     std::array<std::unique_ptr<analysis::AnalysisManager>, 3> analysis_managers;
-    bool glsl_mode = false;
-    bool mirror_boundary = false;
-    std::array<std::string, 3>
-        glsl_shaders; // Direct GLSL shader source per plane
-
-    std::vector<std::pair<int, std::string>> required_props;
-    std::map<std::pair<int, std::string>, int> prop_map;
 
     int num_streams = 8;
     std::vector<std::unique_ptr<VkStream>> streams;
@@ -1193,68 +1183,15 @@ vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
 
     try {
         // Validate and initialize clips
-        d->num_inputs = vsapi->mapNumElements(in, "clips");
-        if (d->num_inputs == 0) {
-            throw std::runtime_error("At least one clip must be provided.");
-        }
-
-        d->nodes.resize(d->num_inputs);
-        for (int i = 0; i < d->num_inputs; ++i) {
-            d->nodes[i] = vsapi->mapGetNode(in, "clips", i, &err);
-        }
-
-        std::vector<const VSVideoInfo*> vi(d->num_inputs);
-        for (int i = 0; i < d->num_inputs; ++i) {
-            vi[i] = vsapi->getVideoInfo(d->nodes[i]);
-            if (!vsh::isConstantVideoFormat(vi[i])) {
-                throw std::runtime_error(
-                    "Only constant format clips are supported.");
-            }
-        }
-
-        for (int i = 1; i < d->num_inputs; ++i) {
-            if (vi[i]->width != vi[0]->width ||
-                vi[i]->height != vi[0]->height) {
-                throw std::runtime_error(
-                    "All clips must have the same dimensions.");
-            }
-        }
-
-        d->vi = *vi[0];
+        validateAndInitClips<true>(d.get(), in, vsapi);
 
         // Store input formats for CPU-side conversion
         d->input_formats.resize(d->num_inputs);
         for (int i = 0; i < d->num_inputs; ++i) {
-            d->input_formats[i] = vi[i]->format;
+            d->input_formats[i] = vsapi->getVideoInfo(d->nodes[i])->format;
         }
 
-        // Parse format parameter for output format
-        {
-            int format_err = 0;
-            const int format_id = static_cast<int>(
-                vsapi->mapGetInt(in, "format", 0, &format_err));
-            if (format_err == 0) {
-                VSVideoFormat temp_format;
-                if (vsapi->getVideoFormatByID(&temp_format, format_id, core) !=
-                    0) {
-                    if (d->vi.format.numPlanes != temp_format.numPlanes) {
-                        throw std::runtime_error(
-                            "The number of planes in the "
-                            "inputs and output must match.");
-                    }
-                    VSVideoFormat new_format;
-                    if (vsapi->queryVideoFormat(
-                            &new_format, d->vi.format.colorFamily,
-                            temp_format.sampleType, temp_format.bitsPerSample,
-                            d->vi.format.subSamplingW,
-                            d->vi.format.subSamplingH, core) != 0) {
-                        d->vi.format = new_format;
-                    } else {
-                        throw std::runtime_error("Failed to query new format.");
-                    }
-                }
-            }
-        }
+        parseFormatParam(d.get(), in, vsapi, core);
 
         const int nexpr = vsapi->mapNumElements(in, "expr");
         if (nexpr == 0) {
@@ -1272,51 +1209,80 @@ vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
 
         d->mirror_boundary = vsapi->mapGetInt(in, "boundary", 0, &err) != 0;
 
-        d->glsl_mode = vsapi->mapGetInt(in, "glsl", 0, &err) != 0;
-        if (err != 0) {
-            d->glsl_mode = false;
+        bool use_infix = vsapi->mapGetInt(in, "infix", 0, &err) != 0;
+
+        std::array<std::string, 3> processed_exprs;
+        for (int i = 0; i < nexpr && i < 3; ++i) {
+            const std::string& input_expr = expr_strs.at(i);
+            if (use_infix && !input_expr.empty()) {
+                std::map<std::string, std::string> macros;
+                macros["__GPU__"] = "";
+                macros["__WIDTH__"] = std::to_string(d->vi.width);
+                macros["__HEIGHT__"] = std::to_string(d->vi.height);
+                macros["__INPUT_NUM__"] = std::to_string(d->num_inputs);
+                macros["__OUTPUT_BITDEPTH__"] =
+                    std::to_string(d->vi.format.bitsPerSample);
+                macros["__OUTPUT_COLORFAMILY__"] =
+                    std::to_string(d->vi.format.colorFamily);
+                macros["__SUBSAMPLE_W__"] =
+                    std::to_string(d->vi.format.subSamplingW);
+                macros["__SUBSAMPLE_H__"] =
+                    std::to_string(d->vi.format.subSamplingH);
+                macros["__PLANE_NO__"] = std::to_string(i);
+                macros["__OUTPUT_SAMPLETYPE__"] = std::to_string(
+                    (d->vi.format.sampleType == stFloat) ? 1 : 0);
+
+                for (int j = 0; j < d->num_inputs; ++j) {
+                    const VSVideoInfo* input_vi =
+                        vsapi->getVideoInfo(d->nodes[j]);
+                    macros[std::format("__INPUT_BITDEPTH_{}__", j)] =
+                        std::to_string(input_vi->format.bitsPerSample);
+                    macros[std::format("__INPUT_COLORFAMILY_{}__", j)] =
+                        std::to_string(input_vi->format.colorFamily);
+                    macros[std::format("__INPUT_SAMPLETYPE_{}__", j)] =
+                        std::to_string(
+                            (input_vi->format.sampleType == stFloat) ? 1 : 0);
+                }
+
+                processed_exprs.at(i) =
+                    convertInfixToPostfix(input_expr, d->num_inputs,
+                                          infix2postfix::Mode::Expr, &macros);
+            } else {
+                processed_exprs.at(i) = input_expr;
+            }
+        }
+        for (int i = nexpr; i < d->vi.format.numPlanes; ++i) {
+            processed_exprs.at(i) = processed_exprs.at(nexpr - 1);
         }
 
-        if (d->glsl_mode) {
-            for (int i = 0; i < d->vi.format.numPlanes; ++i) {
-                if (expr_strs.at(i).empty()) {
-                    d->plane_op.at(i) = PlaneOp::PO_COPY;
-                } else {
-                    d->plane_op.at(i) = PlaneOp::PO_PROCESS;
-                    d->glsl_shaders.at(i) = expr_strs.at(i);
-                }
-            }
-        } else {
-            for (int i = 0; i < d->vi.format.numPlanes; ++i) {
-                if (expr_strs.at(i).empty()) {
-                    d->plane_op.at(i) = PlaneOp::PO_COPY;
-                } else {
-                    d->plane_op.at(i) = PlaneOp::PO_PROCESS;
-                    d->tokens.at(i) = tokenize(expr_strs.at(i), d->num_inputs,
-                                               ExprMode::EXPR);
+        for (int i = 0; i < d->vi.format.numPlanes; ++i) {
+            if (processed_exprs.at(i).empty()) {
+                d->plane_op.at(i) = PlaneOp::PO_COPY;
+            } else {
+                d->plane_op.at(i) = PlaneOp::PO_PROCESS;
+                d->tokens.at(i) = tokenize(processed_exprs.at(i), d->num_inputs,
+                                           ExprMode::EXPR);
 
-                    for (const auto& token : d->tokens.at(i)) {
-                        if (token.type == TokenType::PROP_ACCESS ||
-                            token.type == TokenType::PROP_EXISTS) {
-                            const auto& payload =
-                                std::get<TokenPayload_PropAccess>(
-                                    token.payload);
-                            auto key = std::make_pair(payload.clip_idx,
-                                                      payload.prop_name);
-                            if (!d->prop_map.contains(key)) {
-                                d->prop_map[key] = static_cast<int>(
-                                    1 + d->required_props.size()); // 0 is for N
-                                d->required_props.push_back(key);
-                            }
+                for (const auto& token : d->tokens.at(i)) {
+                    if (token.type == TokenType::PROP_ACCESS ||
+                        token.type == TokenType::PROP_EXISTS) {
+                        const auto& payload =
+                            std::get<TokenPayload_PropAccess>(token.payload);
+                        auto key =
+                            std::make_pair(payload.clip_idx, payload.prop_name);
+                        if (!d->prop_map.contains(key)) {
+                            d->prop_map[key] = static_cast<int>(
+                                1 + d->required_props.size()); // 0 is for N
+                            d->required_props.push_back(key);
                         }
                     }
-
-                    auto analyser = std::make_unique<analysis::AnalysisManager>(
-                        d->tokens.at(i), d->mirror_boundary);
-                    analysis::ExpressionAnalyzer expr_analyzer(*analyser);
-                    expr_analyzer.analyze();
-                    d->analysis_managers.at(i) = std::move(analyser);
                 }
+
+                auto analyser = std::make_unique<analysis::AnalysisManager>(
+                    d->tokens.at(i), d->mirror_boundary);
+                analysis::ExpressionAnalyzer expr_analyzer(*analyser);
+                expr_analyzer.analyze();
+                d->analysis_managers.at(i) = std::move(analyser);
             }
         }
 
@@ -1346,20 +1312,15 @@ vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
                     continue;
                 }
 
-                std::string shader;
-                if (d->glsl_mode) {
-                    shader = d->glsl_shaders.at(i);
-                } else {
-                    analysis::ExpressionAnalysisResults analysis_results(
-                        *d->analysis_managers.at(i));
-                    GLSLGenerator generator(
-                        d->tokens.at(i), d->num_inputs,
-                        d->vi.width / (i == 0 ? 1 : d->vi.format.subSamplingW),
-                        d->vi.height / (i == 0 ? 1 : d->vi.format.subSamplingH),
-                        d->mirror_boundary, d->prop_map, analysis_results);
-                    shader = generator.generate();
-                    // printf("Generated GLSL:\n%s\n", shader.c_str());
-                }
+                analysis::ExpressionAnalysisResults analysis_results(
+                    *d->analysis_managers.at(i));
+                GLSLGenerator generator(
+                    d->tokens.at(i), d->num_inputs,
+                    d->vi.width / (i == 0 ? 1 : d->vi.format.subSamplingW),
+                    d->vi.height / (i == 0 ? 1 : d->vi.format.subSamplingH),
+                    d->mirror_boundary, d->prop_map, analysis_results);
+                std::string shader = generator.generate();
+                // printf("Generated GLSL:\n%s\n", shader.c_str());
 
                 d->streams[k]->pipelines.at(i) =
                     std::make_unique<llvmexpr::VulkanComputePipeline>(
@@ -1431,8 +1392,9 @@ VapourSynthPluginInit2(VSPlugin* plugin, const VSPLUGINAPI* vspapi) {
                              "level:int:opt;approx_math:int:opt;infix:int:opt;",
                              "clip:vnode;", singleExprCreate, nullptr, plugin);
 
-    vspapi->registerFunction("VkExpr",
-                             "clips:vnode[];expr:data[];format:int:opt;glsl:"
-                             "int:opt;boundary:int:opt;num_streams:int:opt;",
-                             "clip:vnode;", vkExprCreate, nullptr, plugin);
+    vspapi->registerFunction(
+        "VkExpr",
+        "clips:vnode[];expr:data[];format:int:opt;"
+        "boundary:int:opt;num_streams:int:opt;infix:int:opt;",
+        "clip:vnode;", vkExprCreate, nullptr, plugin);
 }
