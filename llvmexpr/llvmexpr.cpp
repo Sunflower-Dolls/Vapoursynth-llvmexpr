@@ -22,6 +22,7 @@
 #include <cmath>
 #include <cstdint>
 #include <format>
+#include <fstream>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -848,6 +849,8 @@ struct VkExprData : BaseExprData {
 
     // Format info for CPU-side conversion
     std::vector<VSVideoFormat> input_formats;
+
+    std::string dump_glsl_path;
 };
 
 const VSFrame*
@@ -1209,6 +1212,12 @@ vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
 
         d->mirror_boundary = vsapi->mapGetInt(in, "boundary", 0, &err) != 0;
 
+        const char* dump_glsl_path =
+            vsapi->mapGetData(in, "dump_glsl", 0, &err);
+        if ((err == 0) && (dump_glsl_path != nullptr)) {
+            d->dump_glsl_path = dump_glsl_path;
+        }
+
         bool use_infix = vsapi->mapGetInt(in, "infix", 0, &err) != 0;
 
         std::array<std::string, 3> processed_exprs;
@@ -1323,6 +1332,23 @@ vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
                 std::string shader = generator.generate();
                 // printf("Generated GLSL:\n%s\n", shader.c_str());
 
+                if (k == 0 && !d->dump_glsl_path.empty()) {
+                    std::string plane_specific_path = d->dump_glsl_path;
+                    size_t dot_pos = plane_specific_path.rfind('.');
+                    std::string plane_suffix = ".plane" + std::to_string(i);
+                    if (dot_pos != std::string::npos) {
+                        plane_specific_path.insert(dot_pos, plane_suffix);
+                    } else {
+                        plane_specific_path += plane_suffix;
+                    }
+
+                    std::ofstream glsl_file(plane_specific_path);
+                    if (glsl_file.is_open()) {
+                        glsl_file << shader;
+                        glsl_file.close();
+                    }
+                }
+
                 d->streams[k]->pipelines.at(i) =
                     std::make_unique<llvmexpr::VulkanComputePipeline>(
                         ctx, shader, static_cast<uint32_t>(d->num_inputs),
@@ -1393,9 +1419,9 @@ VapourSynthPluginInit2(VSPlugin* plugin, const VSPLUGINAPI* vspapi) {
                              "level:int:opt;approx_math:int:opt;infix:int:opt;",
                              "clip:vnode;", singleExprCreate, nullptr, plugin);
 
-    vspapi->registerFunction(
-        "VkExpr",
-        "clips:vnode[];expr:data[];format:int:opt;"
-        "boundary:int:opt;num_streams:int:opt;infix:int:opt;",
-        "clip:vnode;", vkExprCreate, nullptr, plugin);
+    vspapi->registerFunction("VkExpr",
+                             "clips:vnode[];expr:data[];format:int:opt;"
+                             "boundary:int:opt;num_streams:int:opt;dump_glsl:"
+                             "data:opt;infix:int:opt;",
+                             "clip:vnode;", vkExprCreate, nullptr, plugin);
 }

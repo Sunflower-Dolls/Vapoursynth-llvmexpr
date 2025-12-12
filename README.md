@@ -66,6 +66,7 @@ llvmexpr.VkExpr(clip[] clips, string[] expr[, int format, int boundary=0, int in
 - `expr`: Expression strings (one per plane). Format depends on `infix` parameter
 - `format`: Output format (optional). Same behavior as `Expr`.
 - `boundary`: Boundary handling mode (0=clamp, 1=mirror)
+- `dump_glsl`: Path to dump GLSL shader for debugging (optional)
 - `infix`: Expression format (default: 0)
   - `0`: Postfix notation (RPN)
   - `1`: Infix notation (C-style) - automatically converted to postfix. In this mode, a specialized `__GPU__` macro is defined.
