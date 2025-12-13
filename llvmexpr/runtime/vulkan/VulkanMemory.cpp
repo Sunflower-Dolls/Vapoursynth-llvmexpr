@@ -132,7 +132,7 @@ void VulkanMemory::uploadToBuffer(VulkanBuffer& gpuBuffer, const void* data,
 
     vk::SubmitInfo submitInfo;
     submitInfo.setCommandBuffers(*transferCmd);
-    context.getComputeQueue().submit(submitInfo, *transferFence);
+    context.submit(submitInfo, *transferFence);
 
     auto result =
         context.getDevice().waitForFences(*transferFence, VK_TRUE, UINT64_MAX);
@@ -159,7 +159,7 @@ void VulkanMemory::downloadFromBuffer(VulkanBuffer& gpuBuffer, void* data,
 
     vk::SubmitInfo submitInfo;
     submitInfo.setCommandBuffers(*transferCmd);
-    context.getComputeQueue().submit(submitInfo, *transferFence);
+    context.submit(submitInfo, *transferFence);
 
     auto result =
         context.getDevice().waitForFences(*transferFence, VK_TRUE, UINT64_MAX);
@@ -186,7 +186,7 @@ void VulkanMemory::copyBuffer(VulkanBuffer& src, VulkanBuffer& dst,
 
     vk::SubmitInfo submitInfo;
     submitInfo.setCommandBuffers(*transferCmd);
-    context.getComputeQueue().submit(submitInfo, *transferFence);
+    context.submit(submitInfo, *transferFence);
 
     auto result =
         context.getDevice().waitForFences(*transferFence, VK_TRUE, UINT64_MAX);

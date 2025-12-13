@@ -3,6 +3,7 @@
 
 #define VK_NO_PROTOTYPES
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
+#include <mutex>
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan_raii.hpp>
 
@@ -30,6 +31,8 @@ class VulkanContext {
         return queueFamilyIndex;
     }
 
+    void submit(const vk::SubmitInfo& submitInfo, const vk::Fence& fence);
+
   private:
     void createInstance();
     void pickPhysicalDevice();
@@ -42,6 +45,7 @@ class VulkanContext {
     vk::raii::Queue computeQueue = nullptr;
 
     uint32_t queueFamilyIndex = -1;
+    std::mutex queueMutex;
 };
 
 } // namespace llvmexpr

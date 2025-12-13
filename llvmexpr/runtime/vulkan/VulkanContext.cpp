@@ -114,4 +114,10 @@ void VulkanContext::createDevice() {
     computeQueue = device.getQueue(queueFamilyIndex, 0);
 }
 
+void VulkanContext::submit(const vk::SubmitInfo& submitInfo,
+                           const vk::Fence& fence) {
+    std::lock_guard<std::mutex> lock(queueMutex);
+    computeQueue.submit(submitInfo, fence);
+}
+
 } // namespace llvmexpr

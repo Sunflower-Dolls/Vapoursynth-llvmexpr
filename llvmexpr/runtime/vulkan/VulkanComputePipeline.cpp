@@ -206,7 +206,7 @@ void VulkanComputePipeline::updateDescriptorSets(
     cachedPropsBuffer = newPropsBufferHandle;
 
     // Input buffers
-    for (auto *inputBuffer : inputBuffers) {
+    for (auto* inputBuffer : inputBuffers) {
         vk::DescriptorBufferInfo bufInfo;
         bufInfo.buffer = inputBuffer->buffer;
         bufInfo.offset = 0;
@@ -246,9 +246,9 @@ void VulkanComputePipeline::updateDescriptorSets(
 }
 
 void VulkanComputePipeline::dispatch(
-    const std::vector<VulkanBuffer*>& inputBuffers,
-    VulkanBuffer& outputBuffer, VulkanBuffer* propsBuffer, uint32_t width,
-    uint32_t height, int32_t frameNumber) {
+    const std::vector<VulkanBuffer*>& inputBuffers, VulkanBuffer& outputBuffer,
+    VulkanBuffer* propsBuffer, uint32_t width, uint32_t height,
+    int32_t frameNumber) {
 
     updateDescriptorSets(inputBuffers, outputBuffer, propsBuffer);
 
@@ -280,7 +280,7 @@ void VulkanComputePipeline::dispatch(
     // Submit and wait
     vk::SubmitInfo submitInfo;
     submitInfo.setCommandBuffers(*commandBuffer);
-    context.getComputeQueue().submit(submitInfo, *fence);
+    context.submit(submitInfo, *fence);
 
     auto result =
         context.getDevice().waitForFences(*fence, VK_TRUE, UINT64_MAX);

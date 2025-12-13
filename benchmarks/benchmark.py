@@ -52,7 +52,7 @@ class ExprBackend(abc.ABC):
 
 
 class LlvmexprBackend(ExprBackend):
-    """Backend for the current project's llvmexpr."""
+    """Backend for the current project's llvmexpr.Expr"""
 
     def get_name(self) -> str:
         return "llvmexpr"
@@ -60,6 +60,15 @@ class LlvmexprBackend(ExprBackend):
     def filter(self, clip: vs.VideoNode, expr: str) -> Optional[vs.VideoNode]:
         return core.llvmexpr.Expr(clips=[clip], expr=expr)
 
+
+class VkExprBackend(ExprBackend):
+    """Backend for the current projects's llvmexpr.VkExpr"""
+
+    def get_name(self) -> str:
+        return "VkExpr"
+
+    def filter(self, clip: vs.VideoNode, expr: str) -> Optional[vs.VideoNode]:
+        return core.llvmexpr.VkExpr(clips=[clip], expr=expr)
 
 class AkarinExprBackend(ExprBackend):
 
@@ -114,11 +123,13 @@ TEST_CASES: Dict[str, Union[str, Tuple[str, int]]] = {
 
 BACKENDS_TO_TEST: List[ExprBackend] = [
     LlvmexprBackend(),
+    VkExprBackend(),
     AkarinExprBackend(),
 ]
 
 ENABLED_BACKENDS: List[str] = [
     "llvmexpr",
+    "VkExpr",
     "akarin",
 ]
 
