@@ -85,6 +85,8 @@ class VulkanMemory {
     void downloadFromBuffer(VulkanBuffer& gpuBuffer, void* data,
                             VkDeviceSize size, VkDeviceSize offset = 0);
 
+    void copyBuffer(VulkanBuffer& src, VulkanBuffer& dst, VkDeviceSize size);
+
     // blocks until transfer completes
     [[nodiscard]] VmaAllocator getAllocator() const { return allocator; }
 

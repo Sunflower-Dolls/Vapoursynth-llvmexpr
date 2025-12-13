@@ -123,6 +123,7 @@ void VulkanComputePipeline::createDescriptorSetLayout(uint32_t numInputBuffers,
     poolSize.descriptorCount = numInputBuffers + 1 + (withPropsBuffer ? 1 : 0);
 
     vk::DescriptorPoolCreateInfo poolInfo;
+    poolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
     poolInfo.maxSets = 1;
     poolInfo.setPoolSizes(poolSize);
     descriptorPool = vk::raii::DescriptorPool(context.getDevice(), poolInfo);
@@ -166,6 +167,28 @@ void VulkanComputePipeline::createCommandResources() {
 void VulkanComputePipeline::updateDescriptorSets(
     const std::vector<VulkanBuffer*>& inputBuffers, VulkanBuffer& outputBuffer,
     VulkanBuffer* propsBuffer) {
+
+    // Check if we can skip update
+    bool inputsChanged = false;
+    if (cachedInputBuffers.size() != inputBuffers.size()) {
+        inputsChanged = true;
+    } else {
+        for (size_t i = 0; i < inputBuffers.size(); ++i) {
+            if (cachedInputBuffers[i] != inputBuffers[i]->buffer) {
+                inputsChanged = true;
+                break;
+            }
+        }
+    }
+
+    VkBuffer newPropsBufferHandle =
+        (propsBuffer != nullptr) ? propsBuffer->buffer : VK_NULL_HANDLE;
+
+    if (!inputsChanged && cachedOutputBuffer == outputBuffer.buffer &&
+        cachedPropsBuffer == newPropsBufferHandle) {
+        return;
+    }
+
     std::vector<vk::WriteDescriptorSet> writes;
     std::vector<vk::DescriptorBufferInfo> bufferInfos;
 
@@ -173,10 +196,19 @@ void VulkanComputePipeline::updateDescriptorSets(
         inputBuffers.size() + 1 + (propsBuffer != nullptr ? 1 : 0);
     bufferInfos.reserve(numBuffers);
 
+    // Update cache
+    cachedInputBuffers.clear();
+    cachedInputBuffers.reserve(inputBuffers.size());
+    for (auto* buf : inputBuffers) {
+        cachedInputBuffers.push_back(buf->buffer);
+    }
+    cachedOutputBuffer = outputBuffer.buffer;
+    cachedPropsBuffer = newPropsBufferHandle;
+
     // Input buffers
-    for (size_t i = 0; i < inputBuffers.size(); ++i) {
+    for (auto *inputBuffer : inputBuffers) {
         vk::DescriptorBufferInfo bufInfo;
-        bufInfo.buffer = inputBuffers[i]->buffer;
+        bufInfo.buffer = inputBuffer->buffer;
         bufInfo.offset = 0;
         bufInfo.range = VK_WHOLE_SIZE;
         bufferInfos.push_back(bufInfo);
@@ -214,24 +246,11 @@ void VulkanComputePipeline::updateDescriptorSets(
 }
 
 void VulkanComputePipeline::dispatch(
-    VulkanMemory& memory, const std::vector<VulkanBuffer*>& inputBuffers,
-    VulkanBuffer& outputBuffer, const std::vector<float>& propsData,
-    uint32_t width, uint32_t height, int32_t frameNumber) {
+    const std::vector<VulkanBuffer*>& inputBuffers,
+    VulkanBuffer& outputBuffer, VulkanBuffer* propsBuffer, uint32_t width,
+    uint32_t height, int32_t frameNumber) {
 
-    // Create and upload props buffer if we have props data
-    VulkanBuffer propsBuffer;
-    VulkanBuffer* propsBufferPtr = nullptr;
-
-    if (hasPropsBuffer && !propsData.empty()) {
-        VkDeviceSize propsSize = propsData.size() * sizeof(float);
-        propsBuffer = memory.createGPUBuffer(
-            propsSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-                           VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-        memory.uploadToBuffer(propsBuffer, propsData.data(), propsSize);
-        propsBufferPtr = &propsBuffer;
-    }
-
-    updateDescriptorSets(inputBuffers, outputBuffer, propsBufferPtr);
+    updateDescriptorSets(inputBuffers, outputBuffer, propsBuffer);
 
     // Record command buffer
     vk::CommandBufferBeginInfo beginInfo(
@@ -269,11 +288,6 @@ void VulkanComputePipeline::dispatch(
         throw std::runtime_error("Failed to wait for compute fence");
     }
     context.getDevice().resetFences(*fence);
-
-    // Cleanup props buffer
-    if (propsBufferPtr != nullptr) {
-        memory.destroyBuffer(propsBuffer);
-    }
 }
 
 } // namespace llvmexpr

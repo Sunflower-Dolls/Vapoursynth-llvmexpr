@@ -28,8 +28,6 @@ along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
 
 import pytest
 import vapoursynth as vs
-import numpy as np
-import random
 from conftest import get_expr_func
 
 core = vs.core

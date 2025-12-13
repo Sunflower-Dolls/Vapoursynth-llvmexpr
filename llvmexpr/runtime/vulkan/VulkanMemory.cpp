@@ -173,4 +173,27 @@ void VulkanMemory::downloadFromBuffer(VulkanBuffer& gpuBuffer, void* data,
     destroyBuffer(staging);
 }
 
+void VulkanMemory::copyBuffer(VulkanBuffer& src, VulkanBuffer& dst,
+                              VkDeviceSize size) {
+    vk::CommandBufferBeginInfo beginInfo(
+        vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+    transferCmd.begin(beginInfo);
+
+    vk::BufferCopy copyRegion(0, 0, size);
+    transferCmd.copyBuffer(src.buffer, dst.buffer, copyRegion);
+
+    transferCmd.end();
+
+    vk::SubmitInfo submitInfo;
+    submitInfo.setCommandBuffers(*transferCmd);
+    context.getComputeQueue().submit(submitInfo, *transferFence);
+
+    auto result =
+        context.getDevice().waitForFences(*transferFence, VK_TRUE, UINT64_MAX);
+    if (result != vk::Result::eSuccess) {
+        throw std::runtime_error("Failed to wait for copy fence");
+    }
+    context.getDevice().resetFences(*transferFence);
+}
+
 } // namespace llvmexpr

@@ -40,11 +40,9 @@ class VulkanComputePipeline {
     VulkanComputePipeline(VulkanComputePipeline&&) = delete;
     VulkanComputePipeline& operator=(VulkanComputePipeline&&) = delete;
 
-    void dispatch(VulkanMemory& memory,
-                  const std::vector<VulkanBuffer*>& inputBuffers,
-                  VulkanBuffer& outputBuffer,
-                  const std::vector<float>& propsData, uint32_t width,
-                  uint32_t height, int32_t frameNumber);
+    void dispatch(const std::vector<VulkanBuffer*>& inputBuffers,
+                  VulkanBuffer& outputBuffer, VulkanBuffer* propsBuffer,
+                  uint32_t width, uint32_t height, int32_t frameNumber);
 
   private:
     void compileShader(const std::string& glslSource);
@@ -59,6 +57,10 @@ class VulkanComputePipeline {
     VulkanContext& context;
     uint32_t numInputs;
     bool hasPropsBuffer;
+
+    std::vector<VkBuffer> cachedInputBuffers;
+    VkBuffer cachedOutputBuffer = VK_NULL_HANDLE;
+    VkBuffer cachedPropsBuffer = VK_NULL_HANDLE;
 
     std::vector<uint32_t> spirvCode;
     vk::raii::ShaderModule shaderModule = nullptr;

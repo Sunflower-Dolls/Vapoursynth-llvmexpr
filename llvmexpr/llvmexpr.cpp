@@ -21,6 +21,7 @@
 #include <bit>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <format>
 #include <fstream>
 #include <map>
@@ -839,8 +840,55 @@ singleExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
 }
 
 struct VkStream {
+    struct PlaneResources {
+        std::vector<llvmexpr::VulkanBuffer> inputBuffers;
+        std::vector<llvmexpr::VulkanBuffer> inputStagingBuffers;
+        llvmexpr::VulkanBuffer outputBuffer;
+        llvmexpr::VulkanBuffer outputStagingBuffer;
+        llvmexpr::VulkanBuffer propsBuffer;
+        llvmexpr::VulkanBuffer propsStagingBuffer;
+        VkDeviceSize bufferSize = 0;
+        VkDeviceSize propsSize = 0;
+        bool initialized = false;
+    };
+
     std::unique_ptr<llvmexpr::VulkanMemory> memory;
     std::array<std::unique_ptr<llvmexpr::VulkanComputePipeline>, 3> pipelines;
+    std::array<PlaneResources, 3> planeResources;
+
+    VkStream() = default;
+    // NOLINTNEXTLINE(modernize-use-equals-default)
+    ~VkStream() {
+        for (auto& res : planeResources) {
+            freePlaneResources(res);
+        }
+    }
+    VkStream(const VkStream&) = delete;
+    VkStream& operator=(const VkStream&) = delete;
+    VkStream(VkStream&&) = delete;
+    VkStream& operator=(VkStream&&) = delete;
+
+    void freePlaneResources(PlaneResources& res) const {
+        if (res.initialized) {
+            for (auto& buf : res.inputBuffers) {
+                memory->destroyBuffer(buf);
+            }
+            for (auto& buf : res.inputStagingBuffers) {
+                memory->destroyBuffer(buf);
+            }
+            res.inputBuffers.clear();
+            res.inputStagingBuffers.clear();
+            memory->destroyBuffer(res.outputBuffer);
+            memory->destroyBuffer(res.outputStagingBuffer);
+            res.initialized = false;
+            res.bufferSize = 0;
+        }
+        if (res.propsBuffer.isValid()) {
+            memory->destroyBuffer(res.propsBuffer);
+            memory->destroyBuffer(res.propsStagingBuffer);
+            res.propsSize = 0;
+        }
+    }
 };
 
 struct VkExprData : BaseExprData {
@@ -930,35 +978,81 @@ const VSFrame*
                 } releaser(d, stream_idx);
 
                 auto& stream = *d->streams[stream_idx];
+                auto& planeRes = stream.planeResources.at(plane);
 
-                // TODO: Optimize Buffers
-                std::vector<llvmexpr::VulkanBuffer> srcBuffers(d->num_inputs);
+                // Initialize or resize buffers if needed
+                if (!planeRes.initialized ||
+                    planeRes.bufferSize != bufferSize) {
+
+                    if (planeRes.initialized) {
+                        stream.freePlaneResources(planeRes);
+                    }
+
+                    // Inputs
+                    planeRes.inputBuffers.reserve(d->num_inputs);
+                    planeRes.inputStagingBuffers.reserve(d->num_inputs);
+                    for (int i = 0; i < d->num_inputs; ++i) {
+                        planeRes.inputBuffers.push_back(
+                            stream.memory->createGPUBuffer(bufferSize));
+                        planeRes.inputStagingBuffers.push_back(
+                            stream.memory->createStagingBuffer(bufferSize,
+                                                               true));
+                    }
+
+                    // Output
+                    planeRes.outputBuffer =
+                        stream.memory->createGPUBuffer(bufferSize);
+                    planeRes.outputStagingBuffer =
+                        stream.memory->createStagingBuffer(bufferSize, false);
+
+                    planeRes.bufferSize = bufferSize;
+                    planeRes.initialized = true;
+                }
+
+                // Props buffers
+                VkDeviceSize propsSize = props.size() * sizeof(float);
+                if (propsSize > 0) {
+                    if (!planeRes.propsBuffer.isValid() ||
+                        planeRes.propsSize < propsSize) {
+
+                        if (planeRes.propsBuffer.isValid()) {
+                            stream.memory->destroyBuffer(planeRes.propsBuffer);
+                            stream.memory->destroyBuffer(
+                                planeRes.propsStagingBuffer);
+                        }
+
+                        planeRes.propsBuffer = stream.memory->createGPUBuffer(
+                            propsSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                                           VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+                        planeRes.propsStagingBuffer =
+                            stream.memory->createStagingBuffer(propsSize, true);
+                        planeRes.propsSize = propsSize;
+                    }
+                }
+
                 std::vector<llvmexpr::VulkanBuffer*> srcBufferPtrs(
                     d->num_inputs);
 
                 for (int i = 0; i < d->num_inputs; ++i) {
-                    srcBuffers[i] = stream.memory->createGPUBuffer(bufferSize);
-                    srcBufferPtrs[i] = &srcBuffers[i];
+                    srcBufferPtrs[i] = &planeRes.inputBuffers[i];
 
                     const uint8_t* srcPtr =
                         vsapi->getReadPtr(src_frames[i], plane);
                     ptrdiff_t srcStride =
                         vsapi->getStride(src_frames[i], plane);
 
-                    // Convert input to float32 for GPU processing
-                    // TODO: Handle conversion using GPU
-                    // NOLINTBEGIN
                     const VSVideoFormat& inFmt = d->input_formats[i];
                     int bpp = inFmt.bytesPerSample;
 
-                    std::vector<float> tempBuffer(static_cast<size_t>(width) *
-                                                  static_cast<size_t>(height));
+                    auto* mappedData = static_cast<float*>(
+                        planeRes.inputStagingBuffers[i].getMappedData());
 
+                    // NOLINTBEGIN
                     if (inFmt.sampleType == stInteger) {
                         // Integer to float conversion
                         for (int row = 0; row < height; ++row) {
                             const uint8_t* rowPtr = srcPtr + (row * srcStride);
-                            float* outRow = tempBuffer.data() +
+                            float* outRow = mappedData +
                                             (static_cast<size_t>(row) *
                                              static_cast<size_t>(width));
                             for (int col = 0; col < width; ++col) {
@@ -982,7 +1076,7 @@ const VSFrame*
                             for (int row = 0; row < height; ++row) {
                                 const uint8_t* rowPtr =
                                     srcPtr + (row * srcStride);
-                                float* outRow = tempBuffer.data() +
+                                float* outRow = mappedData +
                                                 (static_cast<size_t>(row) *
                                                  static_cast<size_t>(width));
                                 std::memcpy(outRow, rowPtr,
@@ -993,7 +1087,7 @@ const VSFrame*
                             for (int row = 0; row < height; ++row) {
                                 const uint8_t* rowPtr =
                                     srcPtr + (row * srcStride);
-                                float* outRow = tempBuffer.data() +
+                                float* outRow = mappedData +
                                                 (static_cast<size_t>(row) *
                                                  static_cast<size_t>(width));
                                 for (int col = 0; col < width; ++col) {
@@ -1038,14 +1132,24 @@ const VSFrame*
                                 "Unsupported float sample size.");
                         }
                     }
-                    stream.memory->uploadToBuffer(
-                        srcBuffers[i], tempBuffer.data(), bufferSize);
+                    // NOLINTEND
+                    stream.memory->copyBuffer(planeRes.inputStagingBuffers[i],
+                                              planeRes.inputBuffers[i],
+                                              bufferSize);
                 }
 
-                auto dstBuffer = stream.memory->createGPUBuffer(bufferSize);
+                // Upload props
+                if (planeRes.propsBuffer.isValid()) {
+                    std::memcpy(planeRes.propsStagingBuffer.getMappedData(),
+                                props.data(), propsSize);
+                    stream.memory->copyBuffer(planeRes.propsStagingBuffer,
+                                              planeRes.propsBuffer, propsSize);
+                }
 
                 stream.pipelines.at(plane)->dispatch(
-                    *stream.memory, srcBufferPtrs, dstBuffer, props,
+                    srcBufferPtrs, planeRes.outputBuffer,
+                    planeRes.propsBuffer.isValid() ? &planeRes.propsBuffer
+                                                   : nullptr,
                     static_cast<uint32_t>(width), static_cast<uint32_t>(height),
                     n);
 
@@ -1056,23 +1160,25 @@ const VSFrame*
                 const VSVideoFormat& outFmt = d->vi.format;
                 int outBpp = outFmt.bytesPerSample;
 
-                std::vector<float> tempBuffer(static_cast<size_t>(width) *
-                                              static_cast<size_t>(height));
-                stream.memory->downloadFromBuffer(dstBuffer, tempBuffer.data(),
-                                                  bufferSize);
+                stream.memory->copyBuffer(planeRes.outputBuffer,
+                                          planeRes.outputStagingBuffer,
+                                          bufferSize);
+                const auto* mappedOut = static_cast<const float*>(
+                    planeRes.outputStagingBuffer.getMappedData());
 
+                // NOLINTBEGIN
                 if (outFmt.sampleType == stInteger) {
                     // Float to integer with clamping
                     int maxVal = (1 << outFmt.bitsPerSample) - 1;
                     for (int row = 0; row < height; ++row) {
                         uint8_t* outRowPtr = dstPtr + (row * dstStride);
-                        const float* inRow =
-                            tempBuffer.data() + (static_cast<size_t>(row) *
-                                                 static_cast<size_t>(width));
+                        const float* inRow = mappedOut +
+                                             (static_cast<size_t>(row) *
+                                              static_cast<size_t>(width));
                         for (int col = 0; col < width; ++col) {
                             float val = inRow[col];
                             float clamped = std::clamp(
-                                val, 0.0f, static_cast<float>(maxVal));
+                                val, 0.0F, static_cast<float>(maxVal));
                             int intVal =
                                 static_cast<int>(std::nearbyint(clamped));
                             if (outBpp == 1) {
@@ -1091,7 +1197,7 @@ const VSFrame*
                     if (outBpp == 4) {
                         for (int row = 0; row < height; ++row) {
                             uint8_t* outRowPtr = dstPtr + (row * dstStride);
-                            const float* inRow = tempBuffer.data() +
+                            const float* inRow = mappedOut +
                                                  (static_cast<size_t>(row) *
                                                   static_cast<size_t>(width));
                             std::memcpy(outRowPtr, inRow,
@@ -1101,7 +1207,7 @@ const VSFrame*
                     } else if (outBpp == 2) {
                         for (int row = 0; row < height; ++row) {
                             uint8_t* outRowPtr = dstPtr + (row * dstStride);
-                            const float* inRow = tempBuffer.data() +
+                            const float* inRow = mappedOut +
                                                  (static_cast<size_t>(row) *
                                                   static_cast<size_t>(width));
                             for (int col = 0; col < width; ++col) {
@@ -1149,11 +1255,6 @@ const VSFrame*
                     }
                     // NOLINTEND
                 }
-
-                for (int i = 0; i < d->num_inputs; ++i) {
-                    stream.memory->destroyBuffer(srcBuffers[i]);
-                }
-                stream.memory->destroyBuffer(dstBuffer);
 
             } catch (const std::exception& e) {
                 for (const auto& frame : src_frames) {
