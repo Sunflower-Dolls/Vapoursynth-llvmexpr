@@ -1,5 +1,4 @@
 #include "VulkanContext.hpp"
-#include <iostream>
 #include <vector>
 #include <volk.h>
 

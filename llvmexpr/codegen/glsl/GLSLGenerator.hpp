@@ -30,8 +30,7 @@
 #include "../../frontend/Tokenizer.hpp"
 
 /**
- * Control flow is handled using a while+switch state machine pattern where
- * each CFG block becomes a case in the switch statement.
+ * Control flow is handled using Reloop-like algorithm.
  *
  * Variable naming conventions:
  *   t_N  - Temporary values (stack simulation)
@@ -73,6 +72,9 @@ class GLSLGenerator {
     // Block -> entry stack variable names (for merge points)
     std::map<int, std::vector<std::string>> block_entry_stack;
 
+    bool debug_reloop = false;
+    void debug_emit_cfg_comment();
+
     void emit(const std::string& code);
     void emit_line(const std::string& code);
     void emit_newline();
@@ -84,7 +86,143 @@ class GLSLGenerator {
     void emit_helper_functions();
     void emit_variable_declarations();
     void emit_main_function();
+    void emit_main_function_state_machine();
+    void emit_main_function_structured();
     void emit_block_code(int block_idx);
+    void emit_store_and_return(const std::string& result_expr);
+
+    struct LoopContext {
+        std::vector<int> header_stack;
+    };
+
+    template <typename Visitor>
+    bool traverse_structure(int start_block, int stop_block,
+                            LoopContext& loop_ctx, Visitor& visitor) const {
+        const auto& cfg_blocks = analysis.getCFGBlocks();
+        const auto& reloop = analysis.getReloopResult();
+
+        std::set<int> visited_in_region;
+        int block = start_block;
+        while (block != stop_block) {
+            if (block < 0 || static_cast<size_t>(block) >= cfg_blocks.size()) {
+                return false;
+            }
+
+            // Loop header handling
+            if (reloop.isLoopHeader(block) &&
+                !is_loop_header_active(block, loop_ctx)) {
+                int follow = -1;
+                auto it = reloop.loop_follow.find(block);
+                if (it != reloop.loop_follow.end()) {
+                    follow = it->second;
+                }
+                if (!visitor.handle_loop(block, follow, loop_ctx)) {
+                    return false;
+                }
+                block = follow;
+                continue;
+            }
+
+            if (visited_in_region.contains(block)) {
+                return false;
+            }
+            visited_in_region.insert(block);
+
+            if (!visitor.visit_block(block)) {
+                return false;
+            }
+
+            auto succ = cfg_blocks[block].successors;
+            // Treat duplicated successors as a single edge.
+            if (succ.size() == 2 && succ[0] == succ[1]) {
+                succ.pop_back();
+            }
+
+            if (succ.empty()) {
+                return visitor.handle_no_successors(block);
+            }
+
+            if (succ.size() == 1) {
+                int next = succ[0];
+                if (next == stop_block) {
+                    return true;
+                }
+                int current_header = loop_ctx.header_stack.empty()
+                                         ? -1
+                                         : loop_ctx.header_stack.back();
+                if (current_header != -1) {
+                    int follow = -1;
+                    auto it = reloop.loop_follow.find(current_header);
+                    if (it != reloop.loop_follow.end()) {
+                        follow = it->second;
+                    }
+                    if (next == current_header || next == follow) {
+                        return visitor.handle_loop_exit_or_continue(
+                            block, next, current_header, follow);
+                    }
+                    if (!reloop.inLoop(current_header, next)) {
+                        return false;
+                    }
+                }
+
+                if (!visitor.handle_simple_edge(block, next)) {
+                    return false;
+                }
+                block = next;
+                continue;
+            }
+
+            if (succ.size() == 2) {
+                int t = succ[0];
+                int f = succ[1];
+                // Conditional goto:
+                //   if (cond > 0) goto t;
+                //   fallthrough continues at f.
+                int join = f;
+
+                if (!visitor.handle_branch(block, t, f, join, stop_block,
+                                           loop_ctx)) {
+                    return false;
+                }
+
+                int current_header = loop_ctx.header_stack.empty()
+                                         ? -1
+                                         : loop_ctx.header_stack.back();
+                if (current_header != -1) {
+                    int follow = -1;
+                    auto it = reloop.loop_follow.find(current_header);
+                    if (it != reloop.loop_follow.end()) {
+                        follow = it->second;
+                    }
+                    if (join == stop_block && stop_block == follow) {
+                        return visitor.handle_loop_break(join);
+                    }
+                }
+
+                block = join;
+                continue;
+            }
+
+            return false;
+        }
+        return true;
+    }
+
+    void emit_structured_from(int start_block, int stop_block,
+                              LoopContext& loop_ctx, bool& ok);
+    void emit_edge_to_block(int target_block, int stop_block,
+                            LoopContext& loop_ctx, bool& ok);
+    void emit_stack_to_entry_slots(int target_block);
+
+    [[nodiscard]] bool can_structure_from(int start_block, int stop_block,
+                                          LoopContext& loop_ctx) const;
+    [[nodiscard]] bool can_edge_to_block(int target_block, int stop_block,
+                                         LoopContext& loop_ctx) const;
+
+    [[nodiscard]] int lca_postdom(int a, int b,
+                                  const std::vector<int>& ipdom) const;
+    [[nodiscard]] bool is_loop_header_active(int header,
+                                             const LoopContext& loop_ctx) const;
 
     void process_token(const Token& token);
 

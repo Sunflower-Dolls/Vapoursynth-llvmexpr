@@ -1,8 +1,13 @@
 #ifndef LLVMEXPR_RUNTIME_VULKAN_VULKANCONTEXT_HPP
 #define LLVMEXPR_RUNTIME_VULKAN_VULKANCONTEXT_HPP
 
+// NOLINTBEGIN(cppcoreguidelines-macro-usage,cppcoreguidelines-macro-to-enum,modernize-macro-to-enum)
+
 #define VK_NO_PROTOTYPES
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
+
+// NOLINTEND(cppcoreguidelines-macro-usage,cppcoreguidelines-macro-to-enum,modernize-macro-to-enum)
+
 #include <mutex>
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan_raii.hpp>

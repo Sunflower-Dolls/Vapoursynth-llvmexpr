@@ -24,6 +24,7 @@
 #include "passes/CoordinateUsagePass.hpp"
 #include "passes/PropWriteTypeSafetyPass.hpp"
 #include "passes/RelAccessAnalysisPass.hpp"
+#include "passes/ReloopPass.hpp"
 #include "passes/VariableUsagePass.hpp"
 
 namespace analysis {
@@ -40,6 +41,7 @@ void ExpressionAnalyzer::analyze() {
     manager.getResult<RelAccessAnalysisPass>();
     manager.getResult<CoordinateUsagePass>();
     manager.getResult<VariableUsagePass>();
+    manager.getResult<ReloopPass>(); // TODO: Only run reloop for VkExpr.
     manager.getResult<PropWriteTypeSafetyPass>();
 }
 

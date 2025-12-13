@@ -31,3 +31,4 @@ subprojects/vulkan-memory-allocator/
 *.vok
 *.vos
 Todo/
+*.glsl

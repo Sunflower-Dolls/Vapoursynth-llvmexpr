@@ -21,7 +21,9 @@
 
 #include "../Sorting.hpp"
 
+#include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <format>
 #include <numbers>
 #include <stdexcept>
@@ -39,6 +41,13 @@ GLSLGenerator::GLSLGenerator(
     for (const auto& var_name : var_result.all_vars) {
         user_variables.insert(var_name);
     }
+
+#ifndef NDEBUG
+    if (const char* env = std::getenv("LLVMEXPR_GLSL_RELOOP_DEBUG")) {
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+        debug_reloop = (env[0] != '\0' && env[0] != '0');
+    }
+#endif
 }
 
 void GLSLGenerator::emit(const std::string& code) { out << code; }
@@ -60,6 +69,37 @@ void GLSLGenerator::dedent() {
     }
 }
 
+void GLSLGenerator::debug_emit_cfg_comment() {
+#ifdef NDEBUG
+    return;
+#else
+    if (!debug_reloop) {
+        return;
+    }
+    const auto& cfg = analysis.getCFGBlocks();
+    const auto& reloop = analysis.getReloopResult();
+
+    emit_line("// --- llvmexpr GLSL Reloop debug ---");
+    emit_line(std::format("// blocks = {}, reloop.success = {}", cfg.size(),
+                          reloop.success ? 1 : 0));
+    for (size_t i = 0; i < cfg.size(); ++i) {
+        const auto& b = cfg[i];
+        std::string succs;
+        for (size_t j = 0; j < b.successors.size(); ++j) {
+            succs += std::format("{}{}", b.successors[j],
+                                 (j + 1 == b.successors.size()) ? "" : ",");
+        }
+        // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
+        int ip = (i < reloop.ipdom.size()) ? reloop.ipdom[i] : -999;
+        emit_line(std::format("// B{}: [{}..{}) succ=[{}] ipdom={}", i,
+                              b.start_token_idx, b.end_token_idx, succs, ip));
+    }
+    for (const auto& [hdr, follow] : reloop.loop_follow) {
+        emit_line(std::format("// loop header {} follow {}", hdr, follow));
+    }
+    emit_line("// --- end reloop debug ---");
+#endif
+}
 std::string GLSLGenerator::new_temp() {
     return std::format("t_{}", temp_counter++);
 }
@@ -314,6 +354,14 @@ void GLSLGenerator::emit_main_function() {
     emit_variable_declarations();
     emit_newline();
 
+    debug_emit_cfg_comment();
+    emit_main_function_structured();
+
+    dedent();
+    emit_line("}");
+}
+
+void GLSLGenerator::emit_main_function_state_machine() {
     const auto& cfg_blocks = analysis.getCFGBlocks();
 
     emit_line("int _state = 0;");
@@ -342,28 +390,14 @@ void GLSLGenerator::emit_main_function() {
             emit_line("_state = -1;");
         } else if (block.successors.size() == 1) {
             int next = block.successors[0];
-            if (block_entry_stack.contains(next)) {
-                const auto& slots = block_entry_stack[next];
-                for (size_t j = 0; j < slots.size() && j < stack.size(); ++j) {
-                    emit_line(std::format("{} = {};", slots[j], stack[j]));
-                }
-            }
+            emit_stack_to_entry_slots(next);
             emit_line(std::format("_state = {};", next));
         } else {
             std::string cond = pop();
             int true_target = block.successors[0];
             int false_target = block.successors[1];
-
-            for (int target : {true_target, false_target}) {
-                if (block_entry_stack.contains(target)) {
-                    const auto& slots = block_entry_stack[target];
-                    for (size_t j = 0; j < slots.size() && j < stack.size();
-                         ++j) {
-                        emit_line(std::format("{} = {};", slots[j], stack[j]));
-                    }
-                }
-            }
-
+            emit_stack_to_entry_slots(true_target);
+            emit_stack_to_entry_slots(false_target);
             emit_line(std::format("_state = ({} > 0.0) ? {} : {};", cond,
                                   true_target, false_target));
         }
@@ -377,16 +411,292 @@ void GLSLGenerator::emit_main_function() {
     emit_line("}"); // end while
     emit_newline();
 
-    // Check for EXIT_NO_WRITE: skip store if result equals EXIT_NAN_PAYLOAD
-    // (0x7FC0E71F)
     emit_line("if (floatBitsToUint(_result) != 0x7FC0E71Fu) {");
     indent();
     emit_line("dst.data[gid] = _result;");
     dedent();
     emit_line("}");
+}
 
+void GLSLGenerator::emit_store_and_return(const std::string& result_expr) {
+    emit_line(std::format("float _result = {};", result_expr));
+    emit_line("if (floatBitsToUint(_result) != 0x7FC0E71Fu) {");
+    indent();
+    emit_line("dst.data[gid] = _result;");
     dedent();
     emit_line("}");
+    emit_line("return;");
+}
+
+bool GLSLGenerator::is_loop_header_active(int header,
+                                          const LoopContext& loop_ctx) const {
+    return std::ranges::find(loop_ctx.header_stack, header) !=
+           loop_ctx.header_stack.end();
+}
+
+bool GLSLGenerator::can_edge_to_block(int target_block, int stop_block,
+                                      LoopContext& loop_ctx) const {
+    if (target_block == stop_block) {
+        return true;
+    }
+
+    const auto& reloop = analysis.getReloopResult();
+    int current_header =
+        loop_ctx.header_stack.empty() ? -1 : loop_ctx.header_stack.back();
+
+    if (current_header != -1) {
+        int follow = -1;
+        auto it = reloop.loop_follow.find(current_header);
+        if (it != reloop.loop_follow.end()) {
+            follow = it->second;
+        }
+        if (target_block == current_header) {
+            return true; // continue
+        }
+        if (target_block == follow || target_block == stop_block) {
+            return true; // break
+        }
+        if (!reloop.inLoop(current_header, target_block)) {
+            return false;
+        }
+    }
+    return can_structure_from(target_block, stop_block, loop_ctx);
+}
+
+bool GLSLGenerator::can_structure_from(int start_block, int stop_block,
+                                       LoopContext& loop_ctx) const {
+    struct Visitor {
+        const GLSLGenerator* gen;
+
+        bool handle_loop(int block, int follow, LoopContext& ctx) const {
+            ctx.header_stack.push_back(block);
+            bool ok = gen->can_structure_from(block, follow, ctx);
+            ctx.header_stack.pop_back();
+            return ok;
+        }
+        [[nodiscard]] bool visit_block(int /*block*/) const { return true; }
+        [[nodiscard]] bool handle_no_successors(int /*block*/) const {
+            return true;
+        }
+        [[nodiscard]] bool handle_loop_exit_or_continue(int /*block*/,
+                                                        int /*next*/,
+                                                        int /*current_header*/,
+                                                        int /*follow*/) const {
+            return true;
+        }
+        [[nodiscard]] bool handle_simple_edge(int /*block*/,
+                                              int /*next*/) const {
+            return true;
+        }
+        bool handle_branch(int /*block*/, int t, int /*f*/, int join,
+                           int /*stop_block*/, LoopContext& ctx) const {
+            auto saved = ctx;
+            return gen->can_edge_to_block(t, join, saved);
+        }
+        [[nodiscard]] bool handle_loop_break(int /*join*/) const {
+            return true;
+        }
+    } visitor{this};
+
+    return traverse_structure(start_block, stop_block, loop_ctx, visitor);
+}
+
+int GLSLGenerator::lca_postdom(int a, int b,
+                               const std::vector<int>& ipdom) const {
+    if (a == -1 || b == -1) {
+        return -1;
+    }
+    std::set<int> ancestors;
+    int x = a;
+    while (x != -1) {
+        ancestors.insert(x);
+        if (x < 0 || static_cast<size_t>(x) >= ipdom.size()) {
+            break;
+        }
+        x = ipdom[x];
+    }
+    x = b;
+    while (x != -1) {
+        if (ancestors.contains(x)) {
+            return x;
+        }
+        if (x < 0 || static_cast<size_t>(x) >= ipdom.size()) {
+            break;
+        }
+        x = ipdom[x];
+    }
+    return -1;
+}
+
+void GLSLGenerator::emit_stack_to_entry_slots(int target_block) {
+    if (!block_entry_stack.contains(target_block)) {
+        return;
+    }
+    const auto& slots = block_entry_stack[target_block];
+    for (size_t j = 0; j < slots.size() && j < stack.size(); ++j) {
+        emit_line(std::format("{} = {};", slots[j], stack[j]));
+    }
+}
+
+void GLSLGenerator::emit_edge_to_block(int target_block, int stop_block,
+                                       LoopContext& loop_ctx, bool& ok) {
+    if (!ok) {
+        return;
+    }
+
+    const auto& reloop = analysis.getReloopResult();
+    int current_header =
+        loop_ctx.header_stack.empty() ? -1 : loop_ctx.header_stack.back();
+
+    if (current_header != -1) {
+        int follow = -1;
+        auto it = reloop.loop_follow.find(current_header);
+        if (it != reloop.loop_follow.end()) {
+            follow = it->second;
+        }
+
+        // Jumping to the stop block inside a loop exits the loop.
+        if (target_block == stop_block && stop_block == follow) {
+            emit_stack_to_entry_slots(stop_block);
+            emit_line("break;");
+            return;
+        }
+
+        if (target_block == current_header) {
+            emit_stack_to_entry_slots(target_block);
+            emit_line("continue;");
+            return;
+        }
+        if (target_block == follow || target_block == stop_block) {
+            emit_stack_to_entry_slots((target_block == follow) ? follow
+                                                               : stop_block);
+            emit_line("break;");
+            return;
+        }
+        if (!reloop.inLoop(current_header, target_block)) {
+            ok = false;
+            return;
+        }
+    }
+
+    if (target_block == stop_block) {
+        emit_stack_to_entry_slots(target_block);
+        return;
+    }
+
+    emit_stack_to_entry_slots(target_block);
+    emit_structured_from(target_block, stop_block, loop_ctx, ok);
+}
+
+void GLSLGenerator::emit_structured_from(int start_block, int stop_block,
+                                         LoopContext& loop_ctx, bool& ok) {
+    if (!ok) {
+        return;
+    }
+
+    struct Visitor {
+        GLSLGenerator* gen;
+        bool& ok;
+
+        bool handle_loop(int block, int follow, LoopContext& ctx) const {
+            gen->emit_line("while (true) {");
+            gen->indent();
+            ctx.header_stack.push_back(block);
+            gen->emit_structured_from(block, follow, ctx, ok);
+            ctx.header_stack.pop_back();
+            gen->dedent();
+            gen->emit_line("}");
+            return ok;
+        }
+        [[nodiscard]] bool visit_block(int block) const {
+            if (gen->block_entry_stack.contains(block)) {
+                gen->stack = gen->block_entry_stack[block];
+            }
+            gen->emit_block_code(block);
+            return true;
+        }
+        [[nodiscard]] bool handle_no_successors(int /*block*/) const {
+            std::string result_expr = gen->stack.empty() ? "0.0" : gen->pop();
+            gen->emit_store_and_return(result_expr);
+            return true;
+        }
+        [[nodiscard]] bool handle_loop_exit_or_continue(int /*block*/, int next,
+                                                        int current_header,
+                                                        int follow) const {
+            if (next == current_header) {
+                gen->emit_stack_to_entry_slots(next);
+                gen->emit_line("continue;");
+                return true;
+            }
+            if (next == follow) {
+                gen->emit_stack_to_entry_slots(next);
+                gen->emit_line("break;");
+                return true;
+            }
+            ok = false;
+            return false;
+        }
+        [[nodiscard]] bool handle_simple_edge(int /*block*/, int next) const {
+            gen->emit_stack_to_entry_slots(next);
+            return true;
+        }
+        bool handle_branch(int /*block*/, int t, int /*f*/, int join,
+                           int /*stop_block*/, LoopContext& ctx) const {
+            std::string cond = gen->pop();
+            gen->emit_line(std::format("if ({} > 0.0) {{", cond));
+            gen->indent();
+            auto saved_stack = gen->stack;
+            gen->emit_edge_to_block(t, join, ctx, ok);
+            gen->stack = saved_stack; // restore for fallthrough path
+            gen->dedent();
+            gen->emit_line("}");
+            return ok;
+        }
+        [[nodiscard]] bool handle_loop_break(int join) const {
+            gen->emit_stack_to_entry_slots(join);
+            gen->emit_line("break;");
+            return true;
+        }
+    } visitor{.gen = this, .ok = ok};
+
+    if (!traverse_structure(start_block, stop_block, loop_ctx, visitor)) {
+        ok = false;
+    }
+}
+
+void GLSLGenerator::emit_main_function_structured() {
+    LoopContext loop_ctx;
+    bool ok = analysis.getReloopResult().success &&
+              can_structure_from(0, -1, loop_ctx);
+
+    if (!ok) {
+#ifndef NDEBUG
+        if (debug_reloop) {
+            emit_line("// reloop: preflight can_structure_from() failed. "
+                      "falling back to state machine");
+        }
+#endif
+        emit_main_function_state_machine();
+        return;
+    }
+
+    loop_ctx = {};
+    bool emit_ok = true;
+    emit_structured_from(0, -1, loop_ctx, emit_ok);
+
+    // Should be unreachable
+    // Fallback: structuring unexpectedly failed at emit time"
+    // TODO: Raise a exception instead
+    if (!emit_ok) {
+        emit_newline();
+#ifndef NDEBUG
+        if (debug_reloop) {
+            emit_line("// reloop: unexpected emit-time failure. falling back "
+                      "to state machine");
+        }
+#endif
+        emit_main_function_state_machine();
+    }
 }
 
 void GLSLGenerator::emit_block_code(int block_idx) {
