@@ -26,6 +26,7 @@ You should have received a copy of the GNU General Public License
 along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
 """
 
+import random
 import pytest
 import vapoursynth as vs
 from conftest import get_expr_func
