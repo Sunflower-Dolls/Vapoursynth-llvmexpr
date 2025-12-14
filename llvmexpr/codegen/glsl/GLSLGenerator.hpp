@@ -21,6 +21,7 @@
 #define LLVMEXPR_GLSL_GENERATOR_HPP
 
 #include <map>
+#include <optional>
 #include <set>
 #include <sstream>
 #include <string>
@@ -72,8 +73,13 @@ class GLSLGenerator {
     // Block -> entry stack variable names (for merge points)
     std::map<int, std::vector<std::string>> block_entry_stack;
 
+#ifndef NDEBUG
     bool debug_reloop = false;
+#endif
     void debug_emit_cfg_comment();
+
+    int break_flag_counter = 0;
+    std::map<int, std::string> loop_break_flags; // loop header -> bool var
 
     void emit(const std::string& code);
     void emit_line(const std::string& code);
@@ -95,10 +101,21 @@ class GLSLGenerator {
         std::vector<int> header_stack;
     };
 
+    [[nodiscard]] const std::vector<analysis::CFGBlock>&
+    get_codegen_cfg_blocks() const;
+    [[nodiscard]] const std::vector<int>& get_codegen_stack_depth_in() const;
+    [[nodiscard]] int compute_branch_join(int t, int f, int stop_block) const;
+
+    [[nodiscard]] std::string get_loop_break_flag(int header);
+    [[nodiscard]] std::optional<int>
+    find_enclosing_loop_for_follow(int target_block,
+                                   const LoopContext& loop_ctx) const;
+    void emit_unwind_break_if_needed(const LoopContext& loop_ctx);
+
     template <typename Visitor>
     bool traverse_structure(int start_block, int stop_block,
                             LoopContext& loop_ctx, Visitor& visitor) const {
-        const auto& cfg_blocks = analysis.getCFGBlocks();
+        const auto& cfg_blocks = get_codegen_cfg_blocks();
         const auto& reloop = analysis.getReloopResult();
 
         std::set<int> visited_in_region;
@@ -144,9 +161,6 @@ class GLSLGenerator {
 
             if (succ.size() == 1) {
                 int next = succ[0];
-                if (next == stop_block) {
-                    return true;
-                }
                 int current_header = loop_ctx.header_stack.empty()
                                          ? -1
                                          : loop_ctx.header_stack.back();
@@ -161,8 +175,12 @@ class GLSLGenerator {
                             block, next, current_header, follow);
                     }
                     if (!reloop.inLoop(current_header, next)) {
-                        return false;
+                        return visitor.handle_nonlocal_edge(
+                            block, next, stop_block, loop_ctx);
                     }
+                }
+                if (next == stop_block) {
+                    return true;
                 }
 
                 if (!visitor.handle_simple_edge(block, next)) {
@@ -178,7 +196,7 @@ class GLSLGenerator {
                 // Conditional goto:
                 //   if (cond > 0) goto t;
                 //   fallthrough continues at f.
-                int join = f;
+                int join = compute_branch_join(t, f, stop_block);
 
                 if (!visitor.handle_branch(block, t, f, join, stop_block,
                                            loop_ctx)) {

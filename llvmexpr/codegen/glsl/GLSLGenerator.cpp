@@ -76,7 +76,7 @@ void GLSLGenerator::debug_emit_cfg_comment() {
     if (!debug_reloop) {
         return;
     }
-    const auto& cfg = analysis.getCFGBlocks();
+    const auto& cfg = get_codegen_cfg_blocks();
     const auto& reloop = analysis.getReloopResult();
 
     emit_line("// --- llvmexpr GLSL Reloop debug ---");
@@ -100,6 +100,84 @@ void GLSLGenerator::debug_emit_cfg_comment() {
     emit_line("// --- end reloop debug ---");
 #endif
 }
+
+const std::vector<analysis::CFGBlock>&
+GLSLGenerator::get_codegen_cfg_blocks() const {
+    const auto& reloop = analysis.getReloopResult();
+    if (!reloop.structured_cfg_blocks.empty()) {
+        return reloop.structured_cfg_blocks;
+    }
+    return analysis.getCFGBlocks();
+}
+
+const std::vector<int>& GLSLGenerator::get_codegen_stack_depth_in() const {
+    const auto& reloop = analysis.getReloopResult();
+    if (!reloop.structured_stack_depth_in.empty()) {
+        return reloop.structured_stack_depth_in;
+    }
+    return analysis.getStackDepthIn();
+}
+
+int GLSLGenerator::compute_branch_join(int t, int f, int stop_block) const {
+    const auto& reloop = analysis.getReloopResult();
+    int join = lca_postdom(t, f, reloop.ipdom);
+    if (join == -1 && stop_block != -1) {
+        join = stop_block;
+    }
+    return join;
+}
+
+std::string GLSLGenerator::get_loop_break_flag(int header) {
+    auto it = loop_break_flags.find(header);
+    if (it != loop_break_flags.end()) {
+        return it->second;
+    }
+    std::string name = std::format("_brk_{}", break_flag_counter++);
+    loop_break_flags.emplace(header, name);
+    return name;
+}
+
+std::optional<int> GLSLGenerator::find_enclosing_loop_for_follow(
+    int target_block, const LoopContext& loop_ctx) const {
+    const auto& reloop = analysis.getReloopResult();
+    for (auto it = loop_ctx.header_stack.rbegin();
+         it != loop_ctx.header_stack.rend(); ++it) {
+        int header = *it;
+        auto fit = reloop.loop_follow.find(header);
+        if (fit != reloop.loop_follow.end() && fit->second == target_block) {
+            return header;
+        }
+    }
+    return std::nullopt;
+}
+
+void GLSLGenerator::emit_unwind_break_if_needed(const LoopContext& loop_ctx) {
+    if (loop_ctx.header_stack.empty()) {
+        return;
+    }
+
+    std::string cond;
+    for (int header : loop_ctx.header_stack) {
+        auto it = loop_break_flags.find(header);
+        if (it == loop_break_flags.end()) {
+            continue;
+        }
+        if (!cond.empty()) {
+            cond += " || ";
+        }
+        cond += it->second;
+    }
+    if (cond.empty()) {
+        return;
+    }
+
+    emit_line(std::format("if ({}) {{", cond));
+    indent();
+    emit_line("break;");
+    dedent();
+    emit_line("}");
+}
+
 std::string GLSLGenerator::new_temp() {
     return std::format("t_{}", temp_counter++);
 }
@@ -231,6 +309,8 @@ std::string GLSLGenerator::generate() {
     indent_level = 0;
     temp_counter = 0;
     slot_counter = 0;
+    break_flag_counter = 0;
+    loop_break_flags.clear();
     stack.clear();
 
     emit_header();
@@ -317,10 +397,20 @@ void GLSLGenerator::emit_variable_declarations() {
     }
 
     // Stack slot variables for merge points
-    const auto& cfg_blocks = analysis.getCFGBlocks();
-    const auto& stack_depth_in = analysis.getStackDepthIn();
+    const auto& cfg_blocks = get_codegen_cfg_blocks();
+    const auto& stack_depth_in = get_codegen_stack_depth_in();
+    const auto& reloop = analysis.getReloopResult();
+
+    std::set<int> force_slots;
+    for (const auto& [header, follow] : reloop.loop_follow) {
+        if (follow != -1) {
+            force_slots.insert(follow);
+        }
+    }
+
     for (size_t i = 0; i < cfg_blocks.size(); ++i) {
-        if (cfg_blocks[i].predecessors.size() > 1) {
+        if (cfg_blocks[i].predecessors.size() > 1 ||
+            force_slots.contains((int)i)) {
             int depth = stack_depth_in[i];
             std::vector<std::string> slots;
             for (int j = 0; j < depth; ++j) {
@@ -362,7 +452,7 @@ void GLSLGenerator::emit_main_function() {
 }
 
 void GLSLGenerator::emit_main_function_state_machine() {
-    const auto& cfg_blocks = analysis.getCFGBlocks();
+    const auto& cfg_blocks = get_codegen_cfg_blocks();
 
     emit_line("int _state = 0;");
     emit_line("float _result = 0.0;");
@@ -436,13 +526,28 @@ bool GLSLGenerator::is_loop_header_active(int header,
 
 bool GLSLGenerator::can_edge_to_block(int target_block, int stop_block,
                                       LoopContext& loop_ctx) const {
-    if (target_block == stop_block) {
-        return true;
-    }
-
     const auto& reloop = analysis.getReloopResult();
     int current_header =
         loop_ctx.header_stack.empty() ? -1 : loop_ctx.header_stack.back();
+
+    if (target_block == stop_block) {
+        if (current_header == -1) {
+            return true;
+        }
+        int follow = -1;
+        auto it = reloop.loop_follow.find(current_header);
+        if (it != reloop.loop_follow.end()) {
+            follow = it->second;
+        }
+        if (stop_block == follow) {
+            return true;
+        }
+        if (reloop.inLoop(current_header, stop_block)) {
+            return true;
+        }
+        // Leaving to an outer follow via break-flag lowering.
+        return find_enclosing_loop_for_follow(stop_block, loop_ctx).has_value();
+    }
 
     if (current_header != -1) {
         int follow = -1;
@@ -453,11 +558,13 @@ bool GLSLGenerator::can_edge_to_block(int target_block, int stop_block,
         if (target_block == current_header) {
             return true; // continue
         }
-        if (target_block == follow || target_block == stop_block) {
+        if (target_block == follow) {
             return true; // break
         }
         if (!reloop.inLoop(current_header, target_block)) {
-            return false;
+            // Multi-level break to an outer loop follow.
+            return find_enclosing_loop_for_follow(target_block, loop_ctx)
+                .has_value();
         }
     }
     return can_structure_from(target_block, stop_block, loop_ctx);
@@ -488,10 +595,18 @@ bool GLSLGenerator::can_structure_from(int start_block, int stop_block,
                                               int /*next*/) const {
             return true;
         }
-        bool handle_branch(int /*block*/, int t, int /*f*/, int join,
-                           int /*stop_block*/, LoopContext& ctx) const {
+        [[nodiscard]] bool handle_nonlocal_edge(int /*block*/, int next,
+                                                int stop_block,
+                                                LoopContext& ctx) const {
             auto saved = ctx;
-            return gen->can_edge_to_block(t, join, saved);
+            return gen->can_edge_to_block(next, stop_block, saved);
+        }
+        bool handle_branch(int /*block*/, int t, int f, int join,
+                           int /*stop_block*/, LoopContext& ctx) const {
+            auto saved_t = ctx;
+            auto saved_f = ctx;
+            return gen->can_edge_to_block(t, join, saved_t) &&
+                   gen->can_edge_to_block(f, join, saved_f);
         }
         [[nodiscard]] bool handle_loop_break(int /*join*/) const {
             return true;
@@ -567,14 +682,21 @@ void GLSLGenerator::emit_edge_to_block(int target_block, int stop_block,
             emit_line("continue;");
             return;
         }
-        if (target_block == follow || target_block == stop_block) {
-            emit_stack_to_entry_slots((target_block == follow) ? follow
-                                                               : stop_block);
+        if (target_block == follow) {
+            emit_stack_to_entry_slots(follow);
             emit_line("break;");
             return;
         }
         if (!reloop.inLoop(current_header, target_block)) {
-            ok = false;
+            // Multi-level break to an outer loop follow.
+            auto outer = find_enclosing_loop_for_follow(target_block, loop_ctx);
+            if (!outer.has_value()) {
+                ok = false;
+                return;
+            }
+            emit_stack_to_entry_slots(target_block);
+            emit_line(std::format("{} = true;", get_loop_break_flag(*outer)));
+            emit_line("break;");
             return;
         }
     }
@@ -599,6 +721,8 @@ void GLSLGenerator::emit_structured_from(int start_block, int stop_block,
         bool& ok;
 
         bool handle_loop(int block, int follow, LoopContext& ctx) const {
+            std::string flag = gen->get_loop_break_flag(block);
+            gen->emit_line(std::format("bool {} = false;", flag));
             gen->emit_line("while (true) {");
             gen->indent();
             ctx.header_stack.push_back(block);
@@ -606,6 +730,7 @@ void GLSLGenerator::emit_structured_from(int start_block, int stop_block,
             ctx.header_stack.pop_back();
             gen->dedent();
             gen->emit_line("}");
+            gen->emit_unwind_break_if_needed(ctx);
             return ok;
         }
         [[nodiscard]] bool visit_block(int block) const {
@@ -640,16 +765,51 @@ void GLSLGenerator::emit_structured_from(int start_block, int stop_block,
             gen->emit_stack_to_entry_slots(next);
             return true;
         }
-        bool handle_branch(int /*block*/, int t, int /*f*/, int join,
+        [[nodiscard]] bool handle_nonlocal_edge(int /*block*/, int next,
+                                                int stop_block,
+                                                LoopContext& ctx) const {
+            gen->emit_edge_to_block(next, stop_block, ctx, ok);
+            return ok;
+        }
+        bool handle_branch(int /*block*/, int t, int f, int join,
                            int /*stop_block*/, LoopContext& ctx) const {
             std::string cond = gen->pop();
+            auto base_stack = gen->stack; // stack after popping condition
+
+            if (join == f) {
+                gen->emit_line(std::format("if ({} > 0.0) {{", cond));
+                gen->indent();
+                gen->emit_edge_to_block(t, join, ctx, ok);
+                gen->dedent();
+                gen->emit_line("}");
+                gen->stack = base_stack;
+                gen->emit_unwind_break_if_needed(ctx);
+                return ok;
+            }
+
+            if (join == t) {
+                gen->emit_line(std::format("if (!({} > 0.0)) {{", cond));
+                gen->indent();
+                gen->emit_edge_to_block(f, join, ctx, ok);
+                gen->dedent();
+                gen->emit_line("}");
+                gen->stack = base_stack;
+                gen->emit_unwind_break_if_needed(ctx);
+                return ok;
+            }
+
             gen->emit_line(std::format("if ({} > 0.0) {{", cond));
             gen->indent();
-            auto saved_stack = gen->stack;
             gen->emit_edge_to_block(t, join, ctx, ok);
-            gen->stack = saved_stack; // restore for fallthrough path
+            gen->dedent();
+            gen->emit_line("} else {");
+            gen->indent();
+            gen->stack = base_stack;
+            gen->emit_edge_to_block(f, join, ctx, ok);
             gen->dedent();
             gen->emit_line("}");
+            gen->stack = base_stack;
+            gen->emit_unwind_break_if_needed(ctx);
             return ok;
         }
         [[nodiscard]] bool handle_loop_break(int join) const {
@@ -700,7 +860,7 @@ void GLSLGenerator::emit_main_function_structured() {
 }
 
 void GLSLGenerator::emit_block_code(int block_idx) {
-    const auto& cfg_blocks = analysis.getCFGBlocks();
+    const auto& cfg_blocks = get_codegen_cfg_blocks();
     const auto& block = cfg_blocks[block_idx];
 
     for (int i = block.start_token_idx; i < block.end_token_idx; ++i) {

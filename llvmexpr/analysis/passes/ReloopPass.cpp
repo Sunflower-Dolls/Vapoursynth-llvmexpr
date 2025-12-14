@@ -20,6 +20,7 @@
 #include "ReloopPass.hpp"
 #include "../framework/AnalysisManager.hpp"
 #include "BlockAnalysisPass.hpp"
+#include "StackSafetyPass.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -94,15 +95,14 @@ std::vector<int> compute_reachable(const std::vector<CFGBlock>& cfg) {
     return reachable;
 }
 
-void compute_reducibility(ReloopResult& result,
-                          const std::vector<CFGBlock>& cfg,
-                          const std::vector<int>& reachable) {
-    int n = (int)cfg.size();
-    if (n == 0) {
-        result.reducible = true;
-        return;
-    }
+struct SCCDecomposition {
+    std::vector<int> comp;               // node -> component id, -1 unreachable
+    std::vector<std::vector<int>> nodes; // component id -> nodes
+};
 
+SCCDecomposition compute_scc_kosaraju(const std::vector<CFGBlock>& cfg,
+                                      const std::vector<int>& reachable) {
+    int n = (int)cfg.size();
     std::vector<std::vector<int>> g(n);
     std::vector<std::vector<int>> gr(n);
     for (int u = 0; u < n; ++u) {
@@ -117,7 +117,6 @@ void compute_reducibility(ReloopResult& result,
         }
     }
 
-    // Kosaraju SCC
     std::vector<int> order;
     order.reserve((size_t)n);
     std::vector<int> vis(n, 0);
@@ -168,53 +167,283 @@ void compute_reducibility(ReloopResult& result,
 
     std::vector<std::vector<int>> nodes((size_t)compCount);
     for (int i = 0; i < n; ++i) {
-        if (reachable[i] == 0) {
+        if (reachable[i] == 0 || comp[i] < 0) {
             continue;
         }
-        if (comp[i] >= 0) {
-            nodes[(size_t)comp[i]].push_back(i);
+        nodes[(size_t)comp[i]].push_back(i);
+    }
+
+    return {.comp = std::move(comp), .nodes = std::move(nodes)};
+}
+
+bool scc_is_cyclic(const std::vector<CFGBlock>& cfg,
+                   const std::vector<int>& reachable,
+                   const std::vector<int>& scc_nodes) {
+    if (scc_nodes.empty()) {
+        return false;
+    }
+    if (scc_nodes.size() > 1) {
+        return true;
+    }
+    int u = scc_nodes[0];
+    if (reachable[u] == 0) {
+        return false;
+    }
+    return std::ranges::any_of(cfg[u].successors,
+                               [u](int v) { return v == u; });
+}
+
+std::vector<int> scc_entry_nodes(const std::vector<CFGBlock>& cfg,
+                                 const std::vector<int>& reachable,
+                                 const SCCDecomposition& scc, int cid) {
+    std::vector<int> entry;
+    for (int v : scc.nodes[(size_t)cid]) {
+        if (reachable[v] == 0) {
+            continue;
+        }
+        for (int p : cfg[v].predecessors) {
+            if (p < 0 || static_cast<size_t>(p) >= cfg.size()) {
+                continue;
+            }
+            if (reachable[p] == 0) {
+                continue;
+            }
+            if (scc.comp[p] != cid) {
+                entry.push_back(v);
+                break;
+            }
+        }
+    }
+    std::ranges::sort(entry);
+    auto ret = std::ranges::unique(entry);
+    entry.erase(ret.begin(), ret.end());
+    return entry;
+}
+
+bool check_reducible(const std::vector<CFGBlock>& cfg,
+                     const std::vector<int>& reachable) {
+    int n = (int)cfg.size();
+    if (n == 0) {
+        return true;
+    }
+
+    auto scc = compute_scc_kosaraju(cfg, reachable);
+    for (size_t cid = 0; cid < scc.nodes.size(); ++cid) {
+        const auto& nodes = scc.nodes[cid];
+        if (!scc_is_cyclic(cfg, reachable, nodes)) {
+            continue;
+        }
+        // Reducible iff the SCC has at most one entry *node*.
+        auto entry_nodes = scc_entry_nodes(cfg, reachable, scc, (int)cid);
+        if (entry_nodes.size() > 1) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void rebuild_predecessors(std::vector<CFGBlock>& cfg) {
+    for (auto& b : cfg) {
+        b.predecessors.clear();
+    }
+    for (size_t u = 0; u < cfg.size(); ++u) {
+        for (int v : cfg[u].successors) {
+            if (v >= 0 && static_cast<size_t>(v) < cfg.size()) {
+                cfg[(size_t)v].predecessors.push_back((int)u);
+            }
+        }
+    }
+}
+
+bool node_split_make_reducible(std::vector<CFGBlock>& cfg,
+                               std::vector<int>& origin_map,
+                               size_t max_blocks) {
+    if (cfg.empty()) {
+        return false;
+    }
+
+    bool changed_any = false;
+    // Iterate because splitting one SCC can expose/alter others.
+    // Bound iterations to avoid pathological cases.
+    // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
+    for (int iter = 0; iter < 128; ++iter) {
+        rebuild_predecessors(cfg);
+        auto reachable = compute_reachable(cfg);
+        auto scc = compute_scc_kosaraju(cfg, reachable);
+
+        bool changed_this_iter = false;
+        for (size_t cid = 0; cid < scc.nodes.size(); ++cid) {
+            const auto& comp_nodes = scc.nodes[cid];
+            if (!scc_is_cyclic(cfg, reachable, comp_nodes)) {
+                continue;
+            }
+            auto entry_nodes = scc_entry_nodes(cfg, reachable, scc, (int)cid);
+            if (entry_nodes.size() <= 1) {
+                continue;
+            }
+
+            // Heuristic: keep the first entry node as the "primary" entry of
+            // the original SCC, and duplicate the SCC for each other entry.
+            int primary_entry = entry_nodes.front();
+            (void)primary_entry;
+
+            std::vector<uint8_t> in_component(cfg.size(), 0);
+            for (int v : comp_nodes) {
+                if (v >= 0 && static_cast<size_t>(v) < in_component.size()) {
+                    in_component[(size_t)v] = 1;
+                }
+            }
+
+            int original_node_count = (int)cfg.size();
+
+            for (size_t ei = 1; ei < entry_nodes.size(); ++ei) {
+                int entry = entry_nodes[ei];
+
+                if (cfg.size() + comp_nodes.size() > max_blocks) {
+                    return changed_any;
+                }
+
+                std::vector<int> clone_of((size_t)original_node_count, -1);
+
+                // Create clones for all nodes in this SCC.
+                for (int v : comp_nodes) {
+                    CFGBlock nb = cfg[(size_t)v];
+                    nb.successors.clear();
+                    nb.predecessors.clear();
+
+                    int new_idx = (int)cfg.size();
+                    cfg.push_back(std::move(nb));
+                    origin_map.push_back(origin_map[(size_t)v]);
+                    if (v >= 0 && v < original_node_count) {
+                        clone_of[(size_t)v] = new_idx;
+                    }
+                }
+
+                // Wire clone successors (internal edges are remapped to clones,
+                // external edges keep their target).
+                for (int v : comp_nodes) {
+                    int v_clone = clone_of[(size_t)v];
+                    if (v_clone < 0) {
+                        continue;
+                    }
+                    for (int s : cfg[(size_t)v].successors) {
+                        if (s >= 0 && s < original_node_count &&
+                            in_component[(size_t)s] != 0) {
+                            cfg[(size_t)v_clone].successors.push_back(
+                                clone_of[(size_t)s]);
+                        } else {
+                            cfg[(size_t)v_clone].successors.push_back(s);
+                        }
+                    }
+                }
+
+                // Redirect all *external* incoming edges to `entry` to the clone.
+                int entry_clone = clone_of[(size_t)entry];
+                for (int p = 0; p < original_node_count; ++p) {
+                    if (reachable[(size_t)p] == 0) {
+                        continue;
+                    }
+                    if (in_component[(size_t)p] != 0) {
+                        continue; // keep SCC-internal edges pointing to original
+                    }
+                    for (int& s : cfg[(size_t)p].successors) {
+                        if (s == entry) {
+                            s = entry_clone;
+                        }
+                    }
+                }
+            }
+
+            changed_this_iter = true;
+            changed_any = true;
+            break; // CFG changed; restart SCC discovery
+        }
+
+        if (!changed_this_iter) {
+            break;
+        }
+    }
+    return changed_any;
+}
+
+bool tail_duplicate_trivial_joins(std::vector<CFGBlock>& cfg,
+                                  std::vector<int>& origin_map,
+                                  size_t max_blocks) {
+    if (cfg.empty()) {
+        return false;
+    }
+
+    rebuild_predecessors(cfg);
+    auto reachable = compute_reachable(cfg);
+    auto scc = compute_scc_kosaraju(cfg, reachable);
+
+    std::vector<uint8_t> cyclic(cfg.size(), 0);
+    for (const auto& comp_nodes : scc.nodes) {
+        if (!scc_is_cyclic(cfg, reachable, comp_nodes)) {
+            continue;
+        }
+        for (int v : comp_nodes) {
+            if (v >= 0 && static_cast<size_t>(v) < cyclic.size()) {
+                cyclic[(size_t)v] = 1;
+            }
         }
     }
 
-    for (int cid = 0; cid < compCount; ++cid) {
-        const auto& scc = nodes[(size_t)cid];
-        if (scc.empty()) {
+    bool changed = false;
+    int original_n = (int)cfg.size();
+
+    // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
+    constexpr int kMaxTrivialTokens = 6;
+
+    for (int c = 1; c < original_n; ++c) {
+        if (reachable[(size_t)c] == 0) {
+            continue;
+        }
+        if (cyclic[(size_t)c] != 0) {
+            continue;
+        }
+        if (cfg[(size_t)c].successors.size() > 1) {
+            continue;
+        }
+        if (cfg[(size_t)c].predecessors.size() < 2) {
+            continue;
+        }
+        int tok_count =
+            cfg[(size_t)c].end_token_idx - cfg[(size_t)c].start_token_idx;
+        if (tok_count > kMaxTrivialTokens) {
             continue;
         }
 
-        bool cyclic = false;
-        if (scc.size() > 1) {
-            cyclic = true;
-        } else {
-            int u = scc[0];
-            for (int v : g[u]) {
-                if (v == u) {
-                    cyclic = true;
-                    break;
+        auto preds = cfg[(size_t)c].predecessors;
+        std::ranges::sort(preds);
+        auto ret = std::ranges::unique(preds);
+        preds.erase(ret.begin(), ret.end());
+
+        for (int p : preds) {
+            if (cfg.size() + 1 > max_blocks) {
+                rebuild_predecessors(cfg);
+                return changed;
+            }
+
+            CFGBlock clone = cfg[(size_t)c];
+            clone.predecessors.clear();
+
+            int clone_idx = (int)cfg.size();
+            cfg.push_back(std::move(clone));
+            origin_map.push_back(origin_map[(size_t)c]);
+
+            for (int& s : cfg[(size_t)p].successors) {
+                if (s == c) {
+                    s = clone_idx;
                 }
             }
-        }
-        if (!cyclic) {
-            continue;
         }
 
-        std::set<int> sccSet(scc.begin(), scc.end());
-        std::set<int> entryFrom;
-        for (int v : scc) {
-            for (int p : gr[v]) {
-                if (!sccSet.contains(p)) {
-                    entryFrom.insert(p);
-                }
-            }
-        }
-        if (entryFrom.size() > 1) {
-            result.reducible = false;
-            result.success = false;
-            return;
-        }
+        changed = true;
     }
 
-    result.reducible = true;
+    rebuild_predecessors(cfg);
+    return changed;
 }
 
 std::vector<Bitset> compute_dominators(const std::vector<CFGBlock>& cfg,
@@ -486,24 +715,80 @@ ReloopPass::Result ReloopPass::run(const std::vector<Token>& /*unused*/,
                                    AnalysisManager& am) {
     const auto& block_result = am.getResult<BlockAnalysisPass>();
     const auto& cfg = block_result.cfg_blocks;
+    const auto& stack_safety = am.getResult<StackSafetyPass>();
 
     Result result;
-    result.ipdom.assign(cfg.size(), -1);
-    result.innermost_loop_header.assign(cfg.size(), -1);
 
     if (cfg.empty()) {
         return result;
     }
 
-    const auto reachable = compute_reachable(cfg);
-    compute_reducibility(result, cfg, reachable);
-    const auto dom = compute_dominators(cfg, reachable);
-    const auto pdom = compute_postdominators(cfg, reachable);
+    const auto reachable0 = compute_reachable(cfg);
+    const bool reducible0 = check_reducible(cfg, reachable0);
 
-    int n = (int)cfg.size();
+    const std::vector<CFGBlock>* analysis_cfg = &cfg;
+    std::vector<CFGBlock> structured_cfg;
+    std::vector<int> origin_map;
+    bool transformed = false;
+
+    // Build a mutable CFG copy if any transformation is needed.
+    if (!reducible0) {
+        transformed = true;
+    } else {
+        // Try to simplify joins even for reducible graphs.
+        transformed = true;
+    }
+
+    if (transformed) {
+        structured_cfg = cfg;
+        origin_map.resize(cfg.size());
+        for (size_t i = 0; i < cfg.size(); ++i) {
+            origin_map[i] = (int)i;
+        }
+
+        // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
+        size_t max_blocks = std::max<size_t>(cfg.size() * 8, 256);
+        bool tail_changed = tail_duplicate_trivial_joins(
+            structured_cfg, origin_map, max_blocks);
+        bool split_changed = false;
+        if (!reducible0) {
+            split_changed = node_split_make_reducible(structured_cfg,
+                                                      origin_map, max_blocks);
+        }
+
+        transformed = tail_changed || split_changed;
+
+        if (transformed) {
+            analysis_cfg = &structured_cfg;
+
+            result.structured_cfg_blocks = structured_cfg;
+            result.structured_block_origin = origin_map;
+            result.structured_stack_depth_in.resize(structured_cfg.size(), -1);
+            for (size_t i = 0; i < structured_cfg.size(); ++i) {
+                int orig = origin_map[i];
+                if (orig >= 0 && static_cast<size_t>(orig) <
+                                     stack_safety.stack_depth_in.size()) {
+                    result.structured_stack_depth_in[i] =
+                        stack_safety.stack_depth_in[(size_t)orig];
+                }
+            }
+        }
+    }
+
+    const auto reachable = compute_reachable(*analysis_cfg);
+    result.reducible = check_reducible(*analysis_cfg, reachable);
+    result.success = result.reducible;
+
+    result.ipdom.assign(analysis_cfg->size(), -1);
+    result.innermost_loop_header.assign(analysis_cfg->size(), -1);
+
+    const auto dom = compute_dominators(*analysis_cfg, reachable);
+    const auto pdom = compute_postdominators(*analysis_cfg, reachable);
+
+    int n = (int)analysis_cfg->size();
     result.ipdom = compute_ipdom_vector(pdom, n, reachable);
 
-    compute_natural_loops(result, cfg, reachable, dom);
+    compute_natural_loops(result, *analysis_cfg, reachable, dom);
     compute_loop_follow(result);
     compute_innermost_loop_header(result, reachable);
 

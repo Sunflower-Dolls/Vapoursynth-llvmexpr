@@ -20,6 +20,7 @@
 #ifndef LLVMEXPR_ANALYSIS_RELOOP_PASS_HPP
 #define LLVMEXPR_ANALYSIS_RELOOP_PASS_HPP
 
+#include "../framework/DataStructures.hpp"
 #include "../framework/Pass.hpp"
 #include <map>
 #include <set>
@@ -45,6 +46,18 @@ struct ReloopResult {
 
     // For each block, the innermost loop header containing it, or -1.
     std::vector<int> innermost_loop_header;
+
+    // Optional CFG rewrite for codegen (node splitting / tail duplication).
+    // If empty, codegen should use the original CFG from BlockAnalysisPass.
+    std::vector<CFGBlock> structured_cfg_blocks;
+
+    // Map: structured block index -> original block index.
+    // Only valid when structured_cfg_blocks is non-empty.
+    std::vector<int> structured_block_origin;
+
+    // Stack depth at entry for structured_cfg_blocks.
+    // Only valid when structured_cfg_blocks is non-empty.
+    std::vector<int> structured_stack_depth_in;
 
     [[nodiscard]] bool isLoopHeader(int block_idx) const {
         return loop_body.contains(block_idx);
