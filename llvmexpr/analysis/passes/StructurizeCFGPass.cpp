@@ -728,50 +728,35 @@ StructurizeCFGPass::run(const std::vector<Token>& /*unused*/,
     const bool reducible0 = check_reducible(cfg, reachable0);
 
     const std::vector<CFGBlock>* analysis_cfg = &cfg;
-    std::vector<CFGBlock> structured_cfg;
-    std::vector<int> origin_map;
-    bool transformed = false;
 
-    // Build a mutable CFG copy if any transformation is needed.
-    if (!reducible0) {
-        transformed = true;
-    } else {
-        // Try to simplify joins even for reducible graphs.
-        transformed = true;
+    std::vector<CFGBlock> work_cfg = cfg;
+    std::vector<int> origin_map(cfg.size());
+    for (size_t i = 0; i < cfg.size(); ++i) {
+        origin_map[i] = static_cast<int>(i);
     }
 
-    if (transformed) {
-        structured_cfg = cfg;
-        origin_map.resize(cfg.size());
-        for (size_t i = 0; i < cfg.size(); ++i) {
-            origin_map[i] = (int)i;
-        }
+    // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
+    size_t max_blocks = std::max<size_t>(cfg.size() * 8, 256);
 
-        // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
-        size_t max_blocks = std::max<size_t>(cfg.size() * 8, 256);
-        bool tail_changed = tail_duplicate_trivial_joins(
-            structured_cfg, origin_map, max_blocks);
-        bool split_changed = false;
-        if (!reducible0) {
-            split_changed = node_split_make_reducible(structured_cfg,
-                                                      origin_map, max_blocks);
-        }
+    bool changed =
+        tail_duplicate_trivial_joins(work_cfg, origin_map, max_blocks);
+    if (!reducible0) {
+        changed |= node_split_make_reducible(work_cfg, origin_map, max_blocks);
+    }
 
-        transformed = tail_changed || split_changed;
+    if (changed) {
+        result.structured_cfg_blocks = std::move(work_cfg);
+        result.structured_block_origin = std::move(origin_map);
+        analysis_cfg = &result.structured_cfg_blocks;
 
-        if (transformed) {
-            analysis_cfg = &structured_cfg;
-
-            result.structured_cfg_blocks = structured_cfg;
-            result.structured_block_origin = origin_map;
-            result.structured_stack_depth_in.resize(structured_cfg.size(), -1);
-            for (size_t i = 0; i < structured_cfg.size(); ++i) {
-                int orig = origin_map[i];
-                if (orig >= 0 && static_cast<size_t>(orig) <
-                                     stack_safety.stack_depth_in.size()) {
-                    result.structured_stack_depth_in[i] =
-                        stack_safety.stack_depth_in[(size_t)orig];
-                }
+        result.structured_stack_depth_in.resize(
+            result.structured_cfg_blocks.size(), -1);
+        for (size_t i = 0; i < result.structured_cfg_blocks.size(); ++i) {
+            int orig = result.structured_block_origin[i];
+            if (orig >= 0 && static_cast<size_t>(orig) <
+                                 stack_safety.stack_depth_in.size()) {
+                result.structured_stack_depth_in[i] =
+                    stack_safety.stack_depth_in[(size_t)orig];
             }
         }
     }
