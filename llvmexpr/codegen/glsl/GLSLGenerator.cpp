@@ -43,9 +43,10 @@ GLSLGenerator::GLSLGenerator(
     }
 
 #ifndef NDEBUG
-    if (const char* env = std::getenv("LLVMEXPR_GLSL_RELOOP_DEBUG")) {
+    if (const char* env =
+            std::getenv("LLVMEXPR_GLSL_STRUCTURIZECFG_DEBUG")) {
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-        debug_reloop = (env[0] != '\0' && env[0] != '0');
+        debug_structurize_cfg = (env[0] != '\0' && env[0] != '0');
     }
 #endif
 }
@@ -73,15 +74,15 @@ void GLSLGenerator::debug_emit_cfg_comment() {
 #ifdef NDEBUG
     return;
 #else
-    if (!debug_reloop) {
+    if (!debug_structurize_cfg) {
         return;
     }
     const auto& cfg = get_codegen_cfg_blocks();
-    const auto& reloop = analysis.getReloopResult();
+    const auto& structurize = analysis.getStructurizeCFGResult();
 
-    emit_line("// --- llvmexpr GLSL Reloop debug ---");
-    emit_line(std::format("// blocks = {}, reloop.success = {}", cfg.size(),
-                          reloop.success ? 1 : 0));
+    emit_line("// --- llvmexpr GLSL StructurizeCFG debug ---");
+    emit_line(std::format("// blocks = {}, structurize.success = {}",
+                          cfg.size(), structurize.success ? 1 : 0));
     for (size_t i = 0; i < cfg.size(); ++i) {
         const auto& b = cfg[i];
         std::string succs;
@@ -90,37 +91,37 @@ void GLSLGenerator::debug_emit_cfg_comment() {
                                  (j + 1 == b.successors.size()) ? "" : ",");
         }
         // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
-        int ip = (i < reloop.ipdom.size()) ? reloop.ipdom[i] : -999;
+        int ip = (i < structurize.ipdom.size()) ? structurize.ipdom[i] : -999;
         emit_line(std::format("// B{}: [{}..{}) succ=[{}] ipdom={}", i,
                               b.start_token_idx, b.end_token_idx, succs, ip));
     }
-    for (const auto& [hdr, follow] : reloop.loop_follow) {
+    for (const auto& [hdr, follow] : structurize.loop_follow) {
         emit_line(std::format("// loop header {} follow {}", hdr, follow));
     }
-    emit_line("// --- end reloop debug ---");
+    emit_line("// --- end structurize debug ---");
 #endif
 }
 
 const std::vector<analysis::CFGBlock>&
 GLSLGenerator::get_codegen_cfg_blocks() const {
-    const auto& reloop = analysis.getReloopResult();
-    if (!reloop.structured_cfg_blocks.empty()) {
-        return reloop.structured_cfg_blocks;
+    const auto& structurize = analysis.getStructurizeCFGResult();
+    if (!structurize.structured_cfg_blocks.empty()) {
+        return structurize.structured_cfg_blocks;
     }
     return analysis.getCFGBlocks();
 }
 
 const std::vector<int>& GLSLGenerator::get_codegen_stack_depth_in() const {
-    const auto& reloop = analysis.getReloopResult();
-    if (!reloop.structured_stack_depth_in.empty()) {
-        return reloop.structured_stack_depth_in;
+    const auto& structurize = analysis.getStructurizeCFGResult();
+    if (!structurize.structured_stack_depth_in.empty()) {
+        return structurize.structured_stack_depth_in;
     }
     return analysis.getStackDepthIn();
 }
 
 int GLSLGenerator::compute_branch_join(int t, int f, int stop_block) const {
-    const auto& reloop = analysis.getReloopResult();
-    int join = lca_postdom(t, f, reloop.ipdom);
+    const auto& structurize = analysis.getStructurizeCFGResult();
+    int join = lca_postdom(t, f, structurize.ipdom);
     if (join == -1 && stop_block != -1) {
         join = stop_block;
     }
@@ -139,12 +140,13 @@ std::string GLSLGenerator::get_loop_break_flag(int header) {
 
 std::optional<int> GLSLGenerator::find_enclosing_loop_for_follow(
     int target_block, const LoopContext& loop_ctx) const {
-    const auto& reloop = analysis.getReloopResult();
+    const auto& structurize = analysis.getStructurizeCFGResult();
     for (auto it = loop_ctx.header_stack.rbegin();
          it != loop_ctx.header_stack.rend(); ++it) {
         int header = *it;
-        auto fit = reloop.loop_follow.find(header);
-        if (fit != reloop.loop_follow.end() && fit->second == target_block) {
+        auto fit = structurize.loop_follow.find(header);
+        if (fit != structurize.loop_follow.end() &&
+            fit->second == target_block) {
             return header;
         }
     }
@@ -399,10 +401,10 @@ void GLSLGenerator::emit_variable_declarations() {
     // Stack slot variables for merge points
     const auto& cfg_blocks = get_codegen_cfg_blocks();
     const auto& stack_depth_in = get_codegen_stack_depth_in();
-    const auto& reloop = analysis.getReloopResult();
+    const auto& structurize = analysis.getStructurizeCFGResult();
 
     std::set<int> force_slots;
-    for (const auto& [header, follow] : reloop.loop_follow) {
+    for (const auto& [header, follow] : structurize.loop_follow) {
         if (follow != -1) {
             force_slots.insert(follow);
         }
@@ -526,7 +528,7 @@ bool GLSLGenerator::is_loop_header_active(int header,
 
 bool GLSLGenerator::can_edge_to_block(int target_block, int stop_block,
                                       LoopContext& loop_ctx) const {
-    const auto& reloop = analysis.getReloopResult();
+    const auto& structurize = analysis.getStructurizeCFGResult();
     int current_header =
         loop_ctx.header_stack.empty() ? -1 : loop_ctx.header_stack.back();
 
@@ -535,14 +537,14 @@ bool GLSLGenerator::can_edge_to_block(int target_block, int stop_block,
             return true;
         }
         int follow = -1;
-        auto it = reloop.loop_follow.find(current_header);
-        if (it != reloop.loop_follow.end()) {
+        auto it = structurize.loop_follow.find(current_header);
+        if (it != structurize.loop_follow.end()) {
             follow = it->second;
         }
         if (stop_block == follow) {
             return true;
         }
-        if (reloop.inLoop(current_header, stop_block)) {
+        if (structurize.inLoop(current_header, stop_block)) {
             return true;
         }
         // Leaving to an outer follow via break-flag lowering.
@@ -551,8 +553,8 @@ bool GLSLGenerator::can_edge_to_block(int target_block, int stop_block,
 
     if (current_header != -1) {
         int follow = -1;
-        auto it = reloop.loop_follow.find(current_header);
-        if (it != reloop.loop_follow.end()) {
+        auto it = structurize.loop_follow.find(current_header);
+        if (it != structurize.loop_follow.end()) {
             follow = it->second;
         }
         if (target_block == current_header) {
@@ -561,7 +563,7 @@ bool GLSLGenerator::can_edge_to_block(int target_block, int stop_block,
         if (target_block == follow) {
             return true; // break
         }
-        if (!reloop.inLoop(current_header, target_block)) {
+        if (!structurize.inLoop(current_header, target_block)) {
             // Multi-level break to an outer loop follow.
             return find_enclosing_loop_for_follow(target_block, loop_ctx)
                 .has_value();
@@ -659,14 +661,14 @@ void GLSLGenerator::emit_edge_to_block(int target_block, int stop_block,
         return;
     }
 
-    const auto& reloop = analysis.getReloopResult();
+    const auto& structurize = analysis.getStructurizeCFGResult();
     int current_header =
         loop_ctx.header_stack.empty() ? -1 : loop_ctx.header_stack.back();
 
     if (current_header != -1) {
         int follow = -1;
-        auto it = reloop.loop_follow.find(current_header);
-        if (it != reloop.loop_follow.end()) {
+        auto it = structurize.loop_follow.find(current_header);
+        if (it != structurize.loop_follow.end()) {
             follow = it->second;
         }
 
@@ -687,7 +689,7 @@ void GLSLGenerator::emit_edge_to_block(int target_block, int stop_block,
             emit_line("break;");
             return;
         }
-        if (!reloop.inLoop(current_header, target_block)) {
+        if (!structurize.inLoop(current_header, target_block)) {
             // Multi-level break to an outer loop follow.
             auto outer = find_enclosing_loop_for_follow(target_block, loop_ctx);
             if (!outer.has_value()) {
@@ -826,13 +828,13 @@ void GLSLGenerator::emit_structured_from(int start_block, int stop_block,
 
 void GLSLGenerator::emit_main_function_structured() {
     LoopContext loop_ctx;
-    bool ok = analysis.getReloopResult().success &&
+    bool ok = analysis.getStructurizeCFGResult().success &&
               can_structure_from(0, -1, loop_ctx);
 
     if (!ok) {
 #ifndef NDEBUG
-        if (debug_reloop) {
-            emit_line("// reloop: preflight can_structure_from() failed. "
+        if (debug_structurize_cfg) {
+            emit_line("// structurize: preflight can_structure_from() failed. "
                       "falling back to state machine");
         }
 #endif
@@ -850,8 +852,9 @@ void GLSLGenerator::emit_main_function_structured() {
     if (!emit_ok) {
         emit_newline();
 #ifndef NDEBUG
-        if (debug_reloop) {
-            emit_line("// reloop: unexpected emit-time failure. falling back "
+        if (debug_structurize_cfg) {
+            emit_line("// structurize: unexpected emit-time failure. falling "
+                      "back "
                       "to state machine");
         }
 #endif

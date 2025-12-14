@@ -30,15 +30,6 @@
 #include "../../analysis/AnalysisResults.hpp"
 #include "../../frontend/Tokenizer.hpp"
 
-/**
- * Control flow is handled using Reloop-like algorithm.
- *
- * Variable naming conventions:
- *   t_N  - Temporary values (stack simulation)
- *   u_X  - User-defined variables (from var!)
- *   s_N  - Stack slot variables (for merge points)
- *   a_X  - Array variables
- */
 class GLSLGenerator {
   public:
     GLSLGenerator(const std::vector<Token>& tokens, int num_inputs, int width,
@@ -74,7 +65,7 @@ class GLSLGenerator {
     std::map<int, std::vector<std::string>> block_entry_stack;
 
 #ifndef NDEBUG
-    bool debug_reloop = false;
+    bool debug_structurize_cfg = false;
 #endif
     void debug_emit_cfg_comment();
 
@@ -116,7 +107,7 @@ class GLSLGenerator {
     bool traverse_structure(int start_block, int stop_block,
                             LoopContext& loop_ctx, Visitor& visitor) const {
         const auto& cfg_blocks = get_codegen_cfg_blocks();
-        const auto& reloop = analysis.getReloopResult();
+        const auto& structurize = analysis.getStructurizeCFGResult();
 
         std::set<int> visited_in_region;
         int block = start_block;
@@ -126,11 +117,11 @@ class GLSLGenerator {
             }
 
             // Loop header handling
-            if (reloop.isLoopHeader(block) &&
+            if (structurize.isLoopHeader(block) &&
                 !is_loop_header_active(block, loop_ctx)) {
                 int follow = -1;
-                auto it = reloop.loop_follow.find(block);
-                if (it != reloop.loop_follow.end()) {
+                auto it = structurize.loop_follow.find(block);
+                if (it != structurize.loop_follow.end()) {
                     follow = it->second;
                 }
                 if (!visitor.handle_loop(block, follow, loop_ctx)) {
@@ -166,15 +157,15 @@ class GLSLGenerator {
                                          : loop_ctx.header_stack.back();
                 if (current_header != -1) {
                     int follow = -1;
-                    auto it = reloop.loop_follow.find(current_header);
-                    if (it != reloop.loop_follow.end()) {
+                    auto it = structurize.loop_follow.find(current_header);
+                    if (it != structurize.loop_follow.end()) {
                         follow = it->second;
                     }
                     if (next == current_header || next == follow) {
                         return visitor.handle_loop_exit_or_continue(
                             block, next, current_header, follow);
                     }
-                    if (!reloop.inLoop(current_header, next)) {
+                    if (!structurize.inLoop(current_header, next)) {
                         return visitor.handle_nonlocal_edge(
                             block, next, stop_block, loop_ctx);
                     }
@@ -208,8 +199,8 @@ class GLSLGenerator {
                                          : loop_ctx.header_stack.back();
                 if (current_header != -1) {
                     int follow = -1;
-                    auto it = reloop.loop_follow.find(current_header);
-                    if (it != reloop.loop_follow.end()) {
+                    auto it = structurize.loop_follow.find(current_header);
+                    if (it != structurize.loop_follow.end()) {
                         follow = it->second;
                     }
                     if (join == stop_block && stop_block == follow) {

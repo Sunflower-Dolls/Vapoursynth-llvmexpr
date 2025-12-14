@@ -118,7 +118,7 @@ sources = [
   'llvmexpr/analysis/passes/StaticAllocReachabilityPass.cpp',
   'llvmexpr/analysis/passes/ValidationPass.cpp',
   'llvmexpr/analysis/passes/StackSafetyPass.cpp',
-  'llvmexpr/analysis/passes/ReloopPass.cpp',
+  'llvmexpr/analysis/passes/StructurizeCFGPass.cpp',
   'llvmexpr/analysis/passes/PropWriteTypeSafetyPass.cpp',
   'llvmexpr/analysis/passes/RelAccessAnalysisPass.cpp',
   'llvmexpr/analysis/passes/CoordinateUsagePass.cpp',

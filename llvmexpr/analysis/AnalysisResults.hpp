@@ -25,7 +25,7 @@
 #include "passes/BuildCFGPass.hpp"
 #include "passes/CoordinateUsagePass.hpp"
 #include "passes/RelAccessAnalysisPass.hpp"
-#include "passes/ReloopPass.hpp"
+#include "passes/StructurizeCFGPass.hpp"
 #include "passes/StackSafetyPass.hpp"
 #include "passes/VariableUsagePass.hpp"
 #include <map>
@@ -65,8 +65,8 @@ class ExpressionAnalysisResults {
         return manager.getResult<VariableUsagePass>();
     }
 
-    [[nodiscard]] const ReloopResult& getReloopResult() const {
-        return manager.getResult<ReloopPass>();
+    [[nodiscard]] const StructurizeCFGResult& getStructurizeCFGResult() const {
+        return manager.getResult<StructurizeCFGPass>();
     }
 
     [[nodiscard]] const AnalysisManager& getManager() const { return manager; }

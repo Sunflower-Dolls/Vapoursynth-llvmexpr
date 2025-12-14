@@ -17,8 +17,8 @@
  * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef LLVMEXPR_ANALYSIS_RELOOP_PASS_HPP
-#define LLVMEXPR_ANALYSIS_RELOOP_PASS_HPP
+#ifndef LLVMEXPR_ANALYSIS_STRUCTURIZECFG_PASS_HPP
+#define LLVMEXPR_ANALYSIS_STRUCTURIZECFG_PASS_HPP
 
 #include "../framework/DataStructures.hpp"
 #include "../framework/Pass.hpp"
@@ -28,7 +28,7 @@
 
 namespace analysis {
 
-struct ReloopResult {
+struct StructurizeCFGResult {
     // Whether we believe the CFG is structurizable.
     bool success = true;
 
@@ -73,19 +73,20 @@ struct ReloopResult {
 };
 
 /**
-    Computes CFG structuring information for Relooper-style codegen.
+    Computes CFG structuring information for structured-control-flow codegen.
     Responsibilities:
     - Compute post-dominators (for join point selection)
     - Identify natural loops (backedges + loop body closure)
     - Compute loop follow blocks
     Depends on: BuildCFGPass, BlockAnalysisPass
 */
-class ReloopPass : public AnalysisPass<ReloopPass, ReloopResult> {
+class StructurizeCFGPass
+    : public AnalysisPass<StructurizeCFGPass, StructurizeCFGResult> {
   public:
-    using Result = ReloopResult;
+    using Result = StructurizeCFGResult;
 
     [[nodiscard]] const char* getName() const override {
-        return "Reloop (Control Flow Structuring) Pass";
+        return "StructurizeCFG (Control Flow Structuring) Pass";
     }
 
     Result run(const std::vector<Token>& tokens, AnalysisManager& am) override;
@@ -93,4 +94,4 @@ class ReloopPass : public AnalysisPass<ReloopPass, ReloopResult> {
 
 } // namespace analysis
 
-#endif // LLVMEXPR_ANALYSIS_RELOOP_PASS_HPP
+#endif // LLVMEXPR_ANALYSIS_STRUCTURIZECFG_PASS_HPP

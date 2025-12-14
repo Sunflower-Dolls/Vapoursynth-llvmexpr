@@ -17,7 +17,7 @@
  * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "ReloopPass.hpp"
+#include "StructurizeCFGPass.hpp"
 #include "../framework/AnalysisManager.hpp"
 #include "BlockAnalysisPass.hpp"
 #include "StackSafetyPass.hpp"
@@ -233,7 +233,7 @@ bool check_reducible(const std::vector<CFGBlock>& cfg,
         if (!scc_is_cyclic(cfg, reachable, nodes)) {
             continue;
         }
-        // Reducible iff the SCC has at most one entry *node*.
+        // Reducible iff the SCC has at most one entry node.
         auto entry_nodes = scc_entry_nodes(cfg, reachable, scc, (int)cid);
         if (entry_nodes.size() > 1) {
             return false;
@@ -337,7 +337,7 @@ bool node_split_make_reducible(std::vector<CFGBlock>& cfg,
                     }
                 }
 
-                // Redirect all *external* incoming edges to `entry` to the clone.
+                // Redirect all external incoming edges to `entry` to the clone.
                 int entry_clone = clone_of[(size_t)entry];
                 for (int p = 0; p < original_node_count; ++p) {
                     if (reachable[(size_t)p] == 0) {
@@ -637,7 +637,7 @@ std::vector<int> compute_ipdom_vector(const std::vector<Bitset>& pdom,
     return ipdom;
 }
 
-void compute_natural_loops(ReloopResult& result,
+void compute_natural_loops(StructurizeCFGResult& result,
                            const std::vector<CFGBlock>& cfg,
                            const std::vector<int>& reachable,
                            const std::vector<Bitset>& dom) {
@@ -677,7 +677,7 @@ void compute_natural_loops(ReloopResult& result,
     }
 }
 
-void compute_loop_follow(ReloopResult& result) {
+void compute_loop_follow(StructurizeCFGResult& result) {
     for (auto& [header, body] : result.loop_body) {
         int f =
             (header >= 0 && static_cast<size_t>(header) < result.ipdom.size())
@@ -690,7 +690,7 @@ void compute_loop_follow(ReloopResult& result) {
     }
 }
 
-void compute_innermost_loop_header(ReloopResult& result,
+void compute_innermost_loop_header(StructurizeCFGResult& result,
                                    const std::vector<int>& reachable) {
     int n = (int)result.innermost_loop_header.size();
     for (int b = 0; b < n; ++b) {
@@ -711,8 +711,9 @@ void compute_innermost_loop_header(ReloopResult& result,
 
 } // namespace
 
-ReloopPass::Result ReloopPass::run(const std::vector<Token>& /*unused*/,
-                                   AnalysisManager& am) {
+StructurizeCFGPass::Result
+StructurizeCFGPass::run(const std::vector<Token>& /*unused*/,
+                        AnalysisManager& am) {
     const auto& block_result = am.getResult<BlockAnalysisPass>();
     const auto& cfg = block_result.cfg_blocks;
     const auto& stack_safety = am.getResult<StackSafetyPass>();
