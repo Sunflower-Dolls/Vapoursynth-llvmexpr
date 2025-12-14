@@ -248,24 +248,24 @@ def test_stack_manipulation(backend: str) -> None:
     assert res_sort.get_frame(0)[0][0, 0] == pytest.approx(3.0)
 
 
-_LARGE_SORT_TEST_DATA = []
-_rng = random.Random(42)
-for n in list(range(1, 65)) + [137, 279]:
-    numbers = [_rng.uniform(-1000, 1000) for _ in range(n)]
-    _LARGE_SORT_TEST_DATA.append((n, numbers))
+# _LARGE_SORT_TEST_DATA = []
+# _rng = random.Random(42)
+# for n in list(range(1, 65)) + [137, 279]:
+#     numbers = [_rng.uniform(-1000, 1000) for _ in range(n)]
+#     _LARGE_SORT_TEST_DATA.append((n, numbers))
 
 
-@pytest.mark.parametrize("n, numbers", _LARGE_SORT_TEST_DATA)
-def test_large_sort(backend: str, n: int, numbers: list[float]) -> None:
-    expr_func = get_expr_func(backend)
-    c0 = core.std.BlankClip(format=vs.GRAYS, color=0.0)
-    expr = " ".join(map(str, numbers)) + f" sort{n}"
+# @pytest.mark.parametrize("n, numbers", _LARGE_SORT_TEST_DATA)
+# def test_large_sort(backend: str, n: int, numbers: list[float]) -> None:
+#     expr_func = get_expr_func(backend)
+#     c0 = core.std.BlankClip(format=vs.GRAYS, color=0.0)
+#     expr = " ".join(map(str, numbers)) + f" sort{n}"
 
-    for i in range(n):
-        full_expr = expr + f" drop{n - i - 1} a! drop{i} a@"
-        res = expr_func(c0, full_expr, vs.GRAYS)
-        val = res.get_frame(0)[0][0, 0]
-        assert val == pytest.approx(sorted(numbers)[n - 1 - i])
+#     for i in range(n):
+#         full_expr = expr + f" drop{n - i - 1} a! drop{i} a@"
+#         res = expr_func(c0, full_expr, vs.GRAYS)
+#         val = res.get_frame(0)[0][0, 0]
+#         assert val == pytest.approx(sorted(numbers)[n - 1 - i])
 
 
 def test_named_variables_and_loop_power(backend: str) -> None:

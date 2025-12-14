@@ -22,8 +22,8 @@
 
 #include "AST.hpp"
 #include "PostfixBuilder.hpp"
-#include "SemanticAnalyzer.hpp"
 #include "types.hpp"
+
 #include <format>
 #include <map>
 #include <set>
@@ -54,13 +54,13 @@ class CodeGenerator {
 
     std::string generate(const Program* program);
 
-    [[nodiscard]] Mode get_mode() const { return mode; }
-    ExprResult generate_expr(Expr* expr);
+    [[nodiscard]] Mode getMode() const { return mode; }
+    ExprResult generateExpr(Expr* expr);
 
   private:
     Type generate(Expr* expr, PostfixBuilder& builder);
     void generate(Stmt* stmt, PostfixBuilder& builder);
-    std::string generate_expr_to_string(Expr* expr);
+    std::string generateExprToString(Expr* expr);
 
     // Expression handlers
     Type handle(const NumberExpr& expr, PostfixBuilder& builder);
@@ -87,14 +87,13 @@ class CodeGenerator {
     void handle(const GlobalDecl& stmt, PostfixBuilder& builder);
     void handle(const ArrayAssignStmt& stmt, PostfixBuilder& builder);
 
-    void check_stack_effect(const std::string& s, int expected,
-                            const Range& range);
-    int compute_stack_effect(const std::string& s, const Range& range);
+    void checkStackEffect(const std::string& s, int expected,
+                          const Range& range);
+    int computeStackEffect(const std::string& s, const Range& range);
 
-    void inline_function_call(const FunctionSignature& sig,
-                              FunctionDef* func_def,
-                              const std::vector<std::unique_ptr<Expr>>& args,
-                              const Range& call_range, PostfixBuilder& builder);
+    void inlineFunctionCall(const FunctionSignature& sig, FunctionDef* func_def,
+                            const std::vector<std::unique_ptr<Expr>>& args,
+                            const Range& call_range, PostfixBuilder& builder);
 
     Mode mode;
     int num_inputs;

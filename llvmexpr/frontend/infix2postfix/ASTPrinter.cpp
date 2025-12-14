@@ -20,6 +20,7 @@
 #include "ASTPrinter.hpp"
 #include "Builtins.hpp"
 #include "llvmexpr/utils/EnumName.hpp"
+
 #include <cctype>
 #include <cstring>
 
@@ -175,7 +176,7 @@ void ASTPrinter::visit(const GotoStmt& stmt) {
 void ASTPrinter::visit(const GlobalDecl& stmt) {
     std::string mode_name = std::string(enum_name(stmt.mode));
     line("GlobalDecl: mode={}", mode_name);
-    if (stmt.mode == GlobalMode::SPECIFIC) {
+    if (stmt.mode == GlobalMode::Specific) {
         indent();
         for (const auto& g : stmt.globals) {
             line("Global: {}", g.value);
@@ -302,7 +303,7 @@ void ASTPrinter::visit(const PropAccessExpr& expr) {
 
 void ASTPrinter::visit(const StaticRelPixelAccessExpr& expr) {
     line("StaticRelPixelAccessExpr: {}[{},{}]{}", expr.clip.value,
-         expr.offsetX.value, expr.offsetY.value, expr.boundary_suffix);
+         expr.offset_x.value, expr.offset_y.value, expr.boundary_suffix);
 }
 
 void ASTPrinter::visit(const FrameDimensionExpr& expr) {

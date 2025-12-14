@@ -22,6 +22,7 @@
 #include "../../utils/EnumName.hpp"
 #include "../framework/AnalysisError.hpp"
 #include "../framework/AnalysisManager.hpp"
+
 #include <format>
 #include <map>
 #include <string>
@@ -35,9 +36,9 @@ PropWriteTypeSafetyPass::run(const std::vector<Token>& tokens,
 
     for (size_t i = 0; i < tokens.size(); ++i) {
         const auto& token = tokens[i];
-        if (token.type == TokenType::PROP_STORE) {
+        if (token.type == TokenType::PropStore) {
             const auto& payload =
-                std::get<TokenPayload_PropStore>(token.payload);
+                std::get<TokenPayloadPropStore>(token.payload);
             const auto& prop_name = payload.prop_name;
             const auto& prop_type = payload.type;
 
@@ -46,19 +47,17 @@ PropWriteTypeSafetyPass::run(const std::vector<Token>& tokens,
                 auto& [stored_type, stored_idx] = it->second;
                 if (stored_type != prop_type) {
                     // DELETE can co-exist with other types.
-                    if (stored_type == PropWriteType::DELETE) {
+                    if (stored_type == PropWriteType::Delete) {
                         stored_type = prop_type;
                         stored_idx = static_cast<int>(i);
-                    }
-                    else if (prop_type != PropWriteType::DELETE) {
+                    } else if (prop_type != PropWriteType::Delete) {
                         throw AnalysisError(
                             std::format(
                                 "Inconsistent types used for property '{}'. "
                                 "Previous type: {} (idx: {}), current type: {} "
                                 "(idx: {}).",
-                                prop_name, enum_name(stored_type),
-                                stored_idx, enum_name(prop_type),
-                                static_cast<int>(i)),
+                                prop_name, enum_name(stored_type), stored_idx,
+                                enum_name(prop_type), static_cast<int>(i)),
                             static_cast<int>(i));
                     }
                 }

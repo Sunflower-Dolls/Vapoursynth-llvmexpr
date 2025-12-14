@@ -18,7 +18,6 @@
  */
 
 #include "VariableUsagePass.hpp"
-
 #include "../../frontend/Tokenizer.hpp"
 #include "../framework/AnalysisManager.hpp"
 
@@ -29,9 +28,9 @@ VariableUsagePass::run(const std::vector<Token>& tokens,
                        [[maybe_unused]] AnalysisManager& am) {
     VariableUsageResult result;
     for (const auto& token : tokens) {
-        if (token.type == TokenType::VAR_STORE ||
-            token.type == TokenType::VAR_LOAD) {
-            const auto& payload = std::get<TokenPayload_Var>(token.payload);
+        if (token.type == TokenType::VarStore ||
+            token.type == TokenType::VarLoad) {
+            const auto& payload = std::get<TokenPayloadVar>(token.payload);
             result.all_vars.insert(payload.name);
         }
     }

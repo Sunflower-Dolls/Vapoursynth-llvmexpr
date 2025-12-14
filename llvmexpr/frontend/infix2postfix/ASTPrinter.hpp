@@ -21,6 +21,7 @@
 #define LLVMEXPR_INFIX2POSTFIX_ASTPRINTER_HPP
 
 #include "AST.hpp"
+
 #include <format>
 #include <sstream>
 #include <string>

@@ -18,12 +18,12 @@
  */
 
 #include "InfixConverter.hpp"
-#include <format>
-#include <stdexcept>
-
 #include "infix2postfix/AnalysisEngine.hpp"
 #include "infix2postfix/Preprocessor.hpp"
 #include "infix2postfix/Tokenizer.hpp"
+
+#include <format>
+#include <stdexcept>
 
 std::string convertInfixToPostfix(
     const std::string& infix_expr, int num_inputs, infix2postfix::Mode mode,

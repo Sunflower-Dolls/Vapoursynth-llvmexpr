@@ -21,6 +21,7 @@
 #define LLVMEXPR_INFIX2POSTFIX_SYMBOLTABLE_HPP
 
 #include "Symbol.hpp"
+
 #include <map>
 #include <memory>
 #include <string>

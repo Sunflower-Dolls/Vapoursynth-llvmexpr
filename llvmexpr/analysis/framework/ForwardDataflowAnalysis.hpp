@@ -22,6 +22,7 @@
 
 #include "../../frontend/Tokenizer.hpp"
 #include "DataStructures.hpp"
+
 #include <algorithm>
 #include <iterator>
 #include <vector>

@@ -31,8 +31,8 @@
 namespace infix2postfix {
 
 enum class DiagnosticSeverity : std::uint8_t {
-    ERROR,
-    WARNING,
+    Error,
+    Warning,
 };
 
 struct Diagnostic {

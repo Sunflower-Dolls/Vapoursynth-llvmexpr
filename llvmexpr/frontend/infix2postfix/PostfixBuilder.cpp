@@ -18,6 +18,7 @@
  */
 
 #include "PostfixBuilder.hpp"
+
 #include <cctype>
 #include <format>
 #include <sstream>

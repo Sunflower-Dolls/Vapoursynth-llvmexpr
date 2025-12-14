@@ -45,8 +45,8 @@
  * NOTE: No license was specified on the source website.
  */
 
-#ifndef LLVMEXPR_UTILS_MATH_HPP
-#define LLVMEXPR_UTILS_MATH_HPP
+#ifndef LLVMEXPR_CODEGEN_LLVM_MATH_HPP
+#define LLVMEXPR_CODEGEN_LLVM_MATH_HPP
 
 #include <format>
 #include <functional>
@@ -78,12 +78,12 @@ enum class MathOp : std::uint8_t {
     Asin
 };
 
-struct MathOpInfo {
+struct MathopInfo {
     int arity;
     const char* name;
 };
 
-constexpr MathOpInfo getMathOpInfo(MathOp op) {
+constexpr MathopInfo get_math_op_info(MathOp op) {
     switch (op) {
     case MathOp::Exp:
         return {.arity = 1, .name = "fast_exp"};
@@ -150,19 +150,19 @@ template <int VectorWidth> class MathFunctionGenerator {
     }
 
     llvm::Value* getConstant(double val) {
-        auto* scalarConst =
+        auto* scalar_const =
             llvm::ConstantFP::get(llvm::Type::getFloatTy(context), val);
         return (VectorWidth == 1)
-                   ? (llvm::Value*)scalarConst
-                   : builder.CreateVectorSplat(VectorWidth, scalarConst);
+                   ? (llvm::Value*)scalar_const
+                   : builder.CreateVectorSplat(VectorWidth, scalar_const);
     }
 
     llvm::Value* getInt32Constant(int32_t val) {
-        auto* scalarConst =
+        auto* scalar_const =
             llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), val);
         return (VectorWidth == 1)
-                   ? (llvm::Value*)scalarConst
-                   : builder.CreateVectorSplat(VectorWidth, scalarConst);
+                   ? (llvm::Value*)scalar_const
+                   : builder.CreateVectorSplat(VectorWidth, scalar_const);
     }
 
     std::string getFunctionName(const std::string& base_name) {
@@ -230,10 +230,10 @@ template <int VectorWidth, MathOp op> struct MathFunctionImpl;
 
 template <int VectorWidth> struct MathFunctionImpl<VectorWidth, MathOp::Exp> {
     static llvm::Function* generate(MathFunctionGenerator<VectorWidth>* gen) {
-        constexpr auto opInfo = getMathOpInfo(MathOp::Exp);
+        constexpr auto OP_INFO = get_math_op_info(MathOp::Exp);
         // https://github.com/vapoursynth/vapoursynth/blob/2a3d3657320ca505c784b98f10e7cd9649d6169a/src/core/expr/jitcompiler_x86.cpp#L635
         return gen->createFunction(
-            opInfo.name, opInfo.arity,
+            OP_INFO.name, OP_INFO.arity,
             [gen](llvm::ArrayRef<llvm::Value*> args) -> llvm::Value* {
                 auto* x = args[0];
                 // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
@@ -304,10 +304,10 @@ template <int VectorWidth> struct MathFunctionImpl<VectorWidth, MathOp::Exp> {
 
 template <int VectorWidth> struct MathFunctionImpl<VectorWidth, MathOp::Log> {
     static llvm::Function* generate(MathFunctionGenerator<VectorWidth>* gen) {
-        constexpr auto opInfo = getMathOpInfo(MathOp::Log);
+        constexpr auto OP_INFO = get_math_op_info(MathOp::Log);
         // https://github.com/vapoursynth/vapoursynth/blob/2a3d3657320ca505c784b98f10e7cd9649d6169a/src/core/expr/jitcompiler_x86.cpp#L671
         return gen->createFunction(
-            opInfo.name, opInfo.arity,
+            OP_INFO.name, OP_INFO.arity,
             [gen](llvm::ArrayRef<llvm::Value*> args) -> llvm::Value* {
                 auto* x = args[0];
                 // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
@@ -408,10 +408,10 @@ template <int VectorWidth> struct MathFunctionImpl<VectorWidth, MathOp::Log> {
 
 template <int VectorWidth> struct MathFunctionImpl<VectorWidth, MathOp::Sin> {
     static llvm::Function* generate(MathFunctionGenerator<VectorWidth>* gen) {
-        constexpr auto opInfo = getMathOpInfo(MathOp::Sin);
+        constexpr auto OP_INFO = get_math_op_info(MathOp::Sin);
         // https://github.com/vapoursynth/vapoursynth/blob/2a3d3657320ca505c784b98f10e7cd9649d6169a/src/core/expr/jitcompiler_x86.cpp#L813
         return gen->createFunction(
-            opInfo.name, opInfo.arity,
+            OP_INFO.name, OP_INFO.arity,
             [gen](llvm::ArrayRef<llvm::Value*> args) -> llvm::Value* {
                 auto* x = args[0];
                 auto* float_ty = gen->getFloatType();
@@ -423,10 +423,10 @@ template <int VectorWidth> struct MathFunctionImpl<VectorWidth, MathOp::Sin> {
                 auto* float_pi2 = gen->getConstant(0.0009670257568359375F);
                 auto* float_pi3 = gen->getConstant(1.984187252998352e-07F);
                 auto* float_pi4 = gen->getConstant(1.273533813134432e-11F);
-                auto* float_sinC3 = gen->getConstant(-0.1666666567325592F);
-                auto* float_sinC5 = gen->getConstant(0.00833307858556509F);
-                auto* float_sinC7 = gen->getConstant(-0.00019807418575510383F);
-                auto* float_sinC9 = gen->getConstant(2.6019030363451748e-06F);
+                auto* float_sin_c3 = gen->getConstant(-0.1666666567325592F);
+                auto* float_sin_c5 = gen->getConstant(0.00833307858556509F);
+                auto* float_sin_c7 = gen->getConstant(-0.00019807418575510383F);
+                auto* float_sin_c9 = gen->getConstant(2.6019030363451748e-06F);
                 auto* signmask = gen->getInt32Constant(0x80000000);
                 // NOLINTEND(cppcoreguidelines-avoid-magic-numbers)
                 llvm::Value* sign = gen->builder.CreateBitCast(x, int32_ty);
@@ -456,11 +456,11 @@ template <int VectorWidth> struct MathFunctionImpl<VectorWidth, MathOp::Sin> {
                     {t2, gen->builder.CreateFNeg(float_pi4), t1});
                 t2 = gen->builder.CreateFMul(t1, t1);
                 llvm::Value* t3 = gen->createIntrinsicCall(
-                    llvm::Intrinsic::fma, {t2, float_sinC9, float_sinC7});
+                    llvm::Intrinsic::fma, {t2, float_sin_c9, float_sin_c7});
                 t3 = gen->createIntrinsicCall(llvm::Intrinsic::fma,
-                                              {t3, t2, float_sinC5});
+                                              {t3, t2, float_sin_c5});
                 t3 = gen->createIntrinsicCall(llvm::Intrinsic::fma,
-                                              {t3, t2, float_sinC3});
+                                              {t3, t2, float_sin_c3});
                 t3 = gen->builder.CreateFMul(t3, t2);
                 t3 = gen->builder.CreateFMul(t3, t1);
                 t1 = gen->builder.CreateFAdd(t1, t3);
@@ -475,10 +475,10 @@ template <int VectorWidth> struct MathFunctionImpl<VectorWidth, MathOp::Sin> {
 
 template <int VectorWidth> struct MathFunctionImpl<VectorWidth, MathOp::Cos> {
     static llvm::Function* generate(MathFunctionGenerator<VectorWidth>* gen) {
-        constexpr auto opInfo = getMathOpInfo(MathOp::Cos);
+        constexpr auto OP_INFO = get_math_op_info(MathOp::Cos);
         // https://github.com/vapoursynth/vapoursynth/blob/2a3d3657320ca505c784b98f10e7cd9649d6169a/src/core/expr/jitcompiler_x86.cpp#L813
         return gen->createFunction(
-            opInfo.name, opInfo.arity,
+            OP_INFO.name, OP_INFO.arity,
             [gen](llvm::ArrayRef<llvm::Value*> args) -> llvm::Value* {
                 auto* x = args[0];
                 auto* float_ty = gen->getFloatType();
@@ -490,10 +490,10 @@ template <int VectorWidth> struct MathFunctionImpl<VectorWidth, MathOp::Cos> {
                 auto* float_pi2 = gen->getConstant(0.0009670257568359375F);
                 auto* float_pi3 = gen->getConstant(1.984187252998352e-07F);
                 auto* float_pi4 = gen->getConstant(1.273533813134432e-11F);
-                auto* float_cosC2 = gen->getConstant(-0.4999999701976776F);
-                auto* float_cosC4 = gen->getConstant(0.04166652262210846F);
-                auto* float_cosC6 = gen->getConstant(-0.001388676579343155F);
-                auto* float_cosC8 = gen->getConstant(2.4390448881604243e-05F);
+                auto* float_cos_c2 = gen->getConstant(-0.4999999701976776F);
+                auto* float_cos_c4 = gen->getConstant(0.04166652262210846F);
+                auto* float_cos_c6 = gen->getConstant(-0.001388676579343155F);
+                auto* float_cos_c8 = gen->getConstant(2.4390448881604243e-05F);
                 // NOLINTEND(cppcoreguidelines-avoid-magic-numbers)
                 auto* one_float = gen->getConstant(1.0F);
                 llvm::Value* sign = gen->getInt32Constant(0);
@@ -522,11 +522,11 @@ template <int VectorWidth> struct MathFunctionImpl<VectorWidth, MathOp::Cos> {
                     {t2, gen->builder.CreateFNeg(float_pi4), t1});
                 t2 = gen->builder.CreateFMul(t1, t1);
                 llvm::Value* t3 = gen->createIntrinsicCall(
-                    llvm::Intrinsic::fma, {t2, float_cosC8, float_cosC6});
+                    llvm::Intrinsic::fma, {t2, float_cos_c8, float_cos_c6});
                 t3 = gen->createIntrinsicCall(llvm::Intrinsic::fma,
-                                              {t3, t2, float_cosC4});
+                                              {t3, t2, float_cos_c4});
                 t3 = gen->createIntrinsicCall(llvm::Intrinsic::fma,
-                                              {t3, t2, float_cosC2});
+                                              {t3, t2, float_cos_c2});
                 t1 = gen->createIntrinsicCall(llvm::Intrinsic::fma,
                                               {t3, t2, one_float});
                 llvm::Value* t1_as_int =
@@ -540,17 +540,17 @@ template <int VectorWidth> struct MathFunctionImpl<VectorWidth, MathOp::Cos> {
 
 template <int VectorWidth> struct MathFunctionImpl<VectorWidth, MathOp::Tan> {
     static llvm::Function* generate(MathFunctionGenerator<VectorWidth>* gen) {
-        constexpr auto opInfo = getMathOpInfo(MathOp::Tan);
+        constexpr auto OP_INFO = get_math_op_info(MathOp::Tan);
         return gen->createFunction(
-            opInfo.name, opInfo.arity,
+            OP_INFO.name, OP_INFO.arity,
             [gen](llvm::ArrayRef<llvm::Value*> args) -> llvm::Value* {
                 auto* x = args[0];
-                llvm::Function* sinFunc =
+                llvm::Function* sin_func =
                     MathFunctionImpl<VectorWidth, MathOp::Sin>::generate(gen);
-                llvm::Function* cosFunc =
+                llvm::Function* cos_func =
                     MathFunctionImpl<VectorWidth, MathOp::Cos>::generate(gen);
-                llvm::Value* sin_x = gen->builder.CreateCall(sinFunc, {x});
-                llvm::Value* cos_x = gen->builder.CreateCall(cosFunc, {x});
+                llvm::Value* sin_x = gen->builder.CreateCall(sin_func, {x});
+                llvm::Value* cos_x = gen->builder.CreateCall(cos_func, {x});
                 return gen->builder.CreateFDiv(sin_x, cos_x);
             });
     }
@@ -558,10 +558,10 @@ template <int VectorWidth> struct MathFunctionImpl<VectorWidth, MathOp::Tan> {
 
 template <int VectorWidth> struct MathFunctionImpl<VectorWidth, MathOp::Atan> {
     static llvm::Function* generate(MathFunctionGenerator<VectorWidth>* gen) {
-        constexpr auto opInfo = getMathOpInfo(MathOp::Atan);
+        constexpr auto OP_INFO = get_math_op_info(MathOp::Atan);
         // https://stackoverflow.com/a/23097989
         return gen->createFunction(
-            opInfo.name, opInfo.arity,
+            OP_INFO.name, OP_INFO.arity,
             [gen](llvm::ArrayRef<llvm::Value*> args) -> llvm::Value* {
                 auto* var = args[0];
                 // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
@@ -642,9 +642,9 @@ template <int VectorWidth> struct MathFunctionImpl<VectorWidth, MathOp::Atan> {
 
 template <int VectorWidth> struct MathFunctionImpl<VectorWidth, MathOp::Atan2> {
     static llvm::Function* generate(MathFunctionGenerator<VectorWidth>* gen) {
-        constexpr auto opInfo = getMathOpInfo(MathOp::Atan2);
+        constexpr auto OP_INFO = get_math_op_info(MathOp::Atan2);
         return gen->createFunction(
-            opInfo.name, opInfo.arity,
+            OP_INFO.name, OP_INFO.arity,
             [gen](llvm::ArrayRef<llvm::Value*> args) -> llvm::Value* {
                 auto* var_y = args[0];
                 auto* var_x = args[1];
@@ -682,11 +682,11 @@ template <int VectorWidth> struct MathFunctionImpl<VectorWidth, MathOp::Atan2> {
 
 template <int VectorWidth> struct MathFunctionImpl<VectorWidth, MathOp::Acos> {
     static llvm::Function* generate(MathFunctionGenerator<VectorWidth>* gen) {
-        constexpr auto opInfo = getMathOpInfo(MathOp::Acos);
+        constexpr auto OP_INFO = get_math_op_info(MathOp::Acos);
         // https://forwardscattering.org/post/66
         // TODO: Switch to another implementation that doesn't has licensing issues.
         return gen->createFunction(
-            opInfo.name, opInfo.arity,
+            OP_INFO.name, OP_INFO.arity,
             [gen](llvm::ArrayRef<llvm::Value*> args) -> llvm::Value* {
                 auto* x = args[0];
                 auto* pi = gen->getConstant(std::numbers::pi_v<float>);
@@ -724,10 +724,10 @@ template <int VectorWidth> struct MathFunctionImpl<VectorWidth, MathOp::Acos> {
 
 template <int VectorWidth> struct MathFunctionImpl<VectorWidth, MathOp::Asin> {
     static llvm::Function* generate(MathFunctionGenerator<VectorWidth>* gen) {
-        constexpr auto opInfo = getMathOpInfo(MathOp::Asin);
+        constexpr auto OP_INFO = get_math_op_info(MathOp::Asin);
         // asin(x) = pi/2 - acos(x)
         return gen->createFunction(
-            opInfo.name, opInfo.arity,
+            OP_INFO.name, OP_INFO.arity,
             [gen](llvm::ArrayRef<llvm::Value*> args) -> llvm::Value* {
                 auto* x = args[0];
                 auto* pi_div_2 = gen->getConstant(
@@ -763,7 +763,7 @@ class MathLibraryManager {
         : module(module), context(context) {}
 
     llvm::Function* getFunction(MathOp op) {
-        if (auto it = funcCache.find(op); it != funcCache.end()) {
+        if (auto it = func_cache.find(op); it != func_cache.end()) {
             return it->second;
         }
         return generateAndCache(op);
@@ -772,7 +772,7 @@ class MathLibraryManager {
   private:
     llvm::Module* module;
     llvm::LLVMContext& context;
-    std::map<MathOp, llvm::Function*> funcCache;
+    std::map<MathOp, llvm::Function*> func_cache;
 
     template <MathOp op, int VectorWidth> llvm::Function* dispatch() {
         MathFunctionGenerator<VectorWidth> generator(module, context);
@@ -780,9 +780,9 @@ class MathLibraryManager {
     }
 
     template <MathOp op> llvm::Function* generateAndCacheImpl() {
-        llvm::Function* scalarFunc = dispatch<op, 1>();
+        llvm::Function* scalar_func = dispatch<op, 1>();
 
-        if (!scalarFunc) {
+        if (!scalar_func) {
             return nullptr;
         }
 
@@ -791,9 +791,9 @@ class MathLibraryManager {
                                 std::integer_sequence<int, vlen...>) {
             (
                 [&] {
-                    const llvm::Function* vecFunc = dispatch<op, vlen>();
+                    const llvm::Function* vec_func = dispatch<op, vlen>();
 
-                    if (vecFunc) {
+                    if (vec_func) {
 #if defined(__x86_64__) || defined(__ARM_NEON__)
                         std::string isa;
 #ifdef __x86_64__
@@ -815,15 +815,15 @@ class MathLibraryManager {
                             isa = "s"; // SVE
                         }
 #endif
-                        constexpr auto opInfo = getMathOpInfo(op);
-                        std::string parameters(opInfo.arity, 'v');
+                        constexpr auto OP_INFO = get_math_op_info(op);
+                        std::string parameters(OP_INFO.arity, 'v');
                         std::string mask = "N";
-                        std::string abi_string =
-                            std::format("_ZGV{}{}{}{}_{}({})", isa, mask, vlen,
-                                        parameters, scalarFunc->getName().str(),
-                                        vecFunc->getName().str());
+                        std::string abi_string = std::format(
+                            "_ZGV{}{}{}{}_{}({})", isa, mask, vlen, parameters,
+                            scalar_func->getName().str(),
+                            vec_func->getName().str());
 
-                        scalarFunc->addFnAttr(llvm::Attribute::get(
+                        scalar_func->addFnAttr(llvm::Attribute::get(
                             context, "vector-function-abi-variant",
                             abi_string));
 #endif
@@ -834,8 +834,8 @@ class MathLibraryManager {
 
         link_vectors(SupportedVectorWidths{});
 
-        funcCache[op] = scalarFunc;
-        return scalarFunc;
+        func_cache[op] = scalar_func;
+        return scalar_func;
     }
 
     llvm::Function* generateAndCache(MathOp op) {
@@ -854,4 +854,4 @@ class MathLibraryManager {
     }
 };
 
-#endif // LLVMEXPR_UTILS_MATH_HPP
+#endif // LLVMEXPR_CODEGEN_LLVM_MATH_HPP

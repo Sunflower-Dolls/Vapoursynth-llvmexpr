@@ -21,6 +21,7 @@
 #define LLVMEXPR_INFIX2POSTFIX_TOKENIZER_HPP
 
 #include "types.hpp"
+
 #include <map>
 #include <string>
 #include <vector>

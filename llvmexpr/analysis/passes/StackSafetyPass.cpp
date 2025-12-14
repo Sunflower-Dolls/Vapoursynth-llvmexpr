@@ -21,6 +21,7 @@
 #include "../framework/AnalysisError.hpp"
 #include "../framework/AnalysisManager.hpp"
 #include "BlockAnalysisPass.hpp"
+
 #include <format>
 
 namespace analysis {
@@ -65,9 +66,9 @@ StackSafetyPass::Result StackSafetyPass::run(const std::vector<Token>& tokens,
         if (depth_in < block.min_stack_needed) {
             throw AnalysisError(
                 std::format("Stack underflow before executing block {}: "
-                           "depth_in = {}, min_needed = {}, start token '{}'",
-                           block_idx, depth_in, block.min_stack_needed,
-                           tokens[block.start_token_idx].text),
+                            "depth_in = {}, min_needed = {}, start token '{}'",
+                            block_idx, depth_in, block.min_stack_needed,
+                            tokens[block.start_token_idx].text),
                 block.start_token_idx);
         }
 
@@ -79,14 +80,15 @@ StackSafetyPass::Result StackSafetyPass::run(const std::vector<Token>& tokens,
                 worklist.push_back(succ_idx);
             } else if (result.stack_depth_in[succ_idx] != depth_out) {
                 throw AnalysisError(
-                    std::format("Stack depth mismatch on converging paths: "
-                               "block {} -> successor {}. "
-                               "incoming depth = {}, recorded successor depth = {}, "
-                               "current start token '{}', successor start token '{}'",
-                               block_idx, succ_idx, depth_out,
-                               result.stack_depth_in[succ_idx],
-                               tokens[block.start_token_idx].text,
-                               tokens[cfg_blocks[succ_idx].start_token_idx].text),
+                    std::format(
+                        "Stack depth mismatch on converging paths: "
+                        "block {} -> successor {}. "
+                        "incoming depth = {}, recorded successor depth = {}, "
+                        "current start token '{}', successor start token '{}'",
+                        block_idx, succ_idx, depth_out,
+                        result.stack_depth_in[succ_idx],
+                        tokens[block.start_token_idx].text,
+                        tokens[cfg_blocks[succ_idx].start_token_idx].text),
                     cfg_blocks[succ_idx].start_token_idx);
             }
         }
@@ -99,11 +101,12 @@ StackSafetyPass::Result StackSafetyPass::run(const std::vector<Token>& tokens,
                 result.stack_depth_in[i] + cfg_blocks[i].stack_effect;
             if (final_depth != expected_final_depth) {
                 throw AnalysisError(
-                    std::format("Expression stack not balanced on "
-                               "reachable terminal block {}: "
-                               "final depth = {}, expected = {}, start token '{}'",
-                               i, final_depth, expected_final_depth,
-                               tokens[cfg_blocks[i].start_token_idx].text),
+                    std::format(
+                        "Expression stack not balanced on "
+                        "reachable terminal block {}: "
+                        "final depth = {}, expected = {}, start token '{}'",
+                        i, final_depth, expected_final_depth,
+                        tokens[cfg_blocks[i].start_token_idx].text),
                     cfg_blocks[i].start_token_idx);
             }
         }

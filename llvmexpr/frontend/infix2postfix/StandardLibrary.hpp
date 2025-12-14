@@ -20,16 +20,16 @@
 #ifndef LLVMEXPR_INFIX2POSTFIX_STANDARDLIBRARY_HPP
 #define LLVMEXPR_INFIX2POSTFIX_STANDARDLIBRARY_HPP
 
-#include <optional>
-#include <string_view>
-#include <type_traits>
-#include <vector>
-
 // Import all standard library definitions
 #include "stdlib/Algorithms.hpp"
 #include "stdlib/LibraryBase.hpp"
 #include "stdlib/Meta.hpp"
 #include "stdlib/Std.hpp"
+
+#include <optional>
+#include <string_view>
+#include <type_traits>
+#include <vector>
 
 namespace infix2postfix {
 
@@ -37,7 +37,7 @@ using stdlib::ExportedFunction;
 using stdlib::IsLibrary;
 
 using AllStandardLibraries =
-    std::tuple<stdlib::algorithms, stdlib::meta, stdlib::std>;
+    std::tuple<stdlib::Algorithms, stdlib::Meta, stdlib::Std>;
 
 namespace detail {
 
@@ -48,16 +48,16 @@ struct tuple_contains<T, std::tuple<Us...>>
     : std::bool_constant<(std::is_same_v<T, Us> || ...)> {};
 
 template <typename T, typename Tuple>
-inline constexpr bool tuple_contains_v = tuple_contains<T, Tuple>::value;
+inline constexpr bool TUPLE_CONTAINS_V = tuple_contains<T, Tuple>::value;
 
-template <typename Tuple, typename T> struct tuple_push_front {
+template <typename Tuple, typename T> struct TuplePushFront {
     using type =
         decltype(std::tuple_cat(std::tuple<T>{}, std::declval<Tuple>()));
 };
 
-template <typename Lib, typename Resolved> struct append_if_absent {
+template <typename Lib, typename Resolved> struct AppendIfAbsent {
     using type =
-        std::conditional_t<tuple_contains_v<Lib, Resolved>, Resolved,
+        std::conditional_t<TUPLE_CONTAINS_V<Lib, Resolved>, Resolved,
                            decltype(std::tuple_cat(std::declval<Resolved>(),
                                                    std::tuple<Lib>{}))>;
 };
@@ -66,11 +66,11 @@ template <typename DepTuple, typename RecStack, typename Resolved>
 struct resolve_deps;
 
 template <IsLibrary Lib, typename RecStack, typename Resolved>
-struct resolve_one; // Forward declaration
+struct ResolveOne; // Forward declaration
 
 template <IsLibrary Dep, typename... Deps, typename RecStack, typename Resolved>
 struct resolve_deps<std::tuple<Dep, Deps...>, RecStack, Resolved> {
-    using after_first = typename resolve_one<Dep, RecStack, Resolved>::type;
+    using after_first = typename ResolveOne<Dep, RecStack, Resolved>::type;
     using type =
         typename resolve_deps<std::tuple<Deps...>, RecStack, after_first>::type;
 };
@@ -81,21 +81,21 @@ struct resolve_deps<std::tuple<>, RecStack, Resolved> {
 };
 
 template <IsLibrary Lib, typename RecStack, typename Resolved>
-struct resolve_one {
-    static_assert(!tuple_contains_v<Lib, RecStack>,
+struct ResolveOne {
+    static_assert(!TUPLE_CONTAINS_V<Lib, RecStack>,
                   "Circular dependency detected in standard libraries");
 
-    using rec2 = typename tuple_push_front<RecStack, Lib>::type;
+    using rec2 = typename TuplePushFront<RecStack, Lib>::type;
     using after_deps =
         typename resolve_deps<typename Lib::dependencies, rec2, Resolved>::type;
-    using type = typename append_if_absent<Lib, after_deps>::type;
+    using type = typename AppendIfAbsent<Lib, after_deps>::type;
 };
 
 } // namespace detail
 
 template <IsLibrary Lib>
 using ResolveLibraryDependencies =
-    typename detail::resolve_one<Lib, std::tuple<>, std::tuple<>>::type;
+    typename detail::ResolveOne<Lib, std::tuple<>, std::tuple<>>::type;
 
 class StandardLibraryManager {
   public:

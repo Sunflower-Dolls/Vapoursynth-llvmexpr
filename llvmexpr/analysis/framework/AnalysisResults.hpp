@@ -21,6 +21,7 @@
 #define LLVMEXPR_ANALYSIS_FRAMEWORK_ANALYSIS_RESULTS_HPP
 
 #include "AnalysisError.hpp"
+
 #include <any>
 #include <format>
 #include <typeindex>

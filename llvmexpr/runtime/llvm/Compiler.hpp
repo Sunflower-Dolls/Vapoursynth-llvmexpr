@@ -17,8 +17,8 @@
  * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef LLVMEXPR_COMPILER_HPP
-#define LLVMEXPR_COMPILER_HPP
+#ifndef LLVMEXPR_RUNTIME_LLVM_COMPILER_HPP
+#define LLVMEXPR_RUNTIME_LLVM_COMPILER_HPP
 
 #include <map>
 #include <string>
@@ -38,7 +38,7 @@ class Compiler {
              const std::map<std::pair<int, std::string>, int>& p_map,
              std::string function_name, int opt_level_in, int approx_math_in,
              const analysis::ExpressionAnalysisResults& analysis_results_in,
-             ExprMode mode = ExprMode::EXPR,
+             ExprMode mode = ExprMode::Expr,
              const std::vector<std::string>& output_props = {});
 
     CompiledFunction compile();
@@ -62,7 +62,7 @@ class Compiler {
     // Analysis results
     const analysis::ExpressionAnalysisResults& analysis_results;
 
-    CompiledFunction compile_with_approx_math(int actual_approx_math);
+    CompiledFunction compileWithApproxMath(int actual_approx_math);
 };
 
-#endif // LLVMEXPR_COMPILER_HPP
+#endif // LLVMEXPR_RUNTIME_LLVM_COMPILER_HPP

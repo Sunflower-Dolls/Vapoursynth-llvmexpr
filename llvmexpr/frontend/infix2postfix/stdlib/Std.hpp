@@ -1,29 +1,49 @@
+/**
+ * Copyright (C) 2025 yuygfgg
+ * 
+ * This file is part of Vapoursynth-llvmexpr.
+ * 
+ * Vapoursynth-llvmexpr is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ * 
+ * Vapoursynth-llvmexpr is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 #ifndef LLVMEXPR_INFIX2POSTFIX_STDLIB_STD_HPP
 #define LLVMEXPR_INFIX2POSTFIX_STDLIB_STD_HPP
 
 #include "LibraryBase.hpp"
+
 #include "Meta.hpp"
 #include <array>
 
 namespace infix2postfix::stdlib {
 
-struct std {
-    static constexpr ::std::string_view name = "std";
+struct Std {
+    static constexpr ::std::string_view NAME = "std";
 
     //NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)
-    static constexpr char code_data[] = {
+    static constexpr char CODE_DATA[] = {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wc23-extensions"
 #embed "std.expr"
 #pragma clang diagnostic pop
         , 0 // null terminator
     };
-    static constexpr ::std::string_view code = ::std::string_view(
-        static_cast<const char*>(code_data), sizeof(code_data) - 1);
+    static constexpr ::std::string_view CODE = ::std::string_view(
+        static_cast<const char*>(CODE_DATA), sizeof(CODE_DATA) - 1);
 
-    using dependencies = ::std::tuple<meta>;
+    using dependencies = ::std::tuple<Meta>;
 
-    static constexpr ::std::array<ExportedFunction, 15> exports = {{
+    static constexpr ::std::array<ExportedFunction, 15> EXPORTS = {{
         ExportedFunction{.name = "get_width",
                          .param_count = 1,
                          .mode = ExportMode::Expr,

@@ -22,6 +22,7 @@
 #include "../framework/ForwardDataflowAnalysis.hpp"
 #include "../utils/VarNaming.hpp"
 #include "BlockAnalysisPass.hpp"
+
 #include <algorithm>
 #include <iterator>
 #include <set>
@@ -41,13 +42,13 @@ class VarInitAnalysis : public ForwardDataflowAnalysis<std::set<std::string>> {
         std::set<std::string> gen_set;
         const auto& block = cfg_blocks[block_idx];
         for (int j = block.start_token_idx; j < block.end_token_idx; ++j) {
-            if (tokens[j].type == TokenType::VAR_STORE) {
+            if (tokens[j].type == TokenType::VarStore) {
                 gen_set.insert(
-                    std::get<TokenPayload_Var>(tokens[j].payload).name);
-            } else if (tokens[j].type == TokenType::ARRAY_ALLOC_STATIC ||
-                       tokens[j].type == TokenType::ARRAY_ALLOC_DYN) {
+                    std::get<TokenPayloadVar>(tokens[j].payload).name);
+            } else if (tokens[j].type == TokenType::ArrayAllocStatic ||
+                       tokens[j].type == TokenType::ArrayAllocDyn) {
                 const auto& array_name =
-                    std::get<TokenPayload_ArrayOp>(tokens[j].payload).name;
+                    std::get<TokenPayloadArrayOp>(tokens[j].payload).name;
                 gen_set.insert(var_naming::getArrayName(array_name));
             }
         }
@@ -93,15 +94,15 @@ VarInitPass::Result VarInitPass::run(const std::vector<Token>& tokens,
     // Collect all variables and arrays
     std::set<std::string> all_vars;
     for (const auto& token : tokens) {
-        if (token.type == TokenType::VAR_STORE ||
-            token.type == TokenType::VAR_LOAD) {
-            all_vars.insert(std::get<TokenPayload_Var>(token.payload).name);
-        } else if (token.type == TokenType::ARRAY_ALLOC_STATIC ||
-                   token.type == TokenType::ARRAY_ALLOC_DYN ||
-                   token.type == TokenType::ARRAY_STORE ||
-                   token.type == TokenType::ARRAY_LOAD) {
+        if (token.type == TokenType::VarStore ||
+            token.type == TokenType::VarLoad) {
+            all_vars.insert(std::get<TokenPayloadVar>(token.payload).name);
+        } else if (token.type == TokenType::ArrayAllocStatic ||
+                   token.type == TokenType::ArrayAllocDyn ||
+                   token.type == TokenType::ArrayStore ||
+                   token.type == TokenType::ArrayLoad) {
             const auto& array_name =
-                std::get<TokenPayload_ArrayOp>(token.payload).name;
+                std::get<TokenPayloadArrayOp>(token.payload).name;
             all_vars.insert(var_naming::getArrayName(array_name));
         }
     }

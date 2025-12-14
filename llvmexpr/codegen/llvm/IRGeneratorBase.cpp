@@ -18,6 +18,7 @@
  */
 
 #include "IRGeneratorBase.hpp"
+#include "../Sorting.hpp"
 
 #include <algorithm>
 #include <array>
@@ -30,8 +31,6 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/TargetParser/Host.h"
-
-#include "../Sorting.hpp"
 
 constexpr unsigned ALIGNMENT = 32; // Vapoursynth should guarantee this
 
@@ -53,32 +52,33 @@ IRGeneratorBase::IRGeneratorBase(
       alias_scope_domain(nullptr) {}
 
 void IRGeneratorBase::generate() {
-    define_function_signature();
-    generate_loops();
+    defineFunctionSignature();
+    generateLoops();
 }
 
 llvm::AllocaInst*
 IRGeneratorBase::createAllocaInEntry(llvm::Type* type,
                                      const std::string& name) {
-    llvm::IRBuilder<> entryBuilder(&func->getEntryBlock(),
-                                   func->getEntryBlock().begin());
-    return entryBuilder.CreateAlloca(type, nullptr, name);
+    llvm::IRBuilder<> entry_builder(&func->getEntryBlock(),
+                                    func->getEntryBlock().begin());
+    return entry_builder.CreateAlloca(type, nullptr, name);
 }
 
-void IRGeneratorBase::assumeAligned(llvm::Value* ptrValue, unsigned alignment) {
-    llvm::Function* assumeFn = llvm::Intrinsic::getOrInsertDeclaration(
+void IRGeneratorBase::assumeAligned(llvm::Value* ptr_value,
+                                    unsigned alignment) {
+    llvm::Function* assume_fn = llvm::Intrinsic::getOrInsertDeclaration(
         &module, llvm::Intrinsic::assume);
     llvm::Value* cond = builder.getInt1(true);
     llvm::SmallVector<llvm::Value*, 2> args;
-    args.push_back(ptrValue);
+    args.push_back(ptr_value);
     args.push_back(builder.getInt64(static_cast<uint64_t>(alignment)));
-    llvm::OperandBundleDefT<llvm::Value*> alignBundle("align", args);
-    builder.CreateCall(assumeFn, {cond}, {alignBundle});
+    llvm::OperandBundleDefT<llvm::Value*> align_bundle("align", args);
+    builder.CreateCall(assume_fn, {cond}, {align_bundle});
 }
 
-llvm::Value* IRGeneratorBase::get_final_coord(llvm::Value* coord,
-                                              llvm::Value* max_dim,
-                                              bool use_mirror) {
+llvm::Value* IRGeneratorBase::getFinalCoord(llvm::Value* coord,
+                                            llvm::Value* max_dim,
+                                            bool use_mirror) {
     llvm::Value* zero = builder.getInt32(0);
     llvm::Value* one = builder.getInt32(1);
 
@@ -115,16 +115,18 @@ llvm::Value* IRGeneratorBase::get_final_coord(llvm::Value* coord,
     return result;
 }
 
-llvm::Value* IRGeneratorBase::generate_load_from_row_ptr(
-    llvm::Value* row_ptr, int clip_idx, llvm::Value* x, int rel_x,
-    bool use_mirror, bool no_x_bounds_check) {
+llvm::Value* IRGeneratorBase::generateLoadFromRowPtr(llvm::Value* row_ptr,
+                                                     int clip_idx,
+                                                     llvm::Value* x, int rel_x,
+                                                     bool use_mirror,
+                                                     bool no_x_bounds_check) {
     const VSVideoInfo* vinfo = vi[clip_idx];
     llvm::Value* coord_x = builder.CreateAdd(x, builder.getInt32(rel_x));
     llvm::Value* final_x = nullptr;
     if (no_x_bounds_check) {
         final_x = coord_x;
     } else {
-        final_x = get_final_coord(coord_x, builder.getInt32(width), use_mirror);
+        final_x = getFinalCoord(coord_x, builder.getInt32(width), use_mirror);
     }
 
     const VSVideoFormat& format = vinfo->format;
@@ -169,7 +171,7 @@ llvm::Value* IRGeneratorBase::generate_load_from_row_ptr(
     throw std::runtime_error("Unsupported float sample size.");
 }
 
-void IRGeneratorBase::add_loop_metadata(
+void IRGeneratorBase::addLoopMetadata(
     llvm::BranchInst* loop_br) { // NOLINT(readability-non-const-parameter)
     llvm::StringMap<bool> host_features = llvm::sys::getHostCPUFeatures();
     unsigned simd_width = 4;
@@ -212,10 +214,10 @@ void IRGeneratorBase::add_loop_metadata(
     loop_br->setMetadata(llvm::LLVMContext::MD_loop, loop_id);
 }
 
-llvm::Value* IRGeneratorBase::generate_pixel_load(int clip_idx, llvm::Value* x,
-                                                  llvm::Value* y, bool mirror) {
-    llvm::Value* final_x = get_final_coord(x, builder.getInt32(width), mirror);
-    llvm::Value* final_y = get_final_coord(y, builder.getInt32(height), mirror);
+llvm::Value* IRGeneratorBase::generatePixelLoad(int clip_idx, llvm::Value* x,
+                                                llvm::Value* y, bool mirror) {
+    llvm::Value* final_x = getFinalCoord(x, builder.getInt32(width), mirror);
+    llvm::Value* final_y = getFinalCoord(y, builder.getInt32(height), mirror);
 
     int vs_clip_idx = clip_idx + 1;
     llvm::Value* base_ptr = preloaded_base_ptrs[vs_clip_idx];
@@ -225,18 +227,17 @@ llvm::Value* IRGeneratorBase::generate_pixel_load(int clip_idx, llvm::Value* x,
     llvm::Value* row_ptr =
         builder.CreateGEP(builder.getInt8Ty(), base_ptr, y_offset);
 
-    return generate_load_from_row_ptr(row_ptr, clip_idx, final_x, 0, mirror,
-                                      true);
+    return generateLoadFromRowPtr(row_ptr, clip_idx, final_x, 0, mirror, true);
 }
 
-void IRGeneratorBase::generate_pixel_store(llvm::Value* value_to_store,
-                                           llvm::Value* x, llvm::Value* y) {
+void IRGeneratorBase::generatePixelStore(llvm::Value* value_to_store,
+                                         llvm::Value* x, llvm::Value* y) {
     const VSVideoFormat& format = vo->format;
     int bpp = format.bytesPerSample;
-    constexpr int dst_idx = 0;
+    constexpr int DST_IDX = 0;
 
-    llvm::Value* base_ptr = preloaded_base_ptrs[dst_idx];
-    llvm::Value* stride = preloaded_strides[dst_idx];
+    llvm::Value* base_ptr = preloaded_base_ptrs[DST_IDX];
+    llvm::Value* stride = preloaded_strides[DST_IDX];
 
     llvm::Value* y_offset = builder.CreateMul(y, stride);
     llvm::Value* x_offset = builder.CreateMul(x, builder.getInt32(bpp));
@@ -272,30 +273,30 @@ void IRGeneratorBase::generate_pixel_store(llvm::Value* value_to_store,
         }
         final_val = builder.CreateFPToUI(rounded_f, store_type);
         llvm::StoreInst* si = builder.CreateStore(final_val, pixel_addr);
-        setMemoryInstAttrs(si, pixel_align, dst_idx);
+        setMemoryInstAttrs(si, pixel_align, DST_IDX);
     } else {
         if (bpp == 4) {
             llvm::StoreInst* si =
                 builder.CreateStore(value_to_store, pixel_addr);
-            setMemoryInstAttrs(si, pixel_align, dst_idx);
+            setMemoryInstAttrs(si, pixel_align, DST_IDX);
         } else if (bpp == 2) {
             llvm::Value* truncated_val =
                 builder.CreateFPTrunc(value_to_store, builder.getHalfTy());
             llvm::StoreInst* si =
                 builder.CreateStore(truncated_val, pixel_addr);
-            setMemoryInstAttrs(si, pixel_align, dst_idx);
+            setMemoryInstAttrs(si, pixel_align, DST_IDX);
         } else {
             throw std::runtime_error("Unsupported float sample size.");
         }
     }
 }
 
-bool IRGeneratorBase::process_common_token(const Token& token,
-                                           std::vector<llvm::Value*>& rpn_stack,
-                                           llvm::Type* float_ty,
-                                           llvm::Type* i32_ty,
-                                           bool use_approx_math) {
-    auto applyStackOp = [&]<size_t ARITY>(auto&& op) {
+bool IRGeneratorBase::processCommonToken(const Token& token,
+                                         std::vector<llvm::Value*>& rpn_stack,
+                                         llvm::Type* float_ty,
+                                         llvm::Type* i32_ty,
+                                         bool use_approx_math) {
+    auto apply_stack_op = [&]<size_t ARITY>(auto&& op) {
         std::array<llvm::Value*, ARITY> args{};
         for (size_t i = ARITY; i > 0; --i) {
             args.at(i - 1) = rpn_stack.back();
@@ -304,18 +305,18 @@ bool IRGeneratorBase::process_common_token(const Token& token,
         rpn_stack.push_back(std::apply(op, args));
     };
 
-    auto applyIntrinsic = [&]<size_t ARITY>(llvm::Intrinsic::ID id) {
-        applyStackOp.operator()<ARITY>(
+    auto apply_intrinsic = [&]<size_t ARITY>(llvm::Intrinsic::ID id) {
+        apply_stack_op.operator()<ARITY>(
             [&](auto... args) { return createIntrinsicCall(id, args...); });
     };
 
-    auto applyBinaryOp = [&](auto opCallable) {
-        applyStackOp.operator()<2>(
-            [&](auto a, auto b) { return opCallable(a, b); });
+    auto apply_binary_op = [&](auto op_callable) {
+        apply_stack_op.operator()<2>(
+            [&](auto a, auto b) { return op_callable(a, b); });
     };
 
-    auto applyBinaryCmp = [&](llvm::CmpInst::Predicate pred) {
-        applyStackOp.operator()<2>([&](auto a, auto b) {
+    auto apply_binary_cmp = [&](llvm::CmpInst::Predicate pred) {
+        apply_stack_op.operator()<2>([&](auto a, auto b) {
             auto cmp = builder.CreateFCmp(pred, a, b);
             return builder.CreateSelect(cmp,
                                         llvm::ConstantFP::get(float_ty, 1.0),
@@ -323,8 +324,8 @@ bool IRGeneratorBase::process_common_token(const Token& token,
         });
     };
 
-    auto applyLogicalOp = [&](auto op) {
-        applyStackOp.operator()<2>([&](auto a_val, auto b_val) {
+    auto apply_logical_op = [&](auto op) {
+        apply_stack_op.operator()<2>([&](auto a_val, auto b_val) {
             auto a_bool = builder.CreateFCmpOGT(
                 a_val, llvm::ConstantFP::get(float_ty, 0.0));
             auto b_bool = builder.CreateFCmpOGT(
@@ -336,8 +337,8 @@ bool IRGeneratorBase::process_common_token(const Token& token,
         });
     };
 
-    auto applyBitwiseOp = [&](auto op) {
-        applyStackOp.operator()<2>([&](auto a, auto b) {
+    auto apply_bitwise_op = [&](auto op) {
+        apply_stack_op.operator()<2>([&](auto a, auto b) {
             auto a_rounded = createIntrinsicCall(llvm::Intrinsic::nearbyint, a);
             auto b_rounded = createIntrinsicCall(llvm::Intrinsic::nearbyint, b);
             auto ai = builder.CreateFPToSI(a_rounded, i32_ty);
@@ -347,7 +348,7 @@ bool IRGeneratorBase::process_common_token(const Token& token,
         });
     };
 
-    auto applyApproxMathOp =
+    auto apply_approx_math_op =
         [&]<size_t ARITY>(MathOp math_op, llvm::Intrinsic::ID intrinsic_id) {
             static_assert(ARITY == 1 || ARITY == 2,
                           "Only unary or binary operations supported");
@@ -375,111 +376,118 @@ bool IRGeneratorBase::process_common_token(const Token& token,
         };
 
     switch (token.type) {
-    case TokenType::NUMBER: {
-        const auto& payload = std::get<TokenPayload_Number>(token.payload);
+    case TokenType::Number: {
+        const auto& payload = std::get<TokenPayloadNumber>(token.payload);
         rpn_stack.push_back(llvm::ConstantFP::get(float_ty, payload.value));
         return true;
     }
-    case TokenType::CONSTANT_WIDTH:
+    case TokenType::ConstantWidth:
         rpn_stack.push_back(
             builder.CreateSIToFP(builder.getInt32(width), float_ty));
         return true;
-    case TokenType::CONSTANT_HEIGHT:
+    case TokenType::ConstantHeight:
         rpn_stack.push_back(
             builder.CreateSIToFP(builder.getInt32(height), float_ty));
         return true;
-    case TokenType::CONSTANT_N:
+    case TokenType::ConstantN:
         rpn_stack.push_back(builder.CreateLoad(
             float_ty,
             builder.CreateGEP(float_ty, props_arg, builder.getInt32(0))));
         return true;
-    case TokenType::CONSTANT_PI:
+    case TokenType::ConstantPi:
         rpn_stack.push_back(llvm::ConstantFP::get(float_ty, std::numbers::pi));
         return true;
 
     // Binary Operators
-    case TokenType::ADD:
-        applyBinaryOp([&](llvm::Value* a, llvm::Value* b) {
+    case TokenType::Add:
+        apply_binary_op([&](llvm::Value* a, llvm::Value* b) {
             return builder.CreateFAdd(a, b);
         });
         return true;
-    case TokenType::SUB:
-        applyBinaryOp([&](llvm::Value* a, llvm::Value* b) {
+    case TokenType::Sub:
+        apply_binary_op([&](llvm::Value* a, llvm::Value* b) {
             return builder.CreateFSub(a, b);
         });
         return true;
-    case TokenType::MUL:
-        applyBinaryOp([&](llvm::Value* a, llvm::Value* b) {
+    case TokenType::Mul:
+        apply_binary_op([&](llvm::Value* a, llvm::Value* b) {
             return builder.CreateFMul(a, b);
         });
         return true;
-    case TokenType::DIV:
-        applyBinaryOp([&](llvm::Value* a, llvm::Value* b) {
+    case TokenType::Div:
+        apply_binary_op([&](llvm::Value* a, llvm::Value* b) {
             return builder.CreateFDiv(a, b);
         });
         return true;
-    case TokenType::MOD:
-        applyBinaryOp([&](llvm::Value* a, llvm::Value* b) {
+    case TokenType::Mod:
+        apply_binary_op([&](llvm::Value* a, llvm::Value* b) {
             return builder.CreateFRem(a, b);
         });
         return true;
-    case TokenType::POW:
-        applyIntrinsic.operator()<2>(llvm::Intrinsic::pow);
+    case TokenType::Pow:
+        apply_intrinsic.operator()<2>(llvm::Intrinsic::pow);
         return true;
-    case TokenType::ATAN2:
-        applyApproxMathOp.operator()<2>(MathOp::Atan2, llvm::Intrinsic::atan2);
+    case TokenType::Atan2:
+        apply_approx_math_op.operator()<2>(MathOp::Atan2,
+                                           llvm::Intrinsic::atan2);
         return true;
-    case TokenType::COPYSIGN:
-        applyIntrinsic.operator()<2>(llvm::Intrinsic::copysign);
+    case TokenType::Copysign:
+        apply_intrinsic.operator()<2>(llvm::Intrinsic::copysign);
         return true;
-    case TokenType::MIN:
-        applyIntrinsic.operator()<2>(llvm::Intrinsic::minnum);
+    case TokenType::Min:
+        apply_intrinsic.operator()<2>(llvm::Intrinsic::minnum);
         return true;
-    case TokenType::MAX:
-        applyIntrinsic.operator()<2>(llvm::Intrinsic::maxnum);
+    case TokenType::Max:
+        apply_intrinsic.operator()<2>(llvm::Intrinsic::maxnum);
         return true;
 
     // Binary comparisons
-    case TokenType::GT:
-        applyBinaryCmp(llvm::CmpInst::FCMP_OGT);
+    case TokenType::Gt:
+        apply_binary_cmp(llvm::CmpInst::FCMP_OGT);
         return true;
-    case TokenType::LT:
-        applyBinaryCmp(llvm::CmpInst::FCMP_OLT);
+    case TokenType::Lt:
+        apply_binary_cmp(llvm::CmpInst::FCMP_OLT);
         return true;
-    case TokenType::GE:
-        applyBinaryCmp(llvm::CmpInst::FCMP_OGE);
+    case TokenType::Ge:
+        apply_binary_cmp(llvm::CmpInst::FCMP_OGE);
         return true;
-    case TokenType::LE:
-        applyBinaryCmp(llvm::CmpInst::FCMP_OLE);
+    case TokenType::Le:
+        apply_binary_cmp(llvm::CmpInst::FCMP_OLE);
         return true;
-    case TokenType::EQ:
-        applyBinaryCmp(llvm::CmpInst::FCMP_OEQ);
+    case TokenType::Eq:
+        apply_binary_cmp(llvm::CmpInst::FCMP_OEQ);
         return true;
 
     // Logical ops
-    case TokenType::AND:
-        applyLogicalOp([&](auto a, auto b) { return builder.CreateAnd(a, b); });
+    case TokenType::And:
+        apply_logical_op(
+            [&](auto a, auto b) { return builder.CreateAnd(a, b); });
         return true;
-    case TokenType::OR:
-        applyLogicalOp([&](auto a, auto b) { return builder.CreateOr(a, b); });
+    case TokenType::Or:
+        apply_logical_op(
+            [&](auto a, auto b) { return builder.CreateOr(a, b); });
         return true;
-    case TokenType::XOR:
-        applyLogicalOp([&](auto a, auto b) { return builder.CreateXor(a, b); });
+    case TokenType::Xor:
+        apply_logical_op(
+            [&](auto a, auto b) { return builder.CreateXor(a, b); });
         return true;
 
     // Bitwise ops
-    case TokenType::BITAND:
-        applyBitwiseOp([&](auto a, auto b) { return builder.CreateAnd(a, b); });
+    case TokenType::Bitand:
+        apply_bitwise_op(
+            [&](auto a, auto b) { return builder.CreateAnd(a, b); });
         return true;
-    case TokenType::BITOR:
-        applyBitwiseOp([&](auto a, auto b) { return builder.CreateOr(a, b); });
+    case TokenType::Bitor:
+        apply_bitwise_op(
+            [&](auto a, auto b) { return builder.CreateOr(a, b); });
         return true;
-    case TokenType::BITXOR:
-        applyBitwiseOp([&](auto a, auto b) { return builder.CreateXor(a, b); });
+    case TokenType::Bitxor:
+        apply_bitwise_op(
+            [&](auto a, auto b) { return builder.CreateXor(a, b); });
         return true;
 
     // Unary Operators
-    case TokenType::SQRT: {
+    case TokenType::Sqrt: {
         auto* a = rpn_stack.back();
         rpn_stack.pop_back();
         auto* zero = llvm::ConstantFP::get(float_ty, 0.0);
@@ -488,64 +496,64 @@ bool IRGeneratorBase::process_common_token(const Token& token,
             createIntrinsicCall(llvm::Intrinsic::sqrt, max_val));
         return true;
     }
-    case TokenType::EXP:
-        applyApproxMathOp.operator()<1>(MathOp::Exp, llvm::Intrinsic::exp);
+    case TokenType::Exp:
+        apply_approx_math_op.operator()<1>(MathOp::Exp, llvm::Intrinsic::exp);
         return true;
-    case TokenType::LOG:
-        applyApproxMathOp.operator()<1>(MathOp::Log, llvm::Intrinsic::log);
+    case TokenType::Log:
+        apply_approx_math_op.operator()<1>(MathOp::Log, llvm::Intrinsic::log);
         return true;
-    case TokenType::ABS:
-        applyIntrinsic.operator()<1>(llvm::Intrinsic::fabs);
+    case TokenType::Abs:
+        apply_intrinsic.operator()<1>(llvm::Intrinsic::fabs);
         return true;
-    case TokenType::FLOOR:
-        applyIntrinsic.operator()<1>(llvm::Intrinsic::floor);
+    case TokenType::Floor:
+        apply_intrinsic.operator()<1>(llvm::Intrinsic::floor);
         return true;
-    case TokenType::CEIL:
-        applyIntrinsic.operator()<1>(llvm::Intrinsic::ceil);
+    case TokenType::Ceil:
+        apply_intrinsic.operator()<1>(llvm::Intrinsic::ceil);
         return true;
-    case TokenType::TRUNC:
-        applyIntrinsic.operator()<1>(llvm::Intrinsic::trunc);
+    case TokenType::Trunc:
+        apply_intrinsic.operator()<1>(llvm::Intrinsic::trunc);
         return true;
-    case TokenType::ROUND:
-        applyIntrinsic.operator()<1>(llvm::Intrinsic::round);
+    case TokenType::Round:
+        apply_intrinsic.operator()<1>(llvm::Intrinsic::round);
         return true;
-    case TokenType::SIN:
-        applyApproxMathOp.operator()<1>(MathOp::Sin, llvm::Intrinsic::sin);
+    case TokenType::Sin:
+        apply_approx_math_op.operator()<1>(MathOp::Sin, llvm::Intrinsic::sin);
         return true;
-    case TokenType::COS:
-        applyApproxMathOp.operator()<1>(MathOp::Cos, llvm::Intrinsic::cos);
+    case TokenType::Cos:
+        apply_approx_math_op.operator()<1>(MathOp::Cos, llvm::Intrinsic::cos);
         return true;
-    case TokenType::TAN:
-        applyApproxMathOp.operator()<1>(MathOp::Tan, llvm::Intrinsic::tan);
+    case TokenType::Tan:
+        apply_approx_math_op.operator()<1>(MathOp::Tan, llvm::Intrinsic::tan);
         return true;
-    case TokenType::ASIN:
-        applyApproxMathOp.operator()<1>(MathOp::Asin, llvm::Intrinsic::asin);
+    case TokenType::Asin:
+        apply_approx_math_op.operator()<1>(MathOp::Asin, llvm::Intrinsic::asin);
         return true;
-    case TokenType::ACOS:
-        applyApproxMathOp.operator()<1>(MathOp::Acos, llvm::Intrinsic::acos);
+    case TokenType::Acos:
+        apply_approx_math_op.operator()<1>(MathOp::Acos, llvm::Intrinsic::acos);
         return true;
-    case TokenType::ATAN:
-        applyApproxMathOp.operator()<1>(MathOp::Atan, llvm::Intrinsic::atan);
+    case TokenType::Atan:
+        apply_approx_math_op.operator()<1>(MathOp::Atan, llvm::Intrinsic::atan);
         return true;
-    case TokenType::EXP2:
-        applyIntrinsic.operator()<1>(llvm::Intrinsic::exp2);
+    case TokenType::Exp2:
+        apply_intrinsic.operator()<1>(llvm::Intrinsic::exp2);
         return true;
-    case TokenType::LOG10:
-        applyIntrinsic.operator()<1>(llvm::Intrinsic::log10);
+    case TokenType::Log10:
+        apply_intrinsic.operator()<1>(llvm::Intrinsic::log10);
         return true;
-    case TokenType::LOG2:
-        applyIntrinsic.operator()<1>(llvm::Intrinsic::log2);
+    case TokenType::Log2:
+        apply_intrinsic.operator()<1>(llvm::Intrinsic::log2);
         return true;
-    case TokenType::SINH:
-        applyIntrinsic.operator()<1>(llvm::Intrinsic::sinh);
+    case TokenType::Sinh:
+        apply_intrinsic.operator()<1>(llvm::Intrinsic::sinh);
         return true;
-    case TokenType::COSH:
-        applyIntrinsic.operator()<1>(llvm::Intrinsic::cosh);
+    case TokenType::Cosh:
+        apply_intrinsic.operator()<1>(llvm::Intrinsic::cosh);
         return true;
-    case TokenType::TANH:
-        applyIntrinsic.operator()<1>(llvm::Intrinsic::tanh);
+    case TokenType::Tanh:
+        apply_intrinsic.operator()<1>(llvm::Intrinsic::tanh);
         return true;
-    case TokenType::SGN: {
+    case TokenType::Sgn: {
         auto* x = rpn_stack.back();
         rpn_stack.pop_back();
         auto* zero = llvm::ConstantFP::get(float_ty, 0.0);
@@ -558,13 +566,13 @@ bool IRGeneratorBase::process_common_token(const Token& token,
         rpn_stack.push_back(builder.CreateSelect(nonzero, sign, zero));
         return true;
     }
-    case TokenType::NEG: {
+    case TokenType::Neg: {
         auto* a = rpn_stack.back();
         rpn_stack.pop_back();
         rpn_stack.push_back(builder.CreateFNeg(a));
         return true;
     }
-    case TokenType::NOT: {
+    case TokenType::Not: {
         auto* a = rpn_stack.back();
         rpn_stack.pop_back();
         rpn_stack.push_back(builder.CreateSelect(
@@ -573,7 +581,7 @@ bool IRGeneratorBase::process_common_token(const Token& token,
             llvm::ConstantFP::get(float_ty, 0.0)));
         return true;
     }
-    case TokenType::BITNOT: {
+    case TokenType::Bitnot: {
         auto* a = rpn_stack.back();
         rpn_stack.pop_back();
         auto* a_rounded = createIntrinsicCall(llvm::Intrinsic::nearbyint, a);
@@ -584,7 +592,7 @@ bool IRGeneratorBase::process_common_token(const Token& token,
     }
 
     // Ternary and other multi-arg
-    case TokenType::TERNARY: {
+    case TokenType::Ternary: {
         auto* c = rpn_stack.back();
         rpn_stack.pop_back();
         auto* b = rpn_stack.back();
@@ -596,8 +604,8 @@ bool IRGeneratorBase::process_common_token(const Token& token,
             c));
         return true;
     }
-    case TokenType::CLIP:
-    case TokenType::CLAMP: {
+    case TokenType::Clip:
+    case TokenType::Clamp: {
         auto* max_val = rpn_stack.back();
         rpn_stack.pop_back();
         auto* min_val = rpn_stack.back();
@@ -610,7 +618,7 @@ bool IRGeneratorBase::process_common_token(const Token& token,
         rpn_stack.push_back(clamped);
         return true;
     }
-    case TokenType::FMA: {
+    case TokenType::Fma: {
         auto* c = rpn_stack.back();
         rpn_stack.pop_back();
         auto* b = rpn_stack.back();
@@ -625,26 +633,26 @@ bool IRGeneratorBase::process_common_token(const Token& token,
     }
 
     // Stack manipulation
-    case TokenType::DUP: {
-        const auto& payload = std::get<TokenPayload_StackOp>(token.payload);
+    case TokenType::Dup: {
+        const auto& payload = std::get<TokenPayloadStackOp>(token.payload);
         rpn_stack.push_back(rpn_stack[rpn_stack.size() - 1 - payload.n]);
         return true;
     }
-    case TokenType::DROP: {
-        const auto& payload = std::get<TokenPayload_StackOp>(token.payload);
+    case TokenType::Drop: {
+        const auto& payload = std::get<TokenPayloadStackOp>(token.payload);
         if (payload.n > 0) {
             rpn_stack.resize(rpn_stack.size() - payload.n);
         }
         return true;
     }
-    case TokenType::SWAP: {
-        const auto& payload = std::get<TokenPayload_StackOp>(token.payload);
+    case TokenType::Swap: {
+        const auto& payload = std::get<TokenPayloadStackOp>(token.payload);
         std::swap(rpn_stack.back(),
                   rpn_stack[rpn_stack.size() - 1 - payload.n]);
         return true;
     }
-    case TokenType::SORTN: {
-        const auto& payload = std::get<TokenPayload_StackOp>(token.payload);
+    case TokenType::SortN: {
+        const auto& payload = std::get<TokenPayloadStackOp>(token.payload);
         int n = payload.n;
         if (n < 2) {
             return true;
@@ -677,8 +685,8 @@ bool IRGeneratorBase::process_common_token(const Token& token,
     }
 
     // Control Flow (no-op during this pass)
-    case TokenType::LABEL_DEF:
-    case TokenType::JUMP:
+    case TokenType::LabelDef:
+    case TokenType::Jump:
         return true;
 
     default:
@@ -687,10 +695,9 @@ bool IRGeneratorBase::process_common_token(const Token& token,
     }
 }
 
-void IRGeneratorBase::generate_ir_from_tokens(llvm::Value* x, llvm::Value* y,
-                                              llvm::Value* x_fp,
-                                              llvm::Value* y_fp,
-                                              bool no_x_bounds_check) {
+void IRGeneratorBase::generateIRFromTokens(llvm::Value* x, llvm::Value* y,
+                                           llvm::Value* x_fp, llvm::Value* y_fp,
+                                           bool no_x_bounds_check) {
     llvm::Type* float_ty = builder.getFloatTy();
     llvm::Type* i32_ty = builder.getInt32Ty();
     llvm::Function* parent_func = builder.GetInsertBlock()->getParent();
@@ -704,7 +711,7 @@ void IRGeneratorBase::generate_ir_from_tokens(llvm::Value* x, llvm::Value* y,
     }
 
     if (tokens.empty()) {
-        generate_pixel_store(llvm::ConstantFP::get(float_ty, 0.0), x, y);
+        generatePixelStore(llvm::ConstantFP::get(float_ty, 0.0), x, y);
         return;
     }
 
@@ -776,30 +783,30 @@ void IRGeneratorBase::generate_ir_from_tokens(llvm::Value* x, llvm::Value* y,
             const auto& token = tokens[j];
 
             // Try common tokens first
-            if (process_common_token(token, rpn_stack, float_ty, i32_ty,
-                                     use_approx_math)) {
+            if (processCommonToken(token, rpn_stack, float_ty, i32_ty,
+                                   use_approx_math)) {
                 continue;
             }
 
             // Variables
-            if (token.type == TokenType::VAR_STORE) {
-                const auto& payload = std::get<TokenPayload_Var>(token.payload);
+            if (token.type == TokenType::VarStore) {
+                const auto& payload = std::get<TokenPayloadVar>(token.payload);
                 llvm::Value* val_to_store = rpn_stack.back();
                 rpn_stack.pop_back();
                 llvm::Value* var_ptr = named_vars[payload.name];
                 builder.CreateStore(val_to_store, var_ptr);
                 continue;
             }
-            if (token.type == TokenType::VAR_LOAD) {
-                const auto& payload = std::get<TokenPayload_Var>(token.payload);
+            if (token.type == TokenType::VarLoad) {
+                const auto& payload = std::get<TokenPayloadVar>(token.payload);
                 llvm::Value* var_ptr = named_vars[payload.name];
                 rpn_stack.push_back(builder.CreateLoad(float_ty, var_ptr));
                 continue;
             }
 
             // Special tokens - delegate to derived class
-            if (!process_mode_specific_token(token, rpn_stack, x, y, x_fp, y_fp,
-                                             no_x_bounds_check)) {
+            if (!processModeSpecificToken(token, rpn_stack, x, y, x_fp, y_fp,
+                                          no_x_bounds_check)) {
                 throw std::runtime_error(std::format(
                     "Unhandled token type: {}", static_cast<int>(token.type)));
             }
@@ -866,5 +873,5 @@ void IRGeneratorBase::generate_ir_from_tokens(llvm::Value* x, llvm::Value* y,
     }
 
     // Let derived class handle exit logic (if any) and final store
-    finalize_and_store_result(result_val, x, y);
+    finalizeAndStoreResult(result_val, x, y);
 }

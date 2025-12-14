@@ -22,6 +22,7 @@
 #include "../framework/AnalysisManager.hpp"
 #include "BlockAnalysisPass.hpp"
 #include "ConstPropPass.hpp"
+
 #include <algorithm>
 #include <map>
 #include <optional>
@@ -43,9 +44,9 @@ PreservedAnalyses StaticArrayOptPass::run(std::vector<Token>& tokens,
 
     std::map<std::string, int> array_alloc_count;
     for (const auto& token : tokens) {
-        if (token.type == TokenType::ARRAY_ALLOC_STATIC ||
-            token.type == TokenType::ARRAY_ALLOC_DYN) {
-            const auto& payload = std::get<TokenPayload_ArrayOp>(token.payload);
+        if (token.type == TokenType::ArrayAllocStatic ||
+            token.type == TokenType::ArrayAllocDyn) {
+            const auto& payload = std::get<TokenPayloadArrayOp>(token.payload);
             array_alloc_count[payload.name]++;
         }
     }
@@ -73,9 +74,9 @@ PreservedAnalyses StaticArrayOptPass::run(std::vector<Token>& tokens,
             }
             std::ranges::reverse(args);
 
-            if (token.type == TokenType::ARRAY_ALLOC_DYN) {
+            if (token.type == TokenType::ArrayAllocDyn) {
                 const auto& payload =
-                    std::get<TokenPayload_ArrayOp>(token.payload);
+                    std::get<TokenPayloadArrayOp>(token.payload);
                 // Convert to static allocation if:
                 // 1. Size is a compile-time constant (from ConstPropPass)
                 // 2. Size <= threshold
@@ -102,15 +103,15 @@ PreservedAnalyses StaticArrayOptPass::run(std::vector<Token>& tokens,
         int size = it.second;
 
         auto& token = tokens[token_idx];
-        auto& payload = std::get<TokenPayload_ArrayOp>(token.payload);
+        auto& payload = std::get<TokenPayloadArrayOp>(token.payload);
 
-        token.type = TokenType::ARRAY_ALLOC_STATIC;
+        token.type = TokenType::ArrayAllocStatic;
         token.text = payload.name + "{}^" + std::to_string(size);
         payload.static_size = size;
 
-        Token drop_token{.type = TokenType::DROP,
+        Token drop_token{.type = TokenType::Drop,
                          .text = "drop1",
-                         .payload = TokenPayload_StackOp{.n = 1}};
+                         .payload = TokenPayloadStackOp{.n = 1}};
 
         insertions.emplace_back(token_idx, drop_token);
     }

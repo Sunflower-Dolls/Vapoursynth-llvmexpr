@@ -17,8 +17,11 @@
  * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef LLVMEXPR_GLSL_GENERATOR_HPP
-#define LLVMEXPR_GLSL_GENERATOR_HPP
+#ifndef LLVMEXPR_CODEGEN_LLVM_GLSL_GENERATOR_HPP
+#define LLVMEXPR_CODEGEN_LLVM_GLSL_GENERATOR_HPP
+
+#include "../../analysis/AnalysisResults.hpp"
+#include "../../frontend/Tokenizer.hpp"
 
 #include <map>
 #include <optional>
@@ -26,9 +29,6 @@
 #include <sstream>
 #include <string>
 #include <vector>
-
-#include "../../analysis/AnalysisResults.hpp"
-#include "../../frontend/Tokenizer.hpp"
 
 class GLSLGenerator {
   public:
@@ -67,46 +67,46 @@ class GLSLGenerator {
 #ifndef NDEBUG
     bool debug_structurize_cfg = false;
 #endif
-    void debug_emit_cfg_comment();
+    void debugEmitCfgComment();
 
     int break_flag_counter = 0;
     std::map<int, std::string> loop_break_flags; // loop header -> bool var
 
     void emit(const std::string& code);
-    void emit_line(const std::string& code);
-    void emit_newline();
+    void emitLine(const std::string& code);
+    void emitNewline();
     void indent();
     void dedent();
 
-    void emit_header();
-    void emit_buffer_declarations();
-    void emit_helper_functions();
-    void emit_variable_declarations();
-    void emit_main_function();
-    void emit_main_function_state_machine();
-    void emit_main_function_structured();
-    void emit_block_code(int block_idx);
-    void emit_store_and_return(const std::string& result_expr);
+    void emitHeader();
+    void emitBufferDeclarations();
+    void emitHelperFunctions();
+    void emitVariableDeclarations();
+    void emitMainFunction();
+    void emitMainFunctionStateMachine();
+    void emitMainFunctionStructured();
+    void emitBlockCode(int block_idx);
+    void emitStoreAndReturn(const std::string& result_expr);
 
     struct LoopContext {
         std::vector<int> header_stack;
     };
 
     [[nodiscard]] const std::vector<analysis::CFGBlock>&
-    get_codegen_cfg_blocks() const;
-    [[nodiscard]] const std::vector<int>& get_codegen_stack_depth_in() const;
-    [[nodiscard]] int compute_branch_join(int t, int f, int stop_block) const;
+    getCodegenCfgBlocks() const;
+    [[nodiscard]] const std::vector<int>& getCodegenStackDepthIn() const;
+    [[nodiscard]] int computeBranchJoin(int t, int f, int stop_block) const;
 
-    [[nodiscard]] std::string get_loop_break_flag(int header);
+    [[nodiscard]] std::string getLoopBreakFlag(int header);
     [[nodiscard]] std::optional<int>
-    find_enclosing_loop_for_follow(int target_block,
-                                   const LoopContext& loop_ctx) const;
-    void emit_unwind_break_if_needed(const LoopContext& loop_ctx);
+    findEnclosingLoopForFollow(int target_block,
+                               const LoopContext& loop_ctx) const;
+    void emitUnwindBreakIfNeeded(const LoopContext& loop_ctx);
 
     template <typename Visitor>
-    bool traverse_structure(int start_block, int stop_block,
-                            LoopContext& loop_ctx, Visitor& visitor) const {
-        const auto& cfg_blocks = get_codegen_cfg_blocks();
+    bool traverseStructure(int start_block, int stop_block,
+                           LoopContext& loop_ctx, Visitor& visitor) const {
+        const auto& cfg_blocks = getCodegenCfgBlocks();
         const auto& structurize = analysis.getStructurizeCFGResult();
 
         std::set<int> visited_in_region;
@@ -118,13 +118,13 @@ class GLSLGenerator {
 
             // Loop header handling
             if (structurize.isLoopHeader(block) &&
-                !is_loop_header_active(block, loop_ctx)) {
+                !isLoopHeaderActive(block, loop_ctx)) {
                 int follow = -1;
                 auto it = structurize.loop_follow.find(block);
                 if (it != structurize.loop_follow.end()) {
                     follow = it->second;
                 }
-                if (!visitor.handle_loop(block, follow, loop_ctx)) {
+                if (!visitor.handleLoop(block, follow, loop_ctx)) {
                     return false;
                 }
                 block = follow;
@@ -136,7 +136,7 @@ class GLSLGenerator {
             }
             visited_in_region.insert(block);
 
-            if (!visitor.visit_block(block)) {
+            if (!visitor.visitBlock(block)) {
                 return false;
             }
 
@@ -147,7 +147,7 @@ class GLSLGenerator {
             }
 
             if (succ.empty()) {
-                return visitor.handle_no_successors(block);
+                return visitor.handleNoSuccessors(block);
             }
 
             if (succ.size() == 1) {
@@ -162,19 +162,19 @@ class GLSLGenerator {
                         follow = it->second;
                     }
                     if (next == current_header || next == follow) {
-                        return visitor.handle_loop_exit_or_continue(
+                        return visitor.handleLoopExitOrContinue(
                             block, next, current_header, follow);
                     }
                     if (!structurize.inLoop(current_header, next)) {
-                        return visitor.handle_nonlocal_edge(
-                            block, next, stop_block, loop_ctx);
+                        return visitor.handleNonlocalEdge(block, next,
+                                                          stop_block, loop_ctx);
                     }
                 }
                 if (next == stop_block) {
                     return true;
                 }
 
-                if (!visitor.handle_simple_edge(block, next)) {
+                if (!visitor.handleSimpleEdge(block, next)) {
                     return false;
                 }
                 block = next;
@@ -187,10 +187,10 @@ class GLSLGenerator {
                 // Conditional goto:
                 //   if (cond > 0) goto t;
                 //   fallthrough continues at f.
-                int join = compute_branch_join(t, f, stop_block);
+                int join = computeBranchJoin(t, f, stop_block);
 
-                if (!visitor.handle_branch(block, t, f, join, stop_block,
-                                           loop_ctx)) {
+                if (!visitor.handleBranch(block, t, f, join, stop_block,
+                                          loop_ctx)) {
                     return false;
                 }
 
@@ -204,7 +204,7 @@ class GLSLGenerator {
                         follow = it->second;
                     }
                     if (join == stop_block && stop_block == follow) {
-                        return visitor.handle_loop_break(join);
+                        return visitor.handleLoopBreak(join);
                     }
                 }
 
@@ -217,50 +217,49 @@ class GLSLGenerator {
         return true;
     }
 
-    void emit_structured_from(int start_block, int stop_block,
-                              LoopContext& loop_ctx, bool& ok);
-    void emit_edge_to_block(int target_block, int stop_block,
+    void emitStructuredFrom(int start_block, int stop_block,
                             LoopContext& loop_ctx, bool& ok);
-    void emit_stack_to_entry_slots(int target_block);
+    void emitEdgeToBlock(int target_block, int stop_block,
+                         LoopContext& loop_ctx, bool& ok);
+    void emitStackToEntrySlots(int target_block);
 
-    [[nodiscard]] bool can_structure_from(int start_block, int stop_block,
-                                          LoopContext& loop_ctx) const;
-    [[nodiscard]] bool can_edge_to_block(int target_block, int stop_block,
-                                         LoopContext& loop_ctx) const;
+    [[nodiscard]] bool canStructureFrom(int start_block, int stop_block,
+                                        LoopContext& loop_ctx) const;
+    [[nodiscard]] bool canEdgeToBlock(int target_block, int stop_block,
+                                      LoopContext& loop_ctx) const;
 
-    [[nodiscard]] int lca_postdom(int a, int b,
-                                  const std::vector<int>& ipdom) const;
-    [[nodiscard]] bool is_loop_header_active(int header,
-                                             const LoopContext& loop_ctx) const;
+    [[nodiscard]] int lcaPostdom(int a, int b,
+                                 const std::vector<int>& ipdom) const;
+    [[nodiscard]] bool isLoopHeaderActive(int header,
+                                          const LoopContext& loop_ctx) const;
 
-    void process_token(const Token& token);
+    void processToken(const Token& token);
 
-    [[nodiscard]] std::string new_temp();
-    [[nodiscard]] std::string new_slot();
+    [[nodiscard]] std::string newTemp();
+    [[nodiscard]] std::string newSlot();
     [[nodiscard]] std::string pop();
     void push(const std::string& val);
     [[nodiscard]] std::string peek(int offset = 0) const;
 
-    [[nodiscard]] static std::string float_literal(double val);
-    [[nodiscard]] std::string binary_op(const std::string& op);
-    [[nodiscard]] std::string binary_cmp(const std::string& op);
-    [[nodiscard]] std::string unary_fn(const std::string& fn);
-    [[nodiscard]] std::string binary_fn(const std::string& fn);
+    [[nodiscard]] static std::string floatLiteral(double val);
+    [[nodiscard]] std::string binaryOp(const std::string& op);
+    [[nodiscard]] std::string binaryCmp(const std::string& op);
+    [[nodiscard]] std::string unaryFn(const std::string& fn);
+    [[nodiscard]] std::string binaryFn(const std::string& fn);
 
-    [[nodiscard]] std::string emit_clamp_coord(const std::string& coord,
-                                               const std::string& max_dim);
-    [[nodiscard]] std::string emit_mirror_coord(const std::string& coord,
-                                                const std::string& max_dim);
-    [[nodiscard]] std::string emit_final_coord(const std::string& coord,
-                                               const std::string& max_dim,
-                                               bool use_mirror);
+    [[nodiscard]] std::string emitClampCoord(const std::string& coord,
+                                             const std::string& max_dim);
+    [[nodiscard]] std::string emitMirrorCoord(const std::string& coord,
+                                              const std::string& max_dim);
+    [[nodiscard]] std::string emitFinalCoord(const std::string& coord,
+                                             const std::string& max_dim,
+                                             bool use_mirror);
 
-    [[nodiscard]] std::string emit_pixel_load(int clip_idx,
-                                              const std::string& x,
-                                              const std::string& y,
-                                              bool use_mirror);
-    [[nodiscard]] std::string emit_pixel_index(const std::string& x,
-                                               const std::string& y);
+    [[nodiscard]] std::string emitPixelLoad(int clip_idx, const std::string& x,
+                                            const std::string& y,
+                                            bool use_mirror);
+    [[nodiscard]] std::string emitPixelIndex(const std::string& x,
+                                             const std::string& y);
 };
 
-#endif // LLVMEXPR_GLSL_GENERATOR_HPP
+#endif // LLVMEXPR_CODEGEN_LLVM_GLSL_GENERATOR_HPP

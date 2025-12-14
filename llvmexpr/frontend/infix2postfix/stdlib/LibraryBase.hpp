@@ -38,10 +38,10 @@ struct ExportedFunction {
 
 template <typename T>
 concept IsLibrary = requires {
-    { T::name } -> std::convertible_to<std::string_view>;
-    { T::code } -> std::convertible_to<std::string_view>;
+    { T::NAME } -> std::convertible_to<std::string_view>;
+    { T::CODE } -> std::convertible_to<std::string_view>;
     typename T::dependencies;
-    { T::exports };
+    { T::EXPORTS };
 };
 
 } // namespace infix2postfix::stdlib

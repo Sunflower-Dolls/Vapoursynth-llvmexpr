@@ -21,6 +21,7 @@
 #define LLVMEXPR_INFIX2POSTFIX_OVERLOADRESOLUTION_HPP
 
 #include "types.hpp"
+
 #include <algorithm>
 #include <optional>
 #include <vector>
@@ -31,7 +32,7 @@ inline bool isConvertible(Type from, Type to, Mode mode) {
     if (from == Type::Void) {
         return false;
     }
-    return from == to || (to == Type::Value && from != Type::Literal_string &&
+    return from == to || (to == Type::Value && from != Type::LiteralString &&
                           from != Type::Array &&
                           (mode != Mode::Single || from != Type::Clip));
 }

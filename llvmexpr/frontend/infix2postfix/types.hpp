@@ -21,6 +21,7 @@
 #define LLVMEXPR_INFIX2POSTFIX_TYPES_HPP
 
 #include "llvmexpr/frontend/Tokenizer.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -52,7 +53,7 @@ enum class Type : std::uint8_t {
     Value,
     Clip,
     Literal,
-    Literal_string,
+    LiteralString,
     Array,
     Void,
 };
@@ -117,7 +118,7 @@ struct TokenMapping {
     std::string_view str;
 };
 
-constexpr std::array token_mappings = {
+constexpr std::array TOKEN_MAPPINGS = {
     // Keywords
     TokenMapping{.type = TokenType::If, .str = "if"},
     TokenMapping{.type = TokenType::Else, .str = "else"},
@@ -164,9 +165,9 @@ constexpr std::array token_mappings = {
 
 inline std::string token_type_to_string(TokenType type) {
     if (const auto* it = std::ranges::find_if(
-            token_mappings,
+            TOKEN_MAPPINGS,
             [type](const auto& mapping) { return mapping.type == type; });
-        it != token_mappings.end()) {
+        it != TOKEN_MAPPINGS.end()) {
         return std::string(it->str);
     }
     // Handle special cases not in the table
@@ -198,7 +199,7 @@ struct Token {
 
 enum class Mode : std::uint8_t { Expr, Single };
 
-enum class GlobalMode : std::uint8_t { NONE, ALL, SPECIFIC };
+enum class GlobalMode : std::uint8_t { None, All, Specific };
 
 struct ParameterInfo {
     std::string name;
@@ -211,7 +212,7 @@ struct FunctionSignature {
     bool has_return;
     bool returns_value;
     Range range;
-    GlobalMode global_mode = GlobalMode::NONE;
+    GlobalMode global_mode = GlobalMode::None;
     std::set<std::string> specific_globals;
 
     // For <global.all>, track which global variables are actually used in the function body

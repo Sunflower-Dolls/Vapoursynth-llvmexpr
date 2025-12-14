@@ -47,7 +47,7 @@ SingleExprIRGenerator::SingleExprIRGenerator(
     }
 }
 
-void SingleExprIRGenerator::define_function_signature() {
+void SingleExprIRGenerator::defineFunctionSignature() {
     llvm::Type* void_ty = llvm::Type::getVoidTy(context);
     llvm::Type* ptr_ty = llvm::PointerType::get(context, 0);
     llvm::Type* context_ptr_ty = ptr_ty; // opaque pointer (void*)
@@ -94,7 +94,7 @@ void SingleExprIRGenerator::define_function_signature() {
 }
 
 void SingleExprIRGenerator::
-    generate_loops() { // TODO: rename this. Nothing to do with loops here.
+    generateLoops() { // TODO: rename this. Nothing to do with loops here.
     llvm::BasicBlock* entry_bb =
         llvm::BasicBlock::Create(context, "entry", func);
     builder.SetInsertPoint(entry_bb);
@@ -159,7 +159,7 @@ void SingleExprIRGenerator::
 
     // Only generate IR if there are tokens to process
     if (!tokens.empty()) {
-        generate_ir_from_tokens(nullptr, nullptr, nullptr, nullptr, true);
+        generateIRFromTokens(nullptr, nullptr, nullptr, nullptr, true);
     }
 
     // Store output properties back
@@ -175,18 +175,18 @@ void SingleExprIRGenerator::
     builder.CreateRetVoid();
 }
 
-llvm::Value* SingleExprIRGenerator::generate_pixel_load_plane(int clip_idx,
-                                                              int plane_idx,
-                                                              llvm::Value* x,
-                                                              llvm::Value* y) {
+llvm::Value* SingleExprIRGenerator::generatePixelLoadPlane(int clip_idx,
+                                                           int plane_idx,
+                                                           llvm::Value* x,
+                                                           llvm::Value* y) {
     const VSVideoInfo* vinfo = vi[clip_idx];
     int plane_w = vinfo->width >> vinfo->format.subSamplingW;
     int plane_h = vinfo->height >> vinfo->format.subSamplingH;
 
     llvm::Value* final_x =
-        get_final_coord(x, builder.getInt32(plane_w), mirror_boundary);
+        getFinalCoord(x, builder.getInt32(plane_w), mirror_boundary);
     llvm::Value* final_y =
-        get_final_coord(y, builder.getInt32(plane_h), mirror_boundary);
+        getFinalCoord(y, builder.getInt32(plane_h), mirror_boundary);
 
     llvm::Value* base_ptr = plane_base_ptrs[clip_idx + 1][plane_idx];
     llvm::Value* stride = plane_strides[clip_idx + 1][plane_idx];
@@ -227,9 +227,10 @@ llvm::Value* SingleExprIRGenerator::generate_pixel_load_plane(int clip_idx,
     throw std::runtime_error("Unsupported float sample size.");
 }
 
-void SingleExprIRGenerator::generate_pixel_store_plane(
-    llvm::Value* value_to_store, int plane_idx, llvm::Value* x,
-    llvm::Value* y) {
+void SingleExprIRGenerator::generatePixelStorePlane(llvm::Value* value_to_store,
+                                                    int plane_idx,
+                                                    llvm::Value* x,
+                                                    llvm::Value* y) {
     const VSVideoFormat& format = vo->format;
     int bpp = format.bytesPerSample;
 
@@ -280,7 +281,7 @@ void SingleExprIRGenerator::generate_pixel_store_plane(
     }
 }
 
-bool SingleExprIRGenerator::process_mode_specific_token(
+bool SingleExprIRGenerator::processModeSpecificToken(
     const Token& token, std::vector<llvm::Value*>& rpn_stack,
     [[maybe_unused]] llvm::Value* x, [[maybe_unused]] llvm::Value* y,
     [[maybe_unused]] llvm::Value* x_fp, [[maybe_unused]] llvm::Value* y_fp,
@@ -289,23 +290,22 @@ bool SingleExprIRGenerator::process_mode_specific_token(
     llvm::Type* i32_ty = builder.getInt32Ty();
 
     switch (token.type) {
-    case TokenType::CONSTANT_CLIP_WIDTH: {
-        const auto& payload = std::get<TokenPayload_ClipDim>(token.payload);
+    case TokenType::ConstantClipWidth: {
+        const auto& payload = std::get<TokenPayloadClipDim>(token.payload);
         const VSVideoInfo* vinfo = vi[payload.clip_idx];
         rpn_stack.push_back(
             builder.CreateSIToFP(builder.getInt32(vinfo->width), float_ty));
         return true;
     }
-    case TokenType::CONSTANT_CLIP_HEIGHT: {
-        const auto& payload = std::get<TokenPayload_ClipDim>(token.payload);
+    case TokenType::ConstantClipHeight: {
+        const auto& payload = std::get<TokenPayloadClipDim>(token.payload);
         const VSVideoInfo* vinfo = vi[payload.clip_idx];
         rpn_stack.push_back(
             builder.CreateSIToFP(builder.getInt32(vinfo->height), float_ty));
         return true;
     }
-    case TokenType::CONSTANT_CLIP_PLANE_WIDTH: {
-        const auto& payload =
-            std::get<TokenPayload_ClipPlaneDim>(token.payload);
+    case TokenType::ConstantClipPlaneWidth: {
+        const auto& payload = std::get<TokenPayloadClipPlaneDim>(token.payload);
         const VSVideoInfo* vinfo = vi[payload.clip_idx];
         int plane_w = vinfo->width;
         if (vinfo->format.colorFamily == cfYUV && payload.plane_idx > 0) {
@@ -315,9 +315,8 @@ bool SingleExprIRGenerator::process_mode_specific_token(
             builder.CreateSIToFP(builder.getInt32(plane_w), float_ty));
         return true;
     }
-    case TokenType::CONSTANT_CLIP_PLANE_HEIGHT: {
-        const auto& payload =
-            std::get<TokenPayload_ClipPlaneDim>(token.payload);
+    case TokenType::ConstantClipPlaneHeight: {
+        const auto& payload = std::get<TokenPayloadClipPlaneDim>(token.payload);
         const VSVideoInfo* vinfo = vi[payload.clip_idx];
         int plane_h = vinfo->height;
         if (vinfo->format.colorFamily == cfYUV && payload.plane_idx > 0) {
@@ -327,8 +326,8 @@ bool SingleExprIRGenerator::process_mode_specific_token(
             builder.CreateSIToFP(builder.getInt32(plane_h), float_ty));
         return true;
     }
-    case TokenType::CONSTANT_PLANE_WIDTH: {
-        const auto& payload = std::get<TokenPayload_PlaneDim>(token.payload);
+    case TokenType::ConstantPlaneWidth: {
+        const auto& payload = std::get<TokenPayloadPlaneDim>(token.payload);
         int plane_w = vo->width; // NOLINT(cppcoreguidelines-init-variables)
         if (vo->format.colorFamily == cfYUV && payload.plane_idx > 0) {
             plane_w >>= vo->format.subSamplingW;
@@ -337,8 +336,8 @@ bool SingleExprIRGenerator::process_mode_specific_token(
             builder.CreateSIToFP(builder.getInt32(plane_w), float_ty));
         return true;
     }
-    case TokenType::CONSTANT_PLANE_HEIGHT: {
-        const auto& payload = std::get<TokenPayload_PlaneDim>(token.payload);
+    case TokenType::ConstantPlaneHeight: {
+        const auto& payload = std::get<TokenPayloadPlaneDim>(token.payload);
         int plane_h = vo->height; // NOLINT(cppcoreguidelines-init-variables)
         if (vo->format.colorFamily == cfYUV && payload.plane_idx > 0) {
             plane_h >>= vo->format.subSamplingH;
@@ -347,9 +346,9 @@ bool SingleExprIRGenerator::process_mode_specific_token(
             builder.CreateSIToFP(builder.getInt32(plane_h), float_ty));
         return true;
     }
-    case TokenType::CLIP_ABS_PLANE: {
+    case TokenType::ClipAbsPlane: {
         const auto& payload =
-            std::get<TokenPayload_ClipAccessPlane>(token.payload);
+            std::get<TokenPayloadClipAccessPlane>(token.payload);
         llvm::Value* coord_y_f = rpn_stack.back();
         rpn_stack.pop_back();
         llvm::Value* coord_x_f = rpn_stack.back();
@@ -367,13 +366,13 @@ bool SingleExprIRGenerator::process_mode_specific_token(
                                {coord_x_f});
         coord_x = builder.CreateFPToSI(coord_x, i32_ty);
 
-        rpn_stack.push_back(generate_pixel_load_plane(
+        rpn_stack.push_back(generatePixelLoadPlane(
             payload.clip_idx, payload.plane_idx, coord_x, coord_y));
         return true;
     }
-    case TokenType::STORE_ABS_PLANE: {
+    case TokenType::StoreAbsPlane: {
         const auto& payload =
-            std::get<TokenPayload_StoreAbsPlane>(token.payload);
+            std::get<TokenPayloadStoreAbsPlane>(token.payload);
         llvm::Value* coord_y_f = rpn_stack.back();
         rpn_stack.pop_back();
         llvm::Value* coord_x_f = rpn_stack.back();
@@ -393,13 +392,13 @@ bool SingleExprIRGenerator::process_mode_specific_token(
                                {coord_x_f});
         coord_x = builder.CreateFPToSI(coord_x, i32_ty);
 
-        generate_pixel_store_plane(val_to_store, payload.plane_idx, coord_x,
-                                   coord_y);
+        generatePixelStorePlane(val_to_store, payload.plane_idx, coord_x,
+                                coord_y);
         return true;
     }
-    case TokenType::PROP_STORE: {
-        const auto& payload = std::get<TokenPayload_PropStore>(token.payload);
-        if (payload.type == PropWriteType::DELETE) {
+    case TokenType::PropStore: {
+        const auto& payload = std::get<TokenPayloadPropStore>(token.payload);
+        if (payload.type == PropWriteType::Delete) {
             // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
             llvm::APInt payload_bits(32, 0x7FC0DE1E); // PROP_DELETE_NAN_PAYLOAD
             llvm::APFloat nan_payload_apf(llvm::APFloat::IEEEsingle(),
@@ -416,8 +415,8 @@ bool SingleExprIRGenerator::process_mode_specific_token(
         }
         return true;
     }
-    case TokenType::PROP_ACCESS: {
-        const auto& payload = std::get<TokenPayload_PropAccess>(token.payload);
+    case TokenType::PropAccess: {
+        const auto& payload = std::get<TokenPayloadPropAccess>(token.payload);
         if (payload.clip_idx == 0 &&
             output_prop_map.contains(payload.prop_name)) {
             rpn_stack.push_back(builder.CreateLoad(
@@ -431,13 +430,13 @@ bool SingleExprIRGenerator::process_mode_specific_token(
         return true;
     }
 
-    case TokenType::PROP_EXISTS: {
-        const auto& payload = std::get<TokenPayload_PropAccess>(token.payload);
+    case TokenType::PropExists: {
+        const auto& payload = std::get<TokenPayloadPropAccess>(token.payload);
         llvm::Value* prop_val = nullptr;
         if (payload.clip_idx == 0 &&
             output_prop_map.contains(payload.prop_name)) {
-            prop_val = builder.CreateLoad(
-                float_ty, prop_allocas.at(payload.prop_name));
+            prop_val = builder.CreateLoad(float_ty,
+                                          prop_allocas.at(payload.prop_name));
         } else {
             const std::string unique_prop_name =
                 std::format("prop_{}_{}", payload.clip_idx, payload.prop_name);
@@ -445,8 +444,8 @@ bool SingleExprIRGenerator::process_mode_specific_token(
                 rpn_stack.push_back(llvm::ConstantFP::get(float_ty, 0.0));
                 return true;
             }
-            prop_val = builder.CreateLoad(
-                float_ty, prop_allocas.at(unique_prop_name));
+            prop_val =
+                builder.CreateLoad(float_ty, prop_allocas.at(unique_prop_name));
         }
 
         llvm::Value* prop_val_int = builder.CreateBitCast(prop_val, i32_ty);
@@ -464,17 +463,16 @@ bool SingleExprIRGenerator::process_mode_specific_token(
         llvm::Value* does_not_exist =
             builder.CreateOr(is_read_nan, is_delete_nan);
 
-        llvm::Value* exists_val =
-            builder.CreateSelect(does_not_exist,
-                                 llvm::ConstantFP::get(float_ty, 0.0),
-                                 llvm::ConstantFP::get(float_ty, 1.0));
+        llvm::Value* exists_val = builder.CreateSelect(
+            does_not_exist, llvm::ConstantFP::get(float_ty, 0.0),
+            llvm::ConstantFP::get(float_ty, 1.0));
         rpn_stack.push_back(exists_val);
         return true;
     }
 
     // Array
-    case TokenType::ARRAY_ALLOC_STATIC: {
-        const auto& payload = std::get<TokenPayload_ArrayOp>(token.payload);
+    case TokenType::ArrayAllocStatic: {
+        const auto& payload = std::get<TokenPayloadArrayOp>(token.payload);
         llvm::Value* size_val = builder.getInt64(payload.static_size);
         llvm::Value* name_str =
             builder.CreateGlobalString(payload.name, payload.name + "_name");
@@ -484,8 +482,8 @@ bool SingleExprIRGenerator::process_mode_specific_token(
         return true;
     }
 
-    case TokenType::ARRAY_ALLOC_DYN: {
-        const auto& payload = std::get<TokenPayload_ArrayOp>(token.payload);
+    case TokenType::ArrayAllocDyn: {
+        const auto& payload = std::get<TokenPayloadArrayOp>(token.payload);
         llvm::Value* size_f = rpn_stack.back();
         rpn_stack.pop_back();
 
@@ -499,8 +497,8 @@ bool SingleExprIRGenerator::process_mode_specific_token(
         return true;
     }
 
-    case TokenType::ARRAY_LOAD: {
-        const auto& payload = std::get<TokenPayload_ArrayOp>(token.payload);
+    case TokenType::ArrayLoad: {
+        const auto& payload = std::get<TokenPayloadArrayOp>(token.payload);
         llvm::Value* idx_f = rpn_stack.back();
         rpn_stack.pop_back();
         llvm::Value* idx = builder.CreateFPToSI(idx_f, i32_ty);
@@ -512,8 +510,8 @@ bool SingleExprIRGenerator::process_mode_specific_token(
         return true;
     }
 
-    case TokenType::ARRAY_STORE: {
-        const auto& payload = std::get<TokenPayload_ArrayOp>(token.payload);
+    case TokenType::ArrayStore: {
+        const auto& payload = std::get<TokenPayloadArrayOp>(token.payload);
         llvm::Value* idx_f = rpn_stack.back();
         rpn_stack.pop_back();
         llvm::Value* value = rpn_stack.back();
@@ -532,7 +530,7 @@ bool SingleExprIRGenerator::process_mode_specific_token(
     }
 }
 
-void SingleExprIRGenerator::finalize_and_store_result(
+void SingleExprIRGenerator::finalizeAndStoreResult(
     [[maybe_unused]] llvm::Value* result_val, [[maybe_unused]] llvm::Value* x,
     [[maybe_unused]] llvm::Value* y) {
     // No-op for SingleExpr, all stores are explicit

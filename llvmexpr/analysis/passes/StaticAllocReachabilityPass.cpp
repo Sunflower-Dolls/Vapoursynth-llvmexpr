@@ -35,9 +35,9 @@ class StaticAllocReachabilityAnalysis
         const auto& block = cfg_blocks[block_idx];
 
         for (int j = block.start_token_idx; j < block.end_token_idx; ++j) {
-            if (tokens[j].type == TokenType::ARRAY_ALLOC_STATIC) {
+            if (tokens[j].type == TokenType::ArrayAllocStatic) {
                 const auto& array_name =
-                    std::get<TokenPayload_ArrayOp>(tokens[j].payload).name;
+                    std::get<TokenPayloadArrayOp>(tokens[j].payload).name;
                 gen_set.insert(var_naming::getArrayName(array_name));
             }
         }

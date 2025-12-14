@@ -22,6 +22,7 @@
 
 #include "../../frontend/Tokenizer.hpp"
 #include "PreservedAnalyses.hpp"
+
 #include <vector>
 
 namespace analysis {

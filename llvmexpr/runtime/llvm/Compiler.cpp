@@ -57,22 +57,22 @@ Compiler::Compiler(
 
 CompiledFunction Compiler::compile() {
     if (approx_math == 2) {
-        return compile_with_approx_math(1);
+        return compileWithApproxMath(1);
     }
-    return compile_with_approx_math(approx_math);
+    return compileWithApproxMath(approx_math);
 }
 
-CompiledFunction Compiler::compile_with_approx_math(int actual_approx_math) {
+CompiledFunction Compiler::compileWithApproxMath(int actual_approx_math) {
     bool needs_nans = false;
-    if (expr_mode == ExprMode::EXPR) {
+    if (expr_mode == ExprMode::Expr) {
         needs_nans = std::ranges::any_of(tokens, [](const auto& token) {
-            return token.type == TokenType::EXIT_NO_WRITE ||
-                   token.type == TokenType::PROP_EXISTS;
+            return token.type == TokenType::ExitNoWrite ||
+                   token.type == TokenType::PropExists;
         });
-    } else if (expr_mode == ExprMode::SINGLE_EXPR) {
+    } else if (expr_mode == ExprMode::SingleExpr) {
         needs_nans = std::ranges::any_of(tokens, [](const auto& token) {
-            return token.type == TokenType::PROP_STORE ||
-                   token.type == TokenType::PROP_EXISTS;
+            return token.type == TokenType::PropStore ||
+                   token.type == TokenType::PropExists;
         });
     }
 
@@ -92,17 +92,17 @@ CompiledFunction Compiler::compile_with_approx_math(int actual_approx_math) {
 
     // Set up fast math flags
     llvm::IRBuilder<> builder(*context);
-    llvm::FastMathFlags FMF;
-    FMF.setFast();
-    FMF.setNoNaNs(!needs_nans);
-    builder.setFastMathFlags(FMF);
+    llvm::FastMathFlags fmf;
+    fmf.setFast();
+    fmf.setNoNaNs(!needs_nans);
+    builder.setFastMathFlags(fmf);
 
     // Create math library manager
     MathLibraryManager math_manager(module.get(), *context);
 
     // Create IR generator and generate code
     std::unique_ptr<IRGeneratorBase> ir_gen;
-    if (expr_mode == ExprMode::EXPR) {
+    if (expr_mode == ExprMode::Expr) {
         ir_gen = std::make_unique<ExprIRGenerator>(
             tokens, vo, vi, width, height, mirror_boundary, prop_map,
             analysis_results, *context, *module, builder, math_manager,
@@ -121,32 +121,32 @@ CompiledFunction Compiler::compile_with_approx_math(int actual_approx_math) {
         throw std::runtime_error("Failed to find generated function");
     }
 
-    llvm::AttrBuilder FuncAttrs(func->getContext());
-    if (FMF.allowContract()) {
-        FuncAttrs.addAttribute("fp-contract", "fast");
+    llvm::AttrBuilder func_attrs(func->getContext());
+    if (fmf.allowContract()) {
+        func_attrs.addAttribute("fp-contract", "fast");
     }
-    if (FMF.approxFunc()) {
-        FuncAttrs.addAttribute("approx-func-fp-math", "true");
+    if (fmf.approxFunc()) {
+        func_attrs.addAttribute("approx-func-fp-math", "true");
     }
-    if (FMF.noInfs()) {
-        FuncAttrs.addAttribute("no-infs-fp-math", "true");
+    if (fmf.noInfs()) {
+        func_attrs.addAttribute("no-infs-fp-math", "true");
     }
-    if (FMF.noNaNs()) {
-        FuncAttrs.addAttribute("no-nans-fp-math", "true");
+    if (fmf.noNaNs()) {
+        func_attrs.addAttribute("no-nans-fp-math", "true");
     }
-    if (FMF.noSignedZeros()) {
-        FuncAttrs.addAttribute("no-signed-zeros-fp-math", "true");
+    if (fmf.noSignedZeros()) {
+        func_attrs.addAttribute("no-signed-zeros-fp-math", "true");
     }
-    if (FMF.allowReciprocal()) {
-        FuncAttrs.addAttribute("allow-reciprocal-fp-math", "true");
+    if (fmf.allowReciprocal()) {
+        func_attrs.addAttribute("allow-reciprocal-fp-math", "true");
     }
 #ifdef _WIN32
     // Fix for missing ___chkstk_ms symbol
-    FuncAttrs.addAttribute("no-stack-arg-probe", "true");
+    func_attrs.addAttribute("no-stack-arg-probe", "true");
 #endif
-    FuncAttrs.addAttribute(llvm::Attribute::NoUnwind);
-    FuncAttrs.addAttribute(llvm::Attribute::WillReturn);
-    func->addFnAttrs(FuncAttrs);
+    func_attrs.addAttribute(llvm::Attribute::NoUnwind);
+    func_attrs.addAttribute(llvm::Attribute::WillReturn);
+    func->addFnAttrs(func_attrs);
 
     // Verify module before optimization
     if (llvm::verifyModule(*module, &llvm::errs())) {
@@ -165,10 +165,10 @@ CompiledFunction Compiler::compile_with_approx_math(int actual_approx_math) {
             plane_specific_dump_path += "." + func_name;
         }
 
-        std::error_code EC;
+        std::error_code ec;
         std::string pre_path = plane_specific_dump_path + ".pre.ll";
-        llvm::raw_fd_ostream dest_pre(pre_path, EC, llvm::sys::fs::OF_None);
-        if (!EC) {
+        llvm::raw_fd_ostream dest_pre(pre_path, ec, llvm::sys::fs::OF_None);
+        if (!ec) {
             module->print(dest_pre, nullptr);
             dest_pre.flush();
         }
@@ -176,19 +176,19 @@ CompiledFunction Compiler::compile_with_approx_math(int actual_approx_math) {
 
     // Run optimization passes
     {
-        llvm::LoopAnalysisManager LAM;
-        llvm::FunctionAnalysisManager FAM;
-        llvm::CGSCCAnalysisManager CGAM;
-        llvm::ModuleAnalysisManager MAM;
+        llvm::LoopAnalysisManager lam;
+        llvm::FunctionAnalysisManager fam;
+        llvm::CGSCCAnalysisManager cgam;
+        llvm::ModuleAnalysisManager mam;
 
-        llvm::PassBuilder PB;
-        PB.registerModuleAnalyses(MAM);
-        PB.registerFunctionAnalyses(FAM);
-        PB.registerCGSCCAnalyses(CGAM);
-        PB.registerLoopAnalyses(LAM);
-        PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
+        llvm::PassBuilder pb;
+        pb.registerModuleAnalyses(mam);
+        pb.registerFunctionAnalyses(fam);
+        pb.registerCGSCCAnalyses(cgam);
+        pb.registerLoopAnalyses(lam);
+        pb.crossRegisterProxies(lam, fam, cgam, mam);
 
-        llvm::ModulePassManager MPM;
+        llvm::ModulePassManager mpm;
         std::string pipeline;
         if (opt_level > 0) {
             pipeline = "default<O3>";
@@ -196,14 +196,14 @@ CompiledFunction Compiler::compile_with_approx_math(int actual_approx_math) {
                 pipeline += ",default<O3>";
             }
         }
-        if (auto Err = PB.parsePassPipeline(MPM, pipeline)) {
+        if (auto err = pb.parsePassPipeline(mpm, pipeline)) {
             llvm::errs() << "Failed to parse '" << pipeline
-                         << "' pipeline: " << llvm::toString(std::move(Err))
+                         << "' pipeline: " << llvm::toString(std::move(err))
                          << "\n";
             throw std::runtime_error(
                 "Failed to create default optimization pipeline.");
         }
-        MPM.run(*module, MAM);
+        mpm.run(*module, mam);
     }
 
     // Verify module after optimization
@@ -214,11 +214,11 @@ CompiledFunction Compiler::compile_with_approx_math(int actual_approx_math) {
 
     // Dump post-optimization IR if requested
     if (!plane_specific_dump_path.empty()) {
-        std::error_code EC;
-        llvm::raw_fd_ostream dest(plane_specific_dump_path, EC,
+        std::error_code ec;
+        llvm::raw_fd_ostream dest(plane_specific_dump_path, ec,
                                   llvm::sys::fs::OF_None);
-        if (EC) {
-            throw std::runtime_error("Could not open file: " + EC.message() +
+        if (ec) {
+            throw std::runtime_error("Could not open file: " + ec.message() +
                                      " for writing IR to " +
                                      plane_specific_dump_path);
         }
@@ -233,7 +233,7 @@ CompiledFunction Compiler::compile_with_approx_math(int actual_approx_math) {
                                    height, mirror_boundary, dump_ir_path,
                                    prop_map, func_name, opt_level, approx_math,
                                    analysis_results, expr_mode, output_props);
-        return fallback_compiler.compile_with_approx_math(0);
+        return fallback_compiler.compileWithApproxMath(0);
     }
 
     // Add module to JIT and get function address

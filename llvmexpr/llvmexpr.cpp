@@ -59,7 +59,7 @@ constexpr uint32_t PROP_DELETE_NAN_PAYLOAD =
 
 namespace {
 
-enum class PlaneOp : std::uint8_t { PO_PROCESS, PO_COPY };
+enum class PlaneOp : std::uint8_t { PoProcess, PoCopy };
 
 struct BaseExprData {
     std::vector<VSNode*> nodes;
@@ -99,8 +99,8 @@ thread_local SingleExprFrameData
     g_frame_data; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 template <bool check_dimensions>
-void validateAndInitClips(BaseExprData* d, const VSMap* in,
-                          const VSAPI* vsapi) {
+void validate_and_init_clips(BaseExprData* d, const VSMap* in,
+                             const VSAPI* vsapi) {
     int err = 0;
     d->num_inputs = vsapi->mapNumElements(in, "clips");
     if (d->num_inputs == 0) {
@@ -134,8 +134,8 @@ void validateAndInitClips(BaseExprData* d, const VSMap* in,
     d->vi = *vi[0];
 }
 
-void parseFormatParam(BaseExprData* d, const VSMap* in, const VSAPI* vsapi,
-                      VSCore* core) {
+void parse_format_param(BaseExprData* d, const VSMap* in, const VSAPI* vsapi,
+                        VSCore* core) {
     int err = 0;
     const int format_id =
         static_cast<int>(vsapi->mapGetInt(in, "format", 0, &err));
@@ -160,7 +160,7 @@ void parseFormatParam(BaseExprData* d, const VSMap* in, const VSAPI* vsapi,
     }
 }
 
-void parseCommonParams(BaseExprData* d, const VSMap* in, const VSAPI* vsapi) {
+void parse_common_params(BaseExprData* d, const VSMap* in, const VSAPI* vsapi) {
     int err = 0;
 
     const char* dump_path = vsapi->mapGetData(in, "dump_ir", 0, &err);
@@ -187,7 +187,7 @@ void parseCommonParams(BaseExprData* d, const VSMap* in, const VSAPI* vsapi) {
     }
 }
 
-void readFrameProperties(
+void read_frame_properties(
     std::vector<float>& props, const std::vector<const VSFrame*>& src_frames,
     const std::vector<std::pair<int, std::string>>& required_props, int n,
     const VSAPI* vsapi) {
@@ -230,9 +230,11 @@ void readFrameProperties(
     }
 }
 
+// NOLINTBEGIN(readability-identifier-naming)
 template <typename T>
 void genericFree(void* instanceData, [[maybe_unused]] VSCore* core,
                  const VSAPI* vsapi) {
+    // NOLINTEND(readability-identifier-naming)
     std::unique_ptr<T> d(static_cast<T*>(instanceData));
     for (auto* node : d->nodes) {
         vsapi->freeNode(node);
@@ -271,11 +273,13 @@ std::string generate_cache_key(
     return result;
 }
 
+// NOLINTBEGIN(readability-identifier-naming)
 const VSFrame*
     VS_CC // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
     exprGetFrame(int n, int activationReason, void* instanceData,
                  [[maybe_unused]] void** frameData, VSFrameContext* frameCtx,
                  VSCore* core, const VSAPI* vsapi) {
+    // NOLINTEND(readability-identifier-naming)
     auto* d = static_cast<ExprData*>(instanceData);
 
     if (activationReason == arInitial) {
@@ -289,9 +293,9 @@ const VSFrame*
         }
 
         std::array<const VSFrame*, 3> plane_src = {
-            d->plane_op.at(0) == PlaneOp::PO_COPY ? src_frames[0] : nullptr,
-            d->plane_op.at(1) == PlaneOp::PO_COPY ? src_frames[0] : nullptr,
-            d->plane_op.at(2) == PlaneOp::PO_COPY ? src_frames[0] : nullptr};
+            d->plane_op.at(0) == PlaneOp::PoCopy ? src_frames[0] : nullptr,
+            d->plane_op.at(1) == PlaneOp::PoCopy ? src_frames[0] : nullptr,
+            d->plane_op.at(2) == PlaneOp::PoCopy ? src_frames[0] : nullptr};
         std::array<int, 3> planes = {0, 1, 2};
         VSFrame* dst_frame = vsapi->newVideoFrame2(
             &d->vi.format, d->vi.width, d->vi.height, plane_src.data(),
@@ -301,10 +305,10 @@ const VSFrame*
         std::vector<int> strides(d->num_inputs + 1);
         std::vector<float> props(1 + d->required_props.size());
 
-        readFrameProperties(props, src_frames, d->required_props, n, vsapi);
+        read_frame_properties(props, src_frames, d->required_props, n, vsapi);
 
         for (int plane = 0; plane < d->vi.format.numPlanes; ++plane) {
-            if (d->plane_op.at(plane) == PlaneOp::PO_PROCESS) {
+            if (d->plane_op.at(plane) == PlaneOp::PoProcess) {
                 rwptrs[0] = vsapi->getWritePtr(dst_frame, plane);
                 strides[0] =
                     static_cast<int>(vsapi->getStride(dst_frame, plane));
@@ -380,21 +384,25 @@ const VSFrame*
     return nullptr;
 }
 
+// NOLINTBEGIN(readability-identifier-naming)
 void VS_CC // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 exprFree(void* instanceData, [[maybe_unused]] VSCore* core,
          const VSAPI* vsapi) {
+    // NOLINTEND(readability-identifier-naming)
     genericFree<ExprData>(instanceData, core, vsapi);
 }
 
+// NOLINTBEGIN(readability-identifier-naming)
 void VS_CC // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 exprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
            VSCore* core, const VSAPI* vsapi) {
+    // NOLINTEND(readability-identifier-naming)
     auto d = std::make_unique<ExprData>();
     int err = 0;
 
     try {
-        validateAndInitClips<true>(d.get(), in, vsapi);
-        parseFormatParam(d.get(), in, vsapi, core);
+        validate_and_init_clips<true>(d.get(), in, vsapi);
+        parse_format_param(d.get(), in, vsapi, core);
 
         d->mirror_boundary = vsapi->mapGetInt(in, "boundary", 0, &err) != 0;
 
@@ -456,18 +464,18 @@ exprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
 
         for (int i = 0; i < d->vi.format.numPlanes; ++i) {
             if (expr_strs.at(i).empty()) {
-                d->plane_op.at(i) = PlaneOp::PO_COPY;
+                d->plane_op.at(i) = PlaneOp::PoCopy;
                 continue;
             }
-            d->plane_op.at(i) = PlaneOp::PO_PROCESS;
+            d->plane_op.at(i) = PlaneOp::PoProcess;
             d->tokens.at(i) =
-                tokenize(expr_strs.at(i), d->num_inputs, ExprMode::EXPR);
+                tokenize(expr_strs.at(i), d->num_inputs, ExprMode::Expr);
 
             for (const auto& token : d->tokens.at(i)) {
-                if (token.type == TokenType::PROP_ACCESS ||
-                    token.type == TokenType::PROP_EXISTS) {
+                if (token.type == TokenType::PropAccess ||
+                    token.type == TokenType::PropExists) {
                     const auto& payload =
-                        std::get<TokenPayload_PropAccess>(token.payload);
+                        std::get<TokenPayloadPropAccess>(token.payload);
                     auto key =
                         std::make_pair(payload.clip_idx, payload.prop_name);
                     if (!d->prop_map.contains(key)) {
@@ -486,7 +494,7 @@ exprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
             d->analysis_managers.at(i) = std::move(analyser);
         }
 
-        parseCommonParams(d.get(), in, vsapi);
+        parse_common_params(d.get(), in, vsapi);
 
     } catch (const std::exception& e) {
         for (auto* node : d->nodes) {
@@ -511,18 +519,22 @@ exprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
                              static_cast<int>(deps.size()), d.release(), core);
 }
 
+// NOLINTBEGIN(readability-identifier-naming)
 void VS_CC // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 singleExprFree(void* instanceData, [[maybe_unused]] VSCore* core,
                const VSAPI* vsapi) {
+    // NOLINTEND(readability-identifier-naming)
     genericFree<SingleExprData>(instanceData, core, vsapi);
 }
 
+// NOLINTBEGIN(readability-identifier-naming)
 const VSFrame*
     VS_CC // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
     singleExprGetFrame(int n, int activationReason, void* instanceData,
                        [[maybe_unused]] void** frameData,
                        VSFrameContext* frameCtx, VSCore* core,
                        const VSAPI* vsapi) {
+    // NOLINTEND(readability-identifier-naming)
     auto* d = static_cast<SingleExprData*>(instanceData);
 
     if (activationReason == arInitial) {
@@ -550,7 +562,7 @@ const VSFrame*
         std::vector<float> props(1 + d->required_props.size() +
                                  d->output_props.size());
 
-        readFrameProperties(props, src_frames, d->required_props, n, vsapi);
+        read_frame_properties(props, src_frames, d->required_props, n, vsapi);
 
         for (size_t i = 0; i < d->output_props.size(); ++i) {
             props[1 + d->required_props.size() + i] =
@@ -608,7 +620,7 @@ const VSFrame*
                         std::vector<Token>(d->tokens), &d->vi, vi, d->vi.width,
                         d->vi.height, d->mirror_boundary, d->dump_ir_path,
                         d->prop_map, func_name, d->opt_level, d->approx_math,
-                        results, ExprMode::SINGLE_EXPR, output_prop_names);
+                        results, ExprMode::SingleExpr, output_prop_names);
                     jit_cache[key] = compiler.compile();
                 } catch (const std::exception& e) {
                     for (const auto& frame : src_frames) {
@@ -624,7 +636,7 @@ const VSFrame*
         d->compiled.func_ptr(d, rwptrs.data(), strides.data(), props.data());
 
         // Resolve prop types and write to output frame
-        enum class ResolvedPropWriteType : std::uint8_t { INT, FLOAT };
+        enum class ResolvedPropWriteType : std::uint8_t { Int, Float };
         std::vector<ResolvedPropWriteType> resolved_types;
         resolved_types.reserve(d->output_props.size());
         const VSMap* src_props = vsapi->getFramePropertiesRO(src_frames[0]);
@@ -634,29 +646,29 @@ const VSFrame*
             const auto prop_write_type = prop_info.second;
 
             switch (prop_write_type) {
-            case PropWriteType::INT:
-                resolved_types.push_back(ResolvedPropWriteType::INT);
+            case PropWriteType::Int:
+                resolved_types.push_back(ResolvedPropWriteType::Int);
                 break;
-            case PropWriteType::FLOAT:
-                resolved_types.push_back(ResolvedPropWriteType::FLOAT);
+            case PropWriteType::Float:
+                resolved_types.push_back(ResolvedPropWriteType::Float);
                 break;
-            case PropWriteType::DELETE:
+            case PropWriteType::Delete:
                 // The prop will be deleted so anything is fine.
-                resolved_types.push_back(ResolvedPropWriteType::FLOAT);
+                resolved_types.push_back(ResolvedPropWriteType::Float);
                 break;
-            case PropWriteType::AUTO_INT:
-            case PropWriteType::AUTO_FLOAT:
+            case PropWriteType::AutoInt:
+            case PropWriteType::AutoFloat:
                 int existing_type =
                     vsapi->mapGetType(src_props, prop_name.c_str());
                 if (existing_type == ptInt) {
-                    resolved_types.push_back(ResolvedPropWriteType::INT);
+                    resolved_types.push_back(ResolvedPropWriteType::Int);
                 } else if (existing_type == ptFloat) {
-                    resolved_types.push_back(ResolvedPropWriteType::FLOAT);
+                    resolved_types.push_back(ResolvedPropWriteType::Float);
                 } else {
-                    if (prop_write_type == PropWriteType::AUTO_INT) {
-                        resolved_types.push_back(ResolvedPropWriteType::INT);
+                    if (prop_write_type == PropWriteType::AutoInt) {
+                        resolved_types.push_back(ResolvedPropWriteType::Int);
                     } else {
-                        resolved_types.push_back(ResolvedPropWriteType::FLOAT);
+                        resolved_types.push_back(ResolvedPropWriteType::Float);
                     }
                 }
                 break;
@@ -677,7 +689,7 @@ const VSFrame*
                 continue;
             }
 
-            if (resolved_types[i] == ResolvedPropWriteType::INT) {
+            if (resolved_types[i] == ResolvedPropWriteType::Int) {
                 auto int_value = static_cast<int64_t>(lroundf(value));
                 vsapi->mapSetInt(dst_props, prop_name.c_str(), int_value,
                                  maReplace);
@@ -696,15 +708,17 @@ const VSFrame*
     return nullptr;
 }
 
+// NOLINTBEGIN(readability-identifier-naming)
 void VS_CC // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 singleExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
                  VSCore* core, const VSAPI* vsapi) {
+    // NOLINTEND(readability-identifier-naming)
     auto d = std::make_unique<SingleExprData>();
     int err = 0;
 
     try {
-        validateAndInitClips<false>(d.get(), in, vsapi);
-        parseFormatParam(d.get(), in, vsapi, core);
+        validate_and_init_clips<false>(d.get(), in, vsapi);
+        parse_format_param(d.get(), in, vsapi, core);
 
         d->mirror_boundary = vsapi->mapGetInt(in, "boundary", 0, &err) != 0;
 
@@ -762,7 +776,7 @@ singleExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
         }
 
         d->tokens =
-            tokenize(processed_expr, d->num_inputs, ExprMode::SINGLE_EXPR);
+            tokenize(processed_expr, d->num_inputs, ExprMode::SingleExpr);
 
         // Array optimization passes
         {
@@ -774,20 +788,20 @@ singleExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
         }
 
         for (const auto& token : d->tokens) {
-            if (token.type == TokenType::CONSTANT_PLANE_WIDTH ||
-                token.type == TokenType::CONSTANT_PLANE_HEIGHT) {
+            if (token.type == TokenType::ConstantPlaneWidth ||
+                token.type == TokenType::ConstantPlaneHeight) {
                 const auto& payload =
-                    std::get<TokenPayload_PlaneDim>(token.payload);
+                    std::get<TokenPayloadPlaneDim>(token.payload);
                 if (payload.plane_idx < 0 ||
                     payload.plane_idx >= d->vi.format.numPlanes) {
                     throw std::runtime_error(
                         std::format("Invalid plane index {} in token '{}'",
                                     payload.plane_idx, token.text));
                 }
-            } else if (token.type == TokenType::PROP_ACCESS ||
-                       token.type == TokenType::PROP_EXISTS) {
+            } else if (token.type == TokenType::PropAccess ||
+                       token.type == TokenType::PropExists) {
                 const auto& payload =
-                    std::get<TokenPayload_PropAccess>(token.payload);
+                    std::get<TokenPayloadPropAccess>(token.payload);
                 auto key = std::make_pair(payload.clip_idx, payload.prop_name);
                 if (!d->prop_map.contains(key)) {
                     d->prop_map[key] = static_cast<int>(
@@ -795,9 +809,9 @@ singleExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
                         d->required_props.size()); // 0 is for frame number N
                     d->required_props.push_back(key);
                 }
-            } else if (token.type == TokenType::PROP_STORE) {
+            } else if (token.type == TokenType::PropStore) {
                 const auto& payload =
-                    std::get<TokenPayload_PropStore>(token.payload);
+                    std::get<TokenPayloadPropStore>(token.payload);
                 if (!d->output_prop_map.contains(payload.prop_name)) {
                     d->output_prop_map[payload.prop_name] =
                         static_cast<int>(d->output_props.size());
@@ -813,7 +827,7 @@ singleExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
         expr_analyzer.analyze();
         d->analysis_manager = std::move(analyser);
 
-        parseCommonParams(d.get(), in, vsapi);
+        parse_common_params(d.get(), in, vsapi);
 
     } catch (const std::exception& e) {
         for (auto* node : d->nodes) {
@@ -841,25 +855,25 @@ singleExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
 
 struct VkStream {
     struct PlaneResources {
-        std::vector<llvmexpr::VulkanBuffer> inputBuffers;
-        std::vector<llvmexpr::VulkanBuffer> inputStagingBuffers;
-        llvmexpr::VulkanBuffer outputBuffer;
-        llvmexpr::VulkanBuffer outputStagingBuffer;
-        llvmexpr::VulkanBuffer propsBuffer;
-        llvmexpr::VulkanBuffer propsStagingBuffer;
-        VkDeviceSize bufferSize = 0;
-        VkDeviceSize propsSize = 0;
+        std::vector<llvmexpr::VulkanBuffer> input_buffers;
+        std::vector<llvmexpr::VulkanBuffer> input_staging_buffers;
+        llvmexpr::VulkanBuffer output_buffer;
+        llvmexpr::VulkanBuffer output_staging_buffer;
+        llvmexpr::VulkanBuffer props_buffer;
+        llvmexpr::VulkanBuffer props_staging_buffer;
+        VkDeviceSize buffer_size = 0;
+        VkDeviceSize props_size = 0;
         bool initialized = false;
     };
 
     std::unique_ptr<llvmexpr::VulkanMemory> memory;
     std::array<std::unique_ptr<llvmexpr::VulkanComputePipeline>, 3> pipelines;
-    std::array<PlaneResources, 3> planeResources;
+    std::array<PlaneResources, 3> plane_resources;
 
     VkStream() = default;
     // NOLINTNEXTLINE(modernize-use-equals-default)
     ~VkStream() {
-        for (auto& res : planeResources) {
+        for (auto& res : plane_resources) {
             freePlaneResources(res);
         }
     }
@@ -870,23 +884,23 @@ struct VkStream {
 
     void freePlaneResources(PlaneResources& res) const {
         if (res.initialized) {
-            for (auto& buf : res.inputBuffers) {
+            for (auto& buf : res.input_buffers) {
                 memory->destroyBuffer(buf);
             }
-            for (auto& buf : res.inputStagingBuffers) {
+            for (auto& buf : res.input_staging_buffers) {
                 memory->destroyBuffer(buf);
             }
-            res.inputBuffers.clear();
-            res.inputStagingBuffers.clear();
-            memory->destroyBuffer(res.outputBuffer);
-            memory->destroyBuffer(res.outputStagingBuffer);
+            res.input_buffers.clear();
+            res.input_staging_buffers.clear();
+            memory->destroyBuffer(res.output_buffer);
+            memory->destroyBuffer(res.output_staging_buffer);
             res.initialized = false;
-            res.bufferSize = 0;
+            res.buffer_size = 0;
         }
-        if (res.propsBuffer.isValid()) {
-            memory->destroyBuffer(res.propsBuffer);
-            memory->destroyBuffer(res.propsStagingBuffer);
-            res.propsSize = 0;
+        if (res.props_buffer.isValid()) {
+            memory->destroyBuffer(res.props_buffer);
+            memory->destroyBuffer(res.props_staging_buffer);
+            res.props_size = 0;
         }
     }
 };
@@ -896,23 +910,25 @@ struct VkExprData : BaseExprData {
     std::array<std::vector<Token>, 3> tokens;
     std::array<std::unique_ptr<analysis::AnalysisManager>, 3> analysis_managers;
 
+    // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
     int num_streams = 8;
     std::vector<std::unique_ptr<VkStream>> streams;
     std::unique_ptr<std::counting_semaphore<>> semaphore;
     std::queue<int> free_stream_indices;
     std::mutex stream_mutex;
 
-    // Format info for CPU-side conversion
     std::vector<VSVideoFormat> input_formats;
 
     std::string dump_glsl_path;
 };
 
+// NOLINTBEGIN(readability-identifier-naming)
 const VSFrame*
     VS_CC // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
     vkExprGetFrame(int n, int activationReason, void* instanceData,
                    [[maybe_unused]] void** frameData, VSFrameContext* frameCtx,
                    VSCore* core, const VSAPI* vsapi) {
+    // NOLINTEND(readability-identifier-naming)
     auto* d = static_cast<VkExprData*>(instanceData);
 
     if (activationReason == arInitial) {
@@ -926,27 +942,27 @@ const VSFrame*
         }
 
         std::array<const VSFrame*, 3> plane_src = {
-            d->plane_op.at(0) == PlaneOp::PO_COPY ? src_frames[0] : nullptr,
-            d->plane_op.at(1) == PlaneOp::PO_COPY ? src_frames[0] : nullptr,
-            d->plane_op.at(2) == PlaneOp::PO_COPY ? src_frames[0] : nullptr};
+            d->plane_op.at(0) == PlaneOp::PoCopy ? src_frames[0] : nullptr,
+            d->plane_op.at(1) == PlaneOp::PoCopy ? src_frames[0] : nullptr,
+            d->plane_op.at(2) == PlaneOp::PoCopy ? src_frames[0] : nullptr};
         std::array<int, 3> planes = {0, 1, 2};
         VSFrame* dst_frame = vsapi->newVideoFrame2(
             &d->vi.format, d->vi.width, d->vi.height, plane_src.data(),
             planes.data(), src_frames[0], core);
 
         std::vector<float> props(1 + d->required_props.size());
-        readFrameProperties(props, src_frames, d->required_props, n, vsapi);
+        read_frame_properties(props, src_frames, d->required_props, n, vsapi);
 
         for (int plane = 0; plane < d->vi.format.numPlanes; ++plane) {
-            if (d->plane_op.at(plane) != PlaneOp::PO_PROCESS) {
+            if (d->plane_op.at(plane) != PlaneOp::PoProcess) {
                 continue;
             }
 
             int width = vsapi->getFrameWidth(dst_frame, plane);
             int height = vsapi->getFrameHeight(dst_frame, plane);
-            VkDeviceSize bufferSize = static_cast<VkDeviceSize>(width) *
-                                      static_cast<VkDeviceSize>(height) *
-                                      sizeof(float);
+            VkDeviceSize buffer_size = static_cast<VkDeviceSize>(width) *
+                                       static_cast<VkDeviceSize>(height) *
+                                       sizeof(float);
 
             try {
                 int stream_idx = 0;
@@ -978,83 +994,86 @@ const VSFrame*
                 } releaser(d, stream_idx);
 
                 auto& stream = *d->streams[stream_idx];
-                auto& planeRes = stream.planeResources.at(plane);
+                auto& plane_res = stream.plane_resources.at(plane);
 
                 // Initialize or resize buffers if needed
-                if (!planeRes.initialized ||
-                    planeRes.bufferSize != bufferSize) {
+                if (!plane_res.initialized ||
+                    plane_res.buffer_size != buffer_size) {
 
-                    if (planeRes.initialized) {
-                        stream.freePlaneResources(planeRes);
+                    if (plane_res.initialized) {
+                        stream.freePlaneResources(plane_res);
                     }
 
                     // Inputs
-                    planeRes.inputBuffers.reserve(d->num_inputs);
-                    planeRes.inputStagingBuffers.reserve(d->num_inputs);
+                    plane_res.input_buffers.reserve(d->num_inputs);
+                    plane_res.input_staging_buffers.reserve(d->num_inputs);
                     for (int i = 0; i < d->num_inputs; ++i) {
-                        planeRes.inputBuffers.push_back(
-                            stream.memory->createGPUBuffer(bufferSize));
-                        planeRes.inputStagingBuffers.push_back(
-                            stream.memory->createStagingBuffer(bufferSize,
+                        plane_res.input_buffers.push_back(
+                            stream.memory->createGPUBuffer(buffer_size));
+                        plane_res.input_staging_buffers.push_back(
+                            stream.memory->createStagingBuffer(buffer_size,
                                                                true));
                     }
 
                     // Output
-                    planeRes.outputBuffer =
-                        stream.memory->createGPUBuffer(bufferSize);
-                    planeRes.outputStagingBuffer =
-                        stream.memory->createStagingBuffer(bufferSize, false);
+                    plane_res.output_buffer =
+                        stream.memory->createGPUBuffer(buffer_size);
+                    plane_res.output_staging_buffer =
+                        stream.memory->createStagingBuffer(buffer_size, false);
 
-                    planeRes.bufferSize = bufferSize;
-                    planeRes.initialized = true;
+                    plane_res.buffer_size = buffer_size;
+                    plane_res.initialized = true;
                 }
 
                 // Props buffers
-                VkDeviceSize propsSize = props.size() * sizeof(float);
-                if (propsSize > 0) {
-                    if (!planeRes.propsBuffer.isValid() ||
-                        planeRes.propsSize < propsSize) {
+                VkDeviceSize props_size = props.size() * sizeof(float);
+                if (props_size > 0) {
+                    if (!plane_res.props_buffer.isValid() ||
+                        plane_res.props_size < props_size) {
 
-                        if (planeRes.propsBuffer.isValid()) {
-                            stream.memory->destroyBuffer(planeRes.propsBuffer);
+                        if (plane_res.props_buffer.isValid()) {
                             stream.memory->destroyBuffer(
-                                planeRes.propsStagingBuffer);
+                                plane_res.props_buffer);
+                            stream.memory->destroyBuffer(
+                                plane_res.props_staging_buffer);
                         }
 
-                        planeRes.propsBuffer = stream.memory->createGPUBuffer(
-                            propsSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-                                           VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-                        planeRes.propsStagingBuffer =
-                            stream.memory->createStagingBuffer(propsSize, true);
-                        planeRes.propsSize = propsSize;
+                        plane_res.props_buffer = stream.memory->createGPUBuffer(
+                            props_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                                            VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+                        plane_res.props_staging_buffer =
+                            stream.memory->createStagingBuffer(props_size,
+                                                               true);
+                        plane_res.props_size = props_size;
                     }
                 }
 
-                std::vector<llvmexpr::VulkanBuffer*> srcBufferPtrs(
+                std::vector<llvmexpr::VulkanBuffer*> src_buffer_ptrs(
                     d->num_inputs);
 
                 for (int i = 0; i < d->num_inputs; ++i) {
-                    srcBufferPtrs[i] = &planeRes.inputBuffers[i];
+                    src_buffer_ptrs[i] = &plane_res.input_buffers[i];
 
-                    const uint8_t* srcPtr =
+                    const uint8_t* src_ptr =
                         vsapi->getReadPtr(src_frames[i], plane);
-                    ptrdiff_t srcStride =
+                    ptrdiff_t src_stride =
                         vsapi->getStride(src_frames[i], plane);
 
-                    const VSVideoFormat& inFmt = d->input_formats[i];
-                    int bpp = inFmt.bytesPerSample;
+                    const VSVideoFormat& in_fmt = d->input_formats[i];
+                    int bpp = in_fmt.bytesPerSample;
 
-                    auto* mappedData = static_cast<float*>(
-                        planeRes.inputStagingBuffers[i].getMappedData());
+                    auto* mapped_data = static_cast<float*>(
+                        plane_res.input_staging_buffers[i].getMappedData());
 
                     // NOLINTBEGIN
-                    if (inFmt.sampleType == stInteger) {
+                    if (in_fmt.sampleType == stInteger) {
                         // Integer to float conversion
                         for (int row = 0; row < height; ++row) {
-                            const uint8_t* rowPtr = srcPtr + (row * srcStride);
-                            float* outRow = mappedData +
-                                            (static_cast<size_t>(row) *
-                                             static_cast<size_t>(width));
+                            const uint8_t* rowPtr =
+                                src_ptr + (row * src_stride);
+                            float* outRow =
+                                mapped_data + (static_cast<size_t>(row) *
+                                               static_cast<size_t>(width));
                             for (int col = 0; col < width; ++col) {
                                 if (bpp == 1) {
                                     outRow[col] =
@@ -1075,10 +1094,10 @@ const VSFrame*
                         if (bpp == 4) {
                             for (int row = 0; row < height; ++row) {
                                 const uint8_t* rowPtr =
-                                    srcPtr + (row * srcStride);
-                                float* outRow = mappedData +
-                                                (static_cast<size_t>(row) *
-                                                 static_cast<size_t>(width));
+                                    src_ptr + (row * src_stride);
+                                float* outRow =
+                                    mapped_data + (static_cast<size_t>(row) *
+                                                   static_cast<size_t>(width));
                                 std::memcpy(outRow, rowPtr,
                                             static_cast<size_t>(width) *
                                                 sizeof(float));
@@ -1086,10 +1105,10 @@ const VSFrame*
                         } else if (bpp == 2) {
                             for (int row = 0; row < height; ++row) {
                                 const uint8_t* rowPtr =
-                                    srcPtr + (row * srcStride);
-                                float* outRow = mappedData +
-                                                (static_cast<size_t>(row) *
-                                                 static_cast<size_t>(width));
+                                    src_ptr + (row * src_stride);
+                                float* outRow =
+                                    mapped_data + (static_cast<size_t>(row) *
+                                                   static_cast<size_t>(width));
                                 for (int col = 0; col < width; ++col) {
                                     uint16_t halfBits =
                                         reinterpret_cast<const uint16_t*>(
@@ -1133,57 +1152,58 @@ const VSFrame*
                         }
                     }
                     // NOLINTEND
-                    stream.memory->copyBuffer(planeRes.inputStagingBuffers[i],
-                                              planeRes.inputBuffers[i],
-                                              bufferSize);
+                    stream.memory->copyBuffer(
+                        plane_res.input_staging_buffers[i],
+                        plane_res.input_buffers[i], buffer_size);
                 }
 
                 // Upload props
-                if (planeRes.propsBuffer.isValid()) {
-                    std::memcpy(planeRes.propsStagingBuffer.getMappedData(),
-                                props.data(), propsSize);
-                    stream.memory->copyBuffer(planeRes.propsStagingBuffer,
-                                              planeRes.propsBuffer, propsSize);
+                if (plane_res.props_buffer.isValid()) {
+                    std::memcpy(plane_res.props_staging_buffer.getMappedData(),
+                                props.data(), props_size);
+                    stream.memory->copyBuffer(plane_res.props_staging_buffer,
+                                              plane_res.props_buffer,
+                                              props_size);
                 }
 
                 stream.pipelines.at(plane)->dispatch(
-                    srcBufferPtrs, planeRes.outputBuffer,
-                    planeRes.propsBuffer.isValid() ? &planeRes.propsBuffer
-                                                   : nullptr,
+                    src_buffer_ptrs, plane_res.output_buffer,
+                    plane_res.props_buffer.isValid() ? &plane_res.props_buffer
+                                                     : nullptr,
                     static_cast<uint32_t>(width), static_cast<uint32_t>(height),
                     n);
 
-                uint8_t* dstPtr = vsapi->getWritePtr(dst_frame, plane);
-                ptrdiff_t dstStride = vsapi->getStride(dst_frame, plane);
+                uint8_t* dst_ptr = vsapi->getWritePtr(dst_frame, plane);
+                ptrdiff_t dst_stride = vsapi->getStride(dst_frame, plane);
 
                 // Download and convert from float32 to output format
-                const VSVideoFormat& outFmt = d->vi.format;
-                int outBpp = outFmt.bytesPerSample;
+                const VSVideoFormat& out_fmt = d->vi.format;
+                int out_bpp = out_fmt.bytesPerSample;
 
-                stream.memory->copyBuffer(planeRes.outputBuffer,
-                                          planeRes.outputStagingBuffer,
-                                          bufferSize);
-                const auto* mappedOut = static_cast<const float*>(
-                    planeRes.outputStagingBuffer.getMappedData());
+                stream.memory->copyBuffer(plane_res.output_buffer,
+                                          plane_res.output_staging_buffer,
+                                          buffer_size);
+                const auto* mapped_out = static_cast<const float*>(
+                    plane_res.output_staging_buffer.getMappedData());
 
                 // NOLINTBEGIN
-                if (outFmt.sampleType == stInteger) {
+                if (out_fmt.sampleType == stInteger) {
                     // Float to integer with clamping
-                    int maxVal = (1 << outFmt.bitsPerSample) - 1;
+                    int maxVal = (1 << out_fmt.bitsPerSample) - 1;
                     for (int row = 0; row < height; ++row) {
-                        uint8_t* outRowPtr = dstPtr + (row * dstStride);
-                        const float* inRow = mappedOut +
-                                             (static_cast<size_t>(row) *
-                                              static_cast<size_t>(width));
+                        uint8_t* outRowPtr = dst_ptr + (row * dst_stride);
+                        const float* inRow =
+                            mapped_out + (static_cast<size_t>(row) *
+                                          static_cast<size_t>(width));
                         for (int col = 0; col < width; ++col) {
                             float val = inRow[col];
                             float clamped = std::clamp(
                                 val, 0.0F, static_cast<float>(maxVal));
                             int intVal =
                                 static_cast<int>(std::nearbyint(clamped));
-                            if (outBpp == 1) {
+                            if (out_bpp == 1) {
                                 outRowPtr[col] = static_cast<uint8_t>(intVal);
-                            } else if (outBpp == 2) {
+                            } else if (out_bpp == 2) {
                                 reinterpret_cast<uint16_t*>(outRowPtr)[col] =
                                     static_cast<uint16_t>(intVal);
                             } else {
@@ -1194,22 +1214,22 @@ const VSFrame*
                     }
                 } else {
                     // Float output
-                    if (outBpp == 4) {
+                    if (out_bpp == 4) {
                         for (int row = 0; row < height; ++row) {
-                            uint8_t* outRowPtr = dstPtr + (row * dstStride);
-                            const float* inRow = mappedOut +
-                                                 (static_cast<size_t>(row) *
-                                                  static_cast<size_t>(width));
+                            uint8_t* outRowPtr = dst_ptr + (row * dst_stride);
+                            const float* inRow =
+                                mapped_out + (static_cast<size_t>(row) *
+                                              static_cast<size_t>(width));
                             std::memcpy(outRowPtr, inRow,
                                         static_cast<size_t>(width) *
                                             sizeof(float));
                         }
-                    } else if (outBpp == 2) {
+                    } else if (out_bpp == 2) {
                         for (int row = 0; row < height; ++row) {
-                            uint8_t* outRowPtr = dstPtr + (row * dstStride);
-                            const float* inRow = mappedOut +
-                                                 (static_cast<size_t>(row) *
-                                                  static_cast<size_t>(width));
+                            uint8_t* outRowPtr = dst_ptr + (row * dst_stride);
+                            const float* inRow =
+                                mapped_out + (static_cast<size_t>(row) *
+                                              static_cast<size_t>(width));
                             for (int col = 0; col < width; ++col) {
                                 float val = inRow[col];
                                 auto floatBits = std::bit_cast<uint32_t>(val);
@@ -1277,24 +1297,28 @@ const VSFrame*
     return nullptr;
 }
 
+// NOLINTBEGIN(readability-identifier-naming)
 void VS_CC // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 vkExprFree(void* instanceData, [[maybe_unused]] VSCore* core,
            const VSAPI* vsapi) {
+    // NOLINTEND(readability-identifier-naming)
     std::unique_ptr<VkExprData> d(static_cast<VkExprData*>(instanceData));
     for (auto* node : d->nodes) {
         vsapi->freeNode(node);
     }
 }
 
+// NOLINTBEGIN(readability-identifier-naming)
 void VS_CC // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
              VSCore* core, const VSAPI* vsapi) {
+    // NOLINTEND(readability-identifier-naming)
     auto d = std::make_unique<VkExprData>();
     int err = 0;
 
     try {
         // Validate and initialize clips
-        validateAndInitClips<true>(d.get(), in, vsapi);
+        validate_and_init_clips<true>(d.get(), in, vsapi);
 
         // Store input formats for CPU-side conversion
         d->input_formats.resize(d->num_inputs);
@@ -1302,7 +1326,7 @@ vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
             d->input_formats[i] = vsapi->getVideoInfo(d->nodes[i])->format;
         }
 
-        parseFormatParam(d.get(), in, vsapi, core);
+        parse_format_param(d.get(), in, vsapi, core);
 
         const int nexpr = vsapi->mapNumElements(in, "expr");
         if (nexpr == 0) {
@@ -1379,17 +1403,17 @@ vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
 
         for (int i = 0; i < d->vi.format.numPlanes; ++i) {
             if (processed_exprs.at(i).empty()) {
-                d->plane_op.at(i) = PlaneOp::PO_COPY;
+                d->plane_op.at(i) = PlaneOp::PoCopy;
             } else {
-                d->plane_op.at(i) = PlaneOp::PO_PROCESS;
+                d->plane_op.at(i) = PlaneOp::PoProcess;
                 d->tokens.at(i) = tokenize(processed_exprs.at(i), d->num_inputs,
-                                           ExprMode::EXPR);
+                                           ExprMode::Expr);
 
                 for (const auto& token : d->tokens.at(i)) {
-                    if (token.type == TokenType::PROP_ACCESS ||
-                        token.type == TokenType::PROP_EXISTS) {
+                    if (token.type == TokenType::PropAccess ||
+                        token.type == TokenType::PropExists) {
                         const auto& payload =
-                            std::get<TokenPayload_PropAccess>(token.payload);
+                            std::get<TokenPayloadPropAccess>(token.payload);
                         auto key =
                             std::make_pair(payload.clip_idx, payload.prop_name);
                         if (!d->prop_map.contains(key)) {
@@ -1411,6 +1435,7 @@ vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
         d->num_streams =
             static_cast<int>(vsapi->mapGetInt(in, "num_streams", 0, &err));
         if (err != 0 || d->num_streams < 1) {
+            // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
             d->num_streams = 8;
         }
 
@@ -1426,11 +1451,11 @@ vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
                 std::make_unique<llvmexpr::VulkanMemory>(ctx);
             d->free_stream_indices.push(k);
 
-            auto numPropsFloats = static_cast<uint32_t>(
+            auto num_props_floats = static_cast<uint32_t>(
                 1 + d->required_props.size()); // N + props
 
             for (int i = 0; i < d->vi.format.numPlanes; ++i) {
-                if (d->plane_op.at(i) != PlaneOp::PO_PROCESS) {
+                if (d->plane_op.at(i) != PlaneOp::PoProcess) {
                     continue;
                 }
 
@@ -1464,7 +1489,7 @@ vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
                 d->streams[k]->pipelines.at(i) =
                     std::make_unique<llvmexpr::VulkanComputePipeline>(
                         ctx, shader, static_cast<uint32_t>(d->num_inputs),
-                        numPropsFloats);
+                        num_props_floats);
             }
         }
 
@@ -1515,8 +1540,10 @@ int64_t llvmexpr_get_buffer_size(const char* name) {
 
 } // extern "C"
 
+// NOLINTBEGIN(readability-identifier-naming)
 VS_EXTERNAL_API(void)
 VapourSynthPluginInit2(VSPlugin* plugin, const VSPLUGINAPI* vspapi) {
+    // NOLINTEND(readability-identifier-naming)
     vspapi->configPlugin(
         "com.yuygfgg.llvmexpr", "llvmexpr", "LLVM JIT RPN Expression Filter",
         VS_MAKE_VERSION(4, 0), VAPOURSYNTH_API_VERSION, 0, plugin);

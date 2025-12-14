@@ -44,7 +44,7 @@ ExprIRGenerator::ExprIRGenerator(
                       builder_ref, math_mgr, std::move(func_name_in),
                       approx_math_in) {}
 
-void ExprIRGenerator::define_function_signature() {
+void ExprIRGenerator::defineFunctionSignature() {
     llvm::Type* void_ty = llvm::Type::getVoidTy(context);
     llvm::Type* ptr_ty = llvm::PointerType::get(context, 0);
     llvm::Type* context_ptr_ty = ptr_ty; // opaque pointer (void*)
@@ -72,7 +72,7 @@ void ExprIRGenerator::define_function_signature() {
     func->addParamAttr(3, llvm::Attribute::ReadOnly); // props (float*)
 }
 
-void ExprIRGenerator::generate_loops() {
+void ExprIRGenerator::generateLoops() {
     llvm::BasicBlock* entry_bb =
         llvm::BasicBlock::Create(context, "entry", func);
     builder.SetInsertPoint(entry_bb);
@@ -171,8 +171,8 @@ void ExprIRGenerator::generate_loops() {
 
         llvm::Value* coord_y =
             builder.CreateAdd(y_val, builder.getInt32(rel_y));
-        llvm::Value* final_y = get_final_coord(
-            coord_y, builder.getInt32(height), access.use_mirror);
+        llvm::Value* final_y =
+            getFinalCoord(coord_y, builder.getInt32(height), access.use_mirror);
 
         llvm::Value* base_ptr = preloaded_base_ptrs[vs_clip_idx];
         llvm::Value* stride = preloaded_strides[vs_clip_idx];
@@ -222,7 +222,7 @@ void ExprIRGenerator::generate_loops() {
         llvm::Value* cond = builder.CreateICmpSLT(x_val, start_main_x);
         llvm::BranchInst* left_peel_br =
             builder.CreateCondBr(cond, left_peel_body, after_left_peel);
-        add_loop_metadata(left_peel_br);
+        addLoopMetadata(left_peel_br);
 
         builder.SetInsertPoint(left_peel_body);
         generate_x_loop_body(x_var, x_fp_var, y_var, y_fp_var, false);
@@ -246,7 +246,7 @@ void ExprIRGenerator::generate_loops() {
 
     llvm::BranchInst* loop_br =
         builder.CreateCondBr(main_cond, main_loop_body, after_main_loop);
-    add_loop_metadata(loop_br);
+    addLoopMetadata(loop_br);
 
     builder.SetInsertPoint(main_loop_body);
     generate_x_loop_body(x_var, x_fp_var, y_var, y_fp_var, true);
@@ -267,7 +267,7 @@ void ExprIRGenerator::generate_loops() {
         llvm::Value* cond = builder.CreateICmpSLT(x_val, width_val);
         llvm::BranchInst* right_peel_br =
             builder.CreateCondBr(cond, right_peel_body, loop_x_exit_bb);
-        add_loop_metadata(right_peel_br);
+        addLoopMetadata(right_peel_br);
 
         builder.SetInsertPoint(right_peel_body);
         generate_x_loop_body(x_var, x_fp_var, y_var, y_fp_var, false);
@@ -311,7 +311,7 @@ void ExprIRGenerator::generate_x_loop_body(llvm::Value* x_var,
         y_fp = builder.CreateLoad(builder.getFloatTy(), y_fp_var, "y_fp");
     }
 
-    generate_ir_from_tokens(x_val, y_val, x_fp, y_fp, no_x_bounds_check);
+    generateIRFromTokens(x_val, y_val, x_fp, y_fp, no_x_bounds_check);
 
     llvm::Value* x_next = builder.CreateAdd(x_val, builder.getInt32(1));
     builder.CreateStore(x_next, x_var);
@@ -322,7 +322,7 @@ void ExprIRGenerator::generate_x_loop_body(llvm::Value* x_var,
     }
 }
 
-bool ExprIRGenerator::process_mode_specific_token(
+bool ExprIRGenerator::processModeSpecificToken(
     const Token& token, std::vector<llvm::Value*>& rpn_stack, llvm::Value* x,
     [[maybe_unused]] llvm::Value* y, llvm::Value* x_fp, llvm::Value* y_fp,
     bool no_x_bounds_check) {
@@ -330,28 +330,28 @@ bool ExprIRGenerator::process_mode_specific_token(
     llvm::Type* i32_ty = builder.getInt32Ty();
 
     switch (token.type) {
-    case TokenType::CONSTANT_X:
+    case TokenType::ConstantX:
         rpn_stack.push_back(x_fp);
         return true;
-    case TokenType::CONSTANT_Y:
+    case TokenType::ConstantY:
         rpn_stack.push_back(y_fp);
         return true;
 
-    case TokenType::CLIP_REL: {
-        const auto& payload = std::get<TokenPayload_ClipAccess>(token.payload);
+    case TokenType::ClipRel: {
+        const auto& payload = std::get<TokenPayloadClipAccess>(token.payload);
         bool use_mirror = // NOLINT(cppcoreguidelines-init-variables)
             payload.has_mode ? payload.use_mirror : mirror_boundary;
         analysis::RelYAccess access{.clip_idx = payload.clip_idx,
                                     .rel_y = payload.rel_y,
                                     .use_mirror = use_mirror};
         llvm::Value* row_ptr = row_ptr_cache.at(access);
-        rpn_stack.push_back(generate_load_from_row_ptr(
-            row_ptr, payload.clip_idx, x, payload.rel_x, use_mirror,
-            no_x_bounds_check));
+        rpn_stack.push_back(generateLoadFromRowPtr(row_ptr, payload.clip_idx, x,
+                                                   payload.rel_x, use_mirror,
+                                                   no_x_bounds_check));
         return true;
     }
-    case TokenType::CLIP_ABS: {
-        const auto& payload = std::get<TokenPayload_ClipAccess>(token.payload);
+    case TokenType::ClipAbs: {
+        const auto& payload = std::get<TokenPayloadClipAccess>(token.payload);
         llvm::Value* coord_y_f = rpn_stack.back();
         rpn_stack.pop_back();
         llvm::Value* coord_x_f = rpn_stack.back();
@@ -376,30 +376,30 @@ bool ExprIRGenerator::process_mode_specific_token(
             use_mirror_final = mirror_boundary;
         }
 
-        rpn_stack.push_back(generate_pixel_load(payload.clip_idx, coord_x,
-                                                coord_y, use_mirror_final));
+        rpn_stack.push_back(generatePixelLoad(payload.clip_idx, coord_x,
+                                              coord_y, use_mirror_final));
         return true;
     }
-    case TokenType::CLIP_CUR: {
-        const auto& payload = std::get<TokenPayload_ClipAccess>(token.payload);
+    case TokenType::ClipCur: {
+        const auto& payload = std::get<TokenPayloadClipAccess>(token.payload);
         analysis::RelYAccess access{.clip_idx = payload.clip_idx,
                                     .rel_y = 0,
                                     .use_mirror = mirror_boundary};
         llvm::Value* row_ptr = row_ptr_cache.at(access);
-        rpn_stack.push_back(
-            generate_load_from_row_ptr(row_ptr, payload.clip_idx, x, 0,
-                                       mirror_boundary, no_x_bounds_check));
+        rpn_stack.push_back(generateLoadFromRowPtr(row_ptr, payload.clip_idx, x,
+                                                   0, mirror_boundary,
+                                                   no_x_bounds_check));
         return true;
     }
 
-    case TokenType::EXIT_NO_WRITE: {
+    case TokenType::ExitNoWrite: {
         rpn_stack.push_back(llvm::ConstantFP::get(
             float_ty, std::bit_cast<float>(EXIT_NAN_PAYLOAD)));
         return true;
     }
 
-    case TokenType::PROP_ACCESS: {
-        const auto& payload = std::get<TokenPayload_PropAccess>(token.payload);
+    case TokenType::PropAccess: {
+        const auto& payload = std::get<TokenPayloadPropAccess>(token.payload);
         auto key = std::make_pair(payload.clip_idx, payload.prop_name);
         int prop_idx = // NOLINT(cppcoreguidelines-init-variables)
             prop_map.at(key);
@@ -410,8 +410,8 @@ bool ExprIRGenerator::process_mode_specific_token(
         return true;
     }
 
-    case TokenType::PROP_EXISTS: {
-        const auto& payload = std::get<TokenPayload_PropAccess>(token.payload);
+    case TokenType::PropExists: {
+        const auto& payload = std::get<TokenPayloadPropAccess>(token.payload);
         auto key = std::make_pair(payload.clip_idx, payload.prop_name);
         llvm::Value* exists_val = nullptr;
         if (prop_map.contains(key)) {
@@ -437,7 +437,7 @@ bool ExprIRGenerator::process_mode_specific_token(
         return true;
     }
 
-    case TokenType::STORE_ABS: {
+    case TokenType::StoreAbs: {
         llvm::Value* coord_y_f = rpn_stack.back();
         rpn_stack.pop_back();
         llvm::Value* coord_x_f = rpn_stack.back();
@@ -446,13 +446,13 @@ bool ExprIRGenerator::process_mode_specific_token(
         rpn_stack.pop_back();
         llvm::Value* coord_y = builder.CreateFPToSI(coord_y_f, i32_ty);
         llvm::Value* coord_x = builder.CreateFPToSI(coord_x_f, i32_ty);
-        generate_pixel_store(val_to_store, coord_x, coord_y);
+        generatePixelStore(val_to_store, coord_x, coord_y);
         return true;
     }
 
     // Array
-    case TokenType::ARRAY_ALLOC_STATIC: {
-        const auto& payload = std::get<TokenPayload_ArrayOp>(token.payload);
+    case TokenType::ArrayAllocStatic: {
+        const auto& payload = std::get<TokenPayloadArrayOp>(token.payload);
         if (!named_arrays.contains(payload.name)) {
             llvm::ArrayType* array_ty =
                 llvm::ArrayType::get(float_ty, payload.static_size);
@@ -463,8 +463,8 @@ bool ExprIRGenerator::process_mode_specific_token(
         return true;
     }
 
-    case TokenType::ARRAY_LOAD: {
-        const auto& payload = std::get<TokenPayload_ArrayOp>(token.payload);
+    case TokenType::ArrayLoad: {
+        const auto& payload = std::get<TokenPayloadArrayOp>(token.payload);
         llvm::Value* idx_f = rpn_stack.back();
         rpn_stack.pop_back();
 
@@ -481,8 +481,8 @@ bool ExprIRGenerator::process_mode_specific_token(
         return true;
     }
 
-    case TokenType::ARRAY_STORE: {
-        const auto& payload = std::get<TokenPayload_ArrayOp>(token.payload);
+    case TokenType::ArrayStore: {
+        const auto& payload = std::get<TokenPayloadArrayOp>(token.payload);
         llvm::Value* idx_f = rpn_stack.back();
         rpn_stack.pop_back();
         llvm::Value* value = rpn_stack.back();
@@ -506,12 +506,11 @@ bool ExprIRGenerator::process_mode_specific_token(
     }
 }
 
-void ExprIRGenerator::finalize_and_store_result(llvm::Value* result_val,
-                                                llvm::Value* x,
-                                                llvm::Value* y) {
+void ExprIRGenerator::finalizeAndStoreResult(llvm::Value* result_val,
+                                             llvm::Value* x, llvm::Value* y) {
     bool has_exit = false;
     has_exit = std::ranges::any_of(tokens, [](const auto& token) {
-        return token.type == TokenType::EXIT_NO_WRITE;
+        return token.type == TokenType::ExitNoWrite;
     });
 
     if (has_exit) {
@@ -530,11 +529,11 @@ void ExprIRGenerator::finalize_and_store_result(llvm::Value* result_val,
         builder.CreateCondBr(is_exit_val, after_store_block, store_block);
 
         builder.SetInsertPoint(store_block);
-        generate_pixel_store(result_val, x, y);
+        generatePixelStore(result_val, x, y);
         builder.CreateBr(after_store_block);
 
         builder.SetInsertPoint(after_store_block);
     } else {
-        generate_pixel_store(result_val, x, y);
+        generatePixelStore(result_val, x, y);
     }
 }

@@ -27,7 +27,7 @@ namespace {
 
 std::map<std::string, TokenType> build_keywords_map() {
     std::map<std::string, TokenType> map;
-    for (const auto& mapping : token_mappings) {
+    for (const auto& mapping : TOKEN_MAPPINGS) {
         if (mapping.str.length() > 1 && (std::isalpha(mapping.str[0]) != 0)) {
             map.emplace(mapping.str, mapping.type);
         }
@@ -39,7 +39,7 @@ using OpMap = std::map<char, std::vector<TokenMapping>>;
 
 OpMap build_operator_map() {
     OpMap map;
-    for (const auto& mapping : token_mappings) {
+    for (const auto& mapping : TOKEN_MAPPINGS) {
         if (!mapping.str.empty() && (std::isalpha(mapping.str[0]) == 0)) {
             map[mapping.str[0]].push_back(mapping);
         }

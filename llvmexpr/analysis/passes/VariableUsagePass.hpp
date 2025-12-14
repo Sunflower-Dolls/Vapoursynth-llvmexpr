@@ -21,6 +21,7 @@
 #define LLVMEXPR_ANALYSIS_PASSES_VARIABLEUSAGEPASS_HPP
 
 #include "../framework/Pass.hpp"
+
 #include <set>
 #include <string>
 

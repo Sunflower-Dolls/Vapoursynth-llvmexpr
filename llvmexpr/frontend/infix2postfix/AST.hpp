@@ -104,13 +104,13 @@ struct PropAccessExpr {
 
 struct StaticRelPixelAccessExpr {
     Token clip;
-    Token offsetX;
-    Token offsetY;
+    Token offset_x;
+    Token offset_y;
     std::string boundary_suffix;
     Range range;
 
     StaticRelPixelAccessExpr(Token c, Token x, Token y, std::string suffix)
-        : clip(std::move(c)), offsetX(std::move(x)), offsetY(std::move(y)),
+        : clip(std::move(c)), offset_x(std::move(x)), offset_y(std::move(y)),
           boundary_suffix(std::move(suffix)), range(clip.range) {}
 };
 
@@ -422,17 +422,17 @@ struct is_variant_member<T, std::variant<Types...>>
     : std::disjunction<std::is_same<T, Types>...> {};
 
 template <class T, class V>
-inline constexpr bool is_variant_member_v = is_variant_member<T, V>::value;
+inline constexpr bool IS_VARIANT_MEMBER_V = is_variant_member<T, V>::value;
 
-template <typename T> struct node_wrapper {
-    static_assert(is_variant_member_v<T, Expr::ExprVariant> ||
-                      is_variant_member_v<T, Stmt::StmtVariant>,
+template <typename T> struct NodeWrapper {
+    static_assert(IS_VARIANT_MEMBER_V<T, Expr::ExprVariant> ||
+                      IS_VARIANT_MEMBER_V<T, Stmt::StmtVariant>,
                   "T must be a member of either ExprVariant or StmtVariant");
-    using type = std::conditional_t<is_variant_member_v<T, Expr::ExprVariant>,
+    using type = std::conditional_t<IS_VARIANT_MEMBER_V<T, Expr::ExprVariant>,
                                     Expr, Stmt>;
 };
 
-template <typename T> using node_wrapper_t = typename node_wrapper<T>::type;
+template <typename T> using node_wrapper_t = typename NodeWrapper<T>::type;
 
 template <typename T, typename... Args> auto make_node(Args&&... args) {
     return std::make_unique<node_wrapper_t<T>>(T(std::forward<Args>(args)...));

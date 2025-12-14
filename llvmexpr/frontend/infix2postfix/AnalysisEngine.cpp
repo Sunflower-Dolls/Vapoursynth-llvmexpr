@@ -22,6 +22,7 @@
 #include "Parser.hpp"
 #include "SemanticAnalyzer.hpp"
 #include "llvmexpr/utils/EnumName.hpp"
+
 #include <algorithm>
 #include <format>
 
@@ -45,7 +46,7 @@ bool AnalysisEngine::runAnalysis() {
 
     std::ranges::transform(parse_result.errors, std::back_inserter(diagnostics),
                            [](const auto& error) {
-                               return Diagnostic(DiagnosticSeverity::ERROR,
+                               return Diagnostic(DiagnosticSeverity::Error,
                                                  error.message, error.range);
                            });
 
@@ -82,7 +83,7 @@ std::string AnalysisEngine::generateCode() {
 
 bool AnalysisEngine::hasErrors() const {
     return std::ranges::any_of(diagnostics, [](const auto& diag) {
-        return diag.severity == DiagnosticSeverity::ERROR;
+        return diag.severity == DiagnosticSeverity::Error;
     });
 }
 
@@ -96,7 +97,7 @@ std::string AnalysisEngine::formatDiagnostics() const {
     int warning_count = 0;
 
     for (const auto& diag : diagnostics) {
-        if (diag.severity == DiagnosticSeverity::ERROR) {
+        if (diag.severity == DiagnosticSeverity::Error) {
             error_count++;
         } else {
             warning_count++;

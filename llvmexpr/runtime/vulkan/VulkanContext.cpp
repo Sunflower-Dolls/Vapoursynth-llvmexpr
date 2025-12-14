@@ -1,3 +1,22 @@
+/**
+ * Copyright (C) 2025 yuygfgg
+ * 
+ * This file is part of Vapoursynth-llvmexpr.
+ * 
+ * Vapoursynth-llvmexpr is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ * 
+ * Vapoursynth-llvmexpr is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 #include "VulkanContext.hpp"
 #include <vector>
 #include <volk.h>
@@ -30,8 +49,8 @@ VulkanContext::VulkanContext() : instance(nullptr) {
 VulkanContext::~VulkanContext() = default;
 
 void VulkanContext::createInstance() {
-    vk::ApplicationInfo appInfo("Vapoursynth-llvmexpr", 1, "No Engine", 1,
-                                VK_API_VERSION_1_3);
+    vk::ApplicationInfo app_info("Vapoursynth-llvmexpr", 1, "No Engine", 1,
+                                 VK_API_VERSION_1_3);
 
     std::vector<const char*> layers;
 // Enable validation layers in debug if needed
@@ -45,12 +64,12 @@ void VulkanContext::createInstance() {
     extensions.push_back(
         VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 
-    vk::InstanceCreateInfo createInfo(
-        vk::InstanceCreateFlagBits::eEnumeratePortabilityKHR, &appInfo, layers,
+    vk::InstanceCreateInfo create_info(
+        vk::InstanceCreateFlagBits::eEnumeratePortabilityKHR, &app_info, layers,
         extensions);
 
     try {
-        instance = vk::raii::Instance(context, createInfo);
+        instance = vk::raii::Instance(context, create_info);
     } catch (const std::exception& e) {
         throw std::runtime_error(
             std::string("Failed to create Vulkan instance: ") + e.what());
@@ -70,53 +89,53 @@ void VulkanContext::pickPhysicalDevice() {
         // std::cout << "  - " << props.deviceName << '\n';
 
         // Check for compute queue
-        auto queueFamilies = dev.getQueueFamilyProperties();
+        auto queue_families = dev.getQueueFamilyProperties();
         int i = 0;
-        for (const auto& queueFamily : queueFamilies) {
-            if (queueFamily.queueFlags & vk::QueueFlagBits::eCompute) {
-                physicalDevice = dev;
-                queueFamilyIndex = i;
+        for (const auto& queue_family : queue_families) {
+            if (queue_family.queueFlags & vk::QueueFlagBits::eCompute) {
+                physical_device = dev;
+                queue_family_index = i;
                 break;
             }
             i++;
         }
-        if (*physicalDevice) {
+        if (*physical_device) {
             // std::cout << "    Selected Device: " << props.deviceName << '\n';
             break;
         }
     }
 
-    if (!*physicalDevice) {
+    if (!*physical_device) {
         throw std::runtime_error(
             "Failed to find a suitable GPU with Compute capabilities!");
     }
 }
 
 void VulkanContext::createDevice() {
-    float queuePriority = 1.0F;
-    vk::DeviceQueueCreateInfo queueCreateInfo({}, queueFamilyIndex, 1,
-                                              &queuePriority);
+    float queue_priority = 1.0F;
+    vk::DeviceQueueCreateInfo queue_create_info({}, queue_family_index, 1,
+                                                &queue_priority);
 
-    std::vector<const char*> deviceExtensions;
+    std::vector<const char*> device_extensions;
     // macOS MoltenVK compatibility
-    deviceExtensions.push_back("VK_KHR_portability_subset");
+    device_extensions.push_back("VK_KHR_portability_subset");
 
-    vk::DeviceCreateInfo createInfo({}, queueCreateInfo,
-                                    {}, // layers deprecated
-                                    deviceExtensions);
+    vk::DeviceCreateInfo create_info({}, queue_create_info,
+                                     {}, // layers deprecated
+                                     device_extensions);
 
-    device = vk::raii::Device(physicalDevice, createInfo);
+    device = vk::raii::Device(physical_device, create_info);
 
     // Load device specific pointers
     volkLoadDevice(*device);
 
-    computeQueue = device.getQueue(queueFamilyIndex, 0);
+    compute_queue = device.getQueue(queue_family_index, 0);
 }
 
-void VulkanContext::submit(const vk::SubmitInfo& submitInfo,
+void VulkanContext::submit(const vk::SubmitInfo& submit_info,
                            const vk::Fence& fence) {
-    std::lock_guard<std::mutex> lock(queueMutex);
-    computeQueue.submit(submitInfo, fence);
+    std::lock_guard<std::mutex> lock(queue_mutex);
+    compute_queue.submit(submit_info, fence);
 }
 
 } // namespace llvmexpr

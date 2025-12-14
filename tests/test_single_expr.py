@@ -579,21 +579,21 @@ def test_prop_write_inconsistent_type_error():
     expr_fi = "1.0 MyProp$f 2 MyProp$i"
     with pytest.raises(
         vs.Error,
-        match=r"Inconsistent types used for property 'MyProp'\. Previous type: FLOAT \(idx: 1\), current type: INT \(idx: 3\)\.",
+        match=r"Inconsistent types used for property 'MyProp'\. Previous type: Float \(idx: 1\), current type: Int \(idx: 3\)\.",
     ):
         core.llvmexpr.SingleExpr(clip, expr_fi)
 
     expr_di = "1.0 MyProp$ 2 MyProp$i"
     with pytest.raises(
         vs.Error,
-        match=r"Inconsistent types used for property 'MyProp'\. Previous type: FLOAT \(idx: 1\), current type: INT \(idx: 3\)\.",
+        match=r"Inconsistent types used for property 'MyProp'\. Previous type: Float \(idx: 1\), current type: Int \(idx: 3\)\.",
     ):
         core.llvmexpr.SingleExpr(clip, expr_di)
 
     expr_afi = "1.0 MyProp$af 2 MyProp$i"
     with pytest.raises(
         vs.Error,
-        match=r"Inconsistent types used for property 'MyProp'\. Previous type: AUTO_FLOAT \(idx: 1\), current type: INT \(idx: 3\)\.",
+        match=r"Inconsistent types used for property 'MyProp'\. Previous type: AutoFloat \(idx: 1\), current type: Int \(idx: 3\)\.",
     ):
         core.llvmexpr.SingleExpr(clip, expr_afi)
 

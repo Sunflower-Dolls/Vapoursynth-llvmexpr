@@ -1,3 +1,22 @@
+/**
+ * Copyright (C) 2025 yuygfgg
+ * 
+ * This file is part of Vapoursynth-llvmexpr.
+ * 
+ * Vapoursynth-llvmexpr is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ * 
+ * Vapoursynth-llvmexpr is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 #include "VulkanMemory.hpp"
 #include "VulkanContext.hpp"
 
@@ -18,33 +37,33 @@
 namespace llvmexpr {
 
 VulkanMemory::VulkanMemory(VulkanContext& ctx) : context(ctx) {
-    VmaVulkanFunctions vulkanFunctions = {};
-    vulkanFunctions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
-    vulkanFunctions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
+    VmaVulkanFunctions vulkan_functions = {};
+    vulkan_functions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
+    vulkan_functions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
 
-    VmaAllocatorCreateInfo allocatorInfo = {};
-    allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_3;
-    allocatorInfo.physicalDevice = *context.getPhysicalDevice();
-    allocatorInfo.device = *context.getDevice();
-    allocatorInfo.instance = *context.getInstanceRef();
-    allocatorInfo.pVulkanFunctions = &vulkanFunctions;
+    VmaAllocatorCreateInfo allocator_info = {};
+    allocator_info.vulkanApiVersion = VK_API_VERSION_1_3;
+    allocator_info.physicalDevice = *context.getPhysicalDevice();
+    allocator_info.device = *context.getDevice();
+    allocator_info.instance = *context.getInstanceRef();
+    allocator_info.pVulkanFunctions = &vulkan_functions;
 
-    if (vmaCreateAllocator(&allocatorInfo, &allocator) != VK_SUCCESS) {
+    if (vmaCreateAllocator(&allocator_info, &allocator) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create VMA allocator");
     }
 
-    vk::CommandPoolCreateInfo poolInfo(
+    vk::CommandPoolCreateInfo pool_info(
         vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
         context.getQueueFamilyIndex());
-    transferPool = vk::raii::CommandPool(context.getDevice(), poolInfo);
+    transfer_pool = vk::raii::CommandPool(context.getDevice(), pool_info);
 
-    vk::CommandBufferAllocateInfo cmdInfo(*transferPool,
-                                          vk::CommandBufferLevel::ePrimary, 1);
-    auto cmdBuffers = vk::raii::CommandBuffers(context.getDevice(), cmdInfo);
-    transferCmd = std::move(cmdBuffers[0]);
+    vk::CommandBufferAllocateInfo cmd_info(*transfer_pool,
+                                           vk::CommandBufferLevel::ePrimary, 1);
+    auto cmd_buffers = vk::raii::CommandBuffers(context.getDevice(), cmd_info);
+    transfer_cmd = std::move(cmd_buffers[0]);
 
-    vk::FenceCreateInfo fenceInfo;
-    transferFence = vk::raii::Fence(context.getDevice(), fenceInfo);
+    vk::FenceCreateInfo fence_info;
+    transfer_fence = vk::raii::Fence(context.getDevice(), fence_info);
 }
 
 VulkanMemory::~VulkanMemory() {
@@ -55,55 +74,55 @@ VulkanMemory::~VulkanMemory() {
 
 VulkanBuffer VulkanMemory::createGPUBuffer(VkDeviceSize size,
                                            VkBufferUsageFlags usage) {
-    VkBufferCreateInfo bufferInfo = {};
-    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferInfo.size = size;
-    bufferInfo.usage = usage;
-    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    VkBufferCreateInfo buffer_info = {};
+    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buffer_info.size = size;
+    buffer_info.usage = usage;
+    buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    VmaAllocationCreateInfo allocInfo = {};
-    allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+    VmaAllocationCreateInfo alloc_info = {};
+    alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
     VkBuffer buffer = VK_NULL_HANDLE;
     VmaAllocation allocation = VK_NULL_HANDLE;
-    VmaAllocationInfo allocationInfo = {};
+    VmaAllocationInfo allocation_info = {};
 
-    if (vmaCreateBuffer(allocator, &bufferInfo, &allocInfo, &buffer,
-                        &allocation, &allocationInfo) != VK_SUCCESS) {
+    if (vmaCreateBuffer(allocator, &buffer_info, &alloc_info, &buffer,
+                        &allocation, &allocation_info) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create GPU buffer");
     }
 
-    return VulkanBuffer(buffer, allocation, allocationInfo, size);
+    return VulkanBuffer(buffer, allocation, allocation_info, size);
 }
 
 VulkanBuffer VulkanMemory::createStagingBuffer(VkDeviceSize size,
-                                               bool forUpload) {
-    VkBufferCreateInfo bufferInfo = {};
-    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferInfo.size = size;
-    bufferInfo.usage = forUpload ? VK_BUFFER_USAGE_TRANSFER_SRC_BIT
-                                 : VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+                                               bool for_upload) {
+    VkBufferCreateInfo buffer_info = {};
+    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buffer_info.size = size;
+    buffer_info.usage = for_upload ? VK_BUFFER_USAGE_TRANSFER_SRC_BIT
+                                   : VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    VmaAllocationCreateInfo allocInfo = {};
-    allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-    allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                      VMA_ALLOCATION_CREATE_MAPPED_BIT;
-    if (!forUpload) {
-        allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT |
-                          VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    VmaAllocationCreateInfo alloc_info = {};
+    alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
+    alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                       VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    if (!for_upload) {
+        alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT |
+                           VMA_ALLOCATION_CREATE_MAPPED_BIT;
     }
 
     VkBuffer buffer = VK_NULL_HANDLE;
     VmaAllocation allocation = VK_NULL_HANDLE;
-    VmaAllocationInfo allocationInfo = {};
+    VmaAllocationInfo allocation_info = {};
 
-    if (vmaCreateBuffer(allocator, &bufferInfo, &allocInfo, &buffer,
-                        &allocation, &allocationInfo) != VK_SUCCESS) {
+    if (vmaCreateBuffer(allocator, &buffer_info, &alloc_info, &buffer,
+                        &allocation, &allocation_info) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create staging buffer");
     }
 
-    return VulkanBuffer(buffer, allocation, allocationInfo, size);
+    return VulkanBuffer(buffer, allocation, allocation_info, size);
 }
 
 void VulkanMemory::destroyBuffer(VulkanBuffer& buffer) {
@@ -115,58 +134,58 @@ void VulkanMemory::destroyBuffer(VulkanBuffer& buffer) {
     }
 }
 
-void VulkanMemory::uploadToBuffer(VulkanBuffer& gpuBuffer, const void* data,
+void VulkanMemory::uploadToBuffer(VulkanBuffer& gpu_buffer, const void* data,
                                   VkDeviceSize size, VkDeviceSize offset) {
     auto staging = createStagingBuffer(size, true);
 
     std::memcpy(staging.getMappedData(), data, size);
 
-    vk::CommandBufferBeginInfo beginInfo(
+    vk::CommandBufferBeginInfo begin_info(
         vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
-    transferCmd.begin(beginInfo);
+    transfer_cmd.begin(begin_info);
 
-    vk::BufferCopy copyRegion(0, offset, size);
-    transferCmd.copyBuffer(staging.buffer, gpuBuffer.buffer, copyRegion);
+    vk::BufferCopy copy_region(0, offset, size);
+    transfer_cmd.copyBuffer(staging.buffer, gpu_buffer.buffer, copy_region);
 
-    transferCmd.end();
+    transfer_cmd.end();
 
-    vk::SubmitInfo submitInfo;
-    submitInfo.setCommandBuffers(*transferCmd);
-    context.submit(submitInfo, *transferFence);
+    vk::SubmitInfo submit_info;
+    submit_info.setCommandBuffers(*transfer_cmd);
+    context.submit(submit_info, *transfer_fence);
 
     auto result =
-        context.getDevice().waitForFences(*transferFence, VK_TRUE, UINT64_MAX);
+        context.getDevice().waitForFences(*transfer_fence, VK_TRUE, UINT64_MAX);
     if (result != vk::Result::eSuccess) {
         throw std::runtime_error("Failed to wait for upload fence");
     }
-    context.getDevice().resetFences(*transferFence);
+    context.getDevice().resetFences(*transfer_fence);
 
     destroyBuffer(staging);
 }
 
-void VulkanMemory::downloadFromBuffer(VulkanBuffer& gpuBuffer, void* data,
+void VulkanMemory::downloadFromBuffer(VulkanBuffer& gpu_buffer, void* data,
                                       VkDeviceSize size, VkDeviceSize offset) {
     auto staging = createStagingBuffer(size, false);
 
-    vk::CommandBufferBeginInfo beginInfo(
+    vk::CommandBufferBeginInfo begin_info(
         vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
-    transferCmd.begin(beginInfo);
+    transfer_cmd.begin(begin_info);
 
-    vk::BufferCopy copyRegion(offset, 0, size);
-    transferCmd.copyBuffer(gpuBuffer.buffer, staging.buffer, copyRegion);
+    vk::BufferCopy copy_region(offset, 0, size);
+    transfer_cmd.copyBuffer(gpu_buffer.buffer, staging.buffer, copy_region);
 
-    transferCmd.end();
+    transfer_cmd.end();
 
-    vk::SubmitInfo submitInfo;
-    submitInfo.setCommandBuffers(*transferCmd);
-    context.submit(submitInfo, *transferFence);
+    vk::SubmitInfo submit_info;
+    submit_info.setCommandBuffers(*transfer_cmd);
+    context.submit(submit_info, *transfer_fence);
 
     auto result =
-        context.getDevice().waitForFences(*transferFence, VK_TRUE, UINT64_MAX);
+        context.getDevice().waitForFences(*transfer_fence, VK_TRUE, UINT64_MAX);
     if (result != vk::Result::eSuccess) {
         throw std::runtime_error("Failed to wait for download fence");
     }
-    context.getDevice().resetFences(*transferFence);
+    context.getDevice().resetFences(*transfer_fence);
 
     std::memcpy(data, staging.getMappedData(), size);
 
@@ -175,25 +194,25 @@ void VulkanMemory::downloadFromBuffer(VulkanBuffer& gpuBuffer, void* data,
 
 void VulkanMemory::copyBuffer(VulkanBuffer& src, VulkanBuffer& dst,
                               VkDeviceSize size) {
-    vk::CommandBufferBeginInfo beginInfo(
+    vk::CommandBufferBeginInfo begin_info(
         vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
-    transferCmd.begin(beginInfo);
+    transfer_cmd.begin(begin_info);
 
-    vk::BufferCopy copyRegion(0, 0, size);
-    transferCmd.copyBuffer(src.buffer, dst.buffer, copyRegion);
+    vk::BufferCopy copy_region(0, 0, size);
+    transfer_cmd.copyBuffer(src.buffer, dst.buffer, copy_region);
 
-    transferCmd.end();
+    transfer_cmd.end();
 
-    vk::SubmitInfo submitInfo;
-    submitInfo.setCommandBuffers(*transferCmd);
-    context.submit(submitInfo, *transferFence);
+    vk::SubmitInfo submit_info;
+    submit_info.setCommandBuffers(*transfer_cmd);
+    context.submit(submit_info, *transfer_fence);
 
     auto result =
-        context.getDevice().waitForFences(*transferFence, VK_TRUE, UINT64_MAX);
+        context.getDevice().waitForFences(*transfer_fence, VK_TRUE, UINT64_MAX);
     if (result != vk::Result::eSuccess) {
         throw std::runtime_error("Failed to wait for copy fence");
     }
-    context.getDevice().resetFences(*transferFence);
+    context.getDevice().resetFences(*transfer_fence);
 }
 
 } // namespace llvmexpr

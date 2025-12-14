@@ -35,15 +35,15 @@ void VectorizationDiagnosticHandler::setOriginalHandler(
 }
 
 void VectorizationDiagnosticHandler::handleDiagnostic(
-    const llvm::DiagnosticInfo& DI) {
+    const llvm::DiagnosticInfo& di) {
     bool should_suppress = false;
 
-    if (DI.getSeverity() == llvm::DS_Remark ||
-        DI.getSeverity() == llvm::DS_Warning) {
+    if (di.getSeverity() == llvm::DS_Remark ||
+        di.getSeverity() == llvm::DS_Warning) {
         std::string msg;
         llvm::raw_string_ostream stream(msg);
         llvm::DiagnosticPrinterRawOStream printer(stream);
-        DI.print(printer);
+        di.print(printer);
 
         if (msg.find("loop not vectorized") != std::string::npos) {
             vectorization_failed.store(true);
@@ -53,7 +53,7 @@ void VectorizationDiagnosticHandler::handleDiagnostic(
 
     // Call original handler for all diagnostics except "loop not vectorized"
     if (!should_suppress && (original_handler != nullptr)) {
-        original_handler(&DI, original_context);
+        original_handler(&di, original_context);
     }
 }
 
@@ -66,7 +66,7 @@ void VectorizationDiagnosticHandler::reset() {
 }
 
 void VectorizationDiagnosticHandler::diagnosticHandlerCallback(
-    const llvm::DiagnosticInfo* DI, void* Context) {
-    static_cast<VectorizationDiagnosticHandler*>(Context)->handleDiagnostic(
-        *DI);
+    const llvm::DiagnosticInfo* di, void* context) {
+    static_cast<VectorizationDiagnosticHandler*>(context)->handleDiagnostic(
+        *di);
 }

@@ -19,6 +19,7 @@
 
 #include "PostfixHelper.hpp"
 #include "../Tokenizer.hpp"
+
 #include <format>
 #include <stdexcept>
 
@@ -26,9 +27,8 @@ namespace infix2postfix {
 
 int compute_postfix_stack_effect(const std::string& postfix_expr,
                                  PostfixMode mode, int line, int num_inputs) {
-    ::ExprMode expr_mode = (mode == PostfixMode::EXPR)
-                               ? ::ExprMode::EXPR
-                               : ::ExprMode::SINGLE_EXPR;
+    ::ExprMode expr_mode =
+        (mode == PostfixMode::Expr) ? ::ExprMode::Expr : ::ExprMode::SingleExpr;
 
     std::vector<::Token> tokens;
     try {

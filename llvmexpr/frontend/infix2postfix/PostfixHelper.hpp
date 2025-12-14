@@ -26,8 +26,8 @@
 namespace infix2postfix {
 
 enum class PostfixMode : std::uint8_t {
-    EXPR,
-    SINGLE_EXPR,
+    Expr,
+    SingleExpr,
 };
 
 int compute_postfix_stack_effect(const std::string& postfix_expr,

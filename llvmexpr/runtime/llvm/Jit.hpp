@@ -17,8 +17,8 @@
  * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef LLVMEXPR_JIT_HPP
-#define LLVMEXPR_JIT_HPP
+#ifndef LLVMEXPR_RUNTIME_LLVM_JIT_HPP
+#define LLVMEXPR_RUNTIME_LLVM_JIT_HPP
 
 #include <cstdint>
 #include <memory>
@@ -50,8 +50,8 @@ class OrcJit {
 
     [[nodiscard]] const llvm::Triple& getTargetTriple() const;
 
-    void addModule(std::unique_ptr<llvm::Module> M,
-                   std::unique_ptr<llvm::LLVMContext> Ctx);
+    void addModule(std::unique_ptr<llvm::Module> m,
+                   std::unique_ptr<llvm::LLVMContext> ctx);
 
     void* getFunctionAddress(const std::string& name);
 };
@@ -66,4 +66,4 @@ extern std::unordered_map<std::string, CompiledFunction> jit_cache;
 extern std::mutex cache_mutex;
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
-#endif // LLVMEXPR_JIT_HPP
+#endif // LLVMEXPR_RUNTIME_LLVM_JIT_HPP

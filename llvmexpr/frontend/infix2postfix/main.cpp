@@ -17,6 +17,11 @@
  * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "ASTPrinter.hpp"
+#include "AnalysisEngine.hpp"
+#include "Preprocessor.hpp"
+#include "Tokenizer.hpp"
+
 #include <format>
 #include <fstream>
 #include <iostream>
@@ -24,11 +29,6 @@
 #include <sstream>
 #include <string>
 #include <string_view>
-
-#include "ASTPrinter.hpp"
-#include "AnalysisEngine.hpp"
-#include "Preprocessor.hpp"
-#include "Tokenizer.hpp"
 
 using namespace infix2postfix;
 

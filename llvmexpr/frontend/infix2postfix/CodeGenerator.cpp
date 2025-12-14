@@ -22,6 +22,7 @@
 #include "PostfixBuilder.hpp"
 #include "PostfixHelper.hpp"
 #include "types.hpp"
+
 #include <format>
 #include <functional>
 #include <utility>
@@ -44,13 +45,13 @@ std::string CodeGenerator::generate(const Program* program) {
     return main_builder.get_expression();
 }
 
-CodeGenerator::ExprResult CodeGenerator::generate_expr(Expr* expr) {
+CodeGenerator::ExprResult CodeGenerator::generateExpr(Expr* expr) {
     PostfixBuilder b;
     Type t = generate(expr, b);
     return {.postfix = b, .type = t};
 }
 
-std::string CodeGenerator::generate_expr_to_string(Expr* expr) {
+std::string CodeGenerator::generateExprToString(Expr* expr) {
     if (expr == nullptr) {
         return "";
     }
@@ -185,7 +186,7 @@ Type CodeGenerator::handle(const CallExpr& expr, PostfixBuilder& builder) {
         const auto& sig = *expr.resolved_signature;
         FunctionDef* func_def = expr.resolved_def;
 
-        inline_function_call(sig, func_def, expr.args, expr.range, builder);
+        inlineFunctionCall(sig, func_def, expr.args, expr.range, builder);
         return Type::Value;
     }
 
@@ -199,7 +200,7 @@ Type CodeGenerator::handle(const CallExpr& expr, PostfixBuilder& builder) {
         }
 
         for (size_t i = 0; i < expr.args.size(); ++i) {
-            if (builtin->param_types[i] != Type::Literal_string) {
+            if (builtin->param_types[i] != Type::LiteralString) {
                 generate(expr.args[i].get(), builder);
             }
         }
@@ -232,7 +233,7 @@ Type CodeGenerator::handle(const PropAccessExpr& expr,
     std::string clip_name = expr.clip.value;
     if (param_substitutions.contains(clip_name)) {
         auto* subst_expr = param_substitutions.at(clip_name);
-        clip_name = generate_expr_to_string(subst_expr);
+        clip_name = generateExprToString(subst_expr);
     } else {
         clip_name = clip_name.substr(1);
     }
@@ -246,20 +247,20 @@ Type CodeGenerator::handle(const StaticRelPixelAccessExpr& expr,
     std::string clip_name = expr.clip.value;
     if (param_substitutions.contains(clip_name)) {
         auto* subst_expr = param_substitutions.at(clip_name);
-        clip_name = generate_expr_to_string(subst_expr);
+        clip_name = generateExprToString(subst_expr);
     } else {
         clip_name = clip_name.substr(1);
     }
 
-    builder.add_static_pixel_access(clip_name, expr.offsetX.value,
-                                    expr.offsetY.value, expr.boundary_suffix);
+    builder.add_static_pixel_access(clip_name, expr.offset_x.value,
+                                    expr.offset_y.value, expr.boundary_suffix);
     return Type::Value;
 }
 
 Type CodeGenerator::handle(const FrameDimensionExpr& expr,
                            PostfixBuilder& builder) {
     std::string plane_idx_str =
-        generate_expr_to_string(expr.plane_index_expr.get());
+        generateExprToString(expr.plane_index_expr.get());
     builder.add_frame_dimension(expr.dimension_name, plane_idx_str);
     return Type::Value;
 }
@@ -291,7 +292,7 @@ void CodeGenerator::handle(const ExprStmt& stmt, PostfixBuilder& builder) {
 #ifndef NDEBUG
     PostfixBuilder temp_builder;
     generate(stmt.expr.get(), temp_builder);
-    check_stack_effect(temp_builder.get_expression(), 0, stmt.range);
+    checkStackEffect(temp_builder.get_expression(), 0, stmt.range);
     builder.append(temp_builder);
 #else
     generate(stmt.expr.get(), builder);
@@ -339,7 +340,7 @@ void CodeGenerator::handle(const AssignStmt& stmt, PostfixBuilder& builder) {
                 b.add_array_alloc_dynamic(var_name);
             }
 #ifndef NDEBUG
-            check_stack_effect(b.get_expression(), 0, stmt.range);
+            checkStackEffect(b.get_expression(), 0, stmt.range);
             builder.append(b);
 #endif
             return;
@@ -350,7 +351,7 @@ void CodeGenerator::handle(const AssignStmt& stmt, PostfixBuilder& builder) {
     PostfixBuilder b;
     generate(stmt.value.get(), b);
     b.add_variable_store(var_name);
-    check_stack_effect(b.get_expression(), 0, stmt.range);
+    checkStackEffect(b.get_expression(), 0, stmt.range);
     builder.append(b);
 #else
     generate(stmt.value.get(), builder);
@@ -381,7 +382,7 @@ void CodeGenerator::handle(const ArrayAssignStmt& stmt,
     generate(stmt.value.get(), b);
     generate(array_access->index.get(), b);
     b.add_array_store(array_name);
-    check_stack_effect(b.get_expression(), 0, stmt.range);
+    checkStackEffect(b.get_expression(), 0, stmt.range);
     builder.append(b);
 #else
     generate(stmt.value.get(), builder);
@@ -479,11 +480,11 @@ void CodeGenerator::handle([[maybe_unused]] const GlobalDecl& stmt,
     // Global declarations don't generate code
 }
 
-void CodeGenerator::check_stack_effect([[maybe_unused]] const std::string& s,
-                                       [[maybe_unused]] int expected,
-                                       [[maybe_unused]] const Range& range) {
+void CodeGenerator::checkStackEffect([[maybe_unused]] const std::string& s,
+                                     [[maybe_unused]] int expected,
+                                     [[maybe_unused]] const Range& range) {
 #ifndef NDEBUG
-    int effect = compute_stack_effect(s, range);
+    int effect = computeStackEffect(s, range);
     if (effect != expected) {
         throw CodeGenError(std::format("Unbalanced stack. "
                                        "Expected {}, got {}",
@@ -493,10 +494,10 @@ void CodeGenerator::check_stack_effect([[maybe_unused]] const std::string& s,
 #endif
 }
 
-int CodeGenerator::compute_stack_effect(const std::string& s,
-                                        const Range& range) {
+int CodeGenerator::computeStackEffect(const std::string& s,
+                                      const Range& range) {
     PostfixMode postfix_mode =
-        (mode == Mode::Expr) ? PostfixMode::EXPR : PostfixMode::SINGLE_EXPR;
+        (mode == Mode::Expr) ? PostfixMode::Expr : PostfixMode::SingleExpr;
 
     try {
         return compute_postfix_stack_effect(s, postfix_mode, range.start.line,
@@ -506,7 +507,7 @@ int CodeGenerator::compute_stack_effect(const std::string& s,
     }
 }
 
-void CodeGenerator::inline_function_call(
+void CodeGenerator::inlineFunctionCall(
     const FunctionSignature& sig, FunctionDef* func_def,
     const std::vector<std::unique_ptr<Expr>>& args,
     [[maybe_unused]] const Range& call_range, PostfixBuilder& builder) {
@@ -629,7 +630,7 @@ void CodeGenerator::inline_function_call(
     int expected_effect = sig.returns_value ? 1 : 0;
     try {
         int actual_effect =
-            compute_stack_effect(inlined_builder.get_expression(), call_range);
+            computeStackEffect(inlined_builder.get_expression(), call_range);
         if (actual_effect != expected_effect) {
             throw CodeGenError(std::format("Function '{}' has "
                                            "unbalanced stack. "

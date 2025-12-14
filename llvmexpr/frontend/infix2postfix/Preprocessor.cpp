@@ -19,6 +19,7 @@
 
 #include "Preprocessor.hpp"
 #include "StandardLibrary.hpp"
+
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -39,56 +40,56 @@ namespace infix2postfix {
 namespace preprocessor_detail {
 
 enum class TokenType : std::uint8_t {
-    IDENTIFIER,
-    NUMBER,
-    PLUS,
-    MINUS,
-    MULTIPLY,
-    DIVIDE,
-    MODULO,
-    POWER,
-    EQUAL,
-    NOT_EQUAL,
-    GREATER,
-    GREATER_EQUAL,
-    LESS,
-    LESS_EQUAL,
-    LOGICAL_AND,
-    LOGICAL_OR,
-    LOGICAL_NOT,
-    BIT_AND,
-    BIT_OR,
-    BIT_XOR,
-    BIT_NOT,
-    LPAREN,
-    RPAREN,
-    LBRACKET,
-    RBRACKET,
-    LBRACE,
-    RBRACE,
-    COMMA,
-    DOT,
-    QUESTION,
-    COLON,
-    SEMICOLON,
-    ASSIGN,
-    AT_DEFINE,
-    AT_UNDEF,
-    AT_IFDEF,
-    AT_IFNDEF,
-    AT_IF,
-    AT_ELSE,
-    AT_ENDIF,
-    AT_ERROR,
-    AT_REQUIRES,
-    AT,
-    WHITESPACE,
-    NEWLINE,
-    COMMENT,
-    END_OF_FILE,
-    CONCAT,
-    BEGIN_MACRO_EXPANSION,
-    END_MACRO_EXPANSION,
+    Identifier,
+    Number,
+    Plus,
+    Minus,
+    Multiply,
+    Divide,
+    Modulo,
+    Power,
+    Equal,
+    NotEqual,
+    Greater,
+    GreaterEqual,
+    Less,
+    LessEqual,
+    LogicalAnd,
+    LogicalOr,
+    LogicalNot,
+    BitAnd,
+    BitOr,
+    BitXor,
+    BitNot,
+    Lparen,
+    Rparen,
+    Lbracket,
+    Rbracket,
+    Lbrace,
+    Rbrace,
+    Comma,
+    Dot,
+    Question,
+    Colon,
+    Semicolon,
+    Assign,
+    AtDefine,
+    AtUndef,
+    AtIfdef,
+    AtIfndef,
+    AtIf,
+    AtElse,
+    AtEndif,
+    AtError,
+    AtRequires,
+    At,
+    Whitespace,
+    Newline,
+    Comment,
+    EndOfFile,
+    Concat,
+    BeginMacroExpansion,
+    EndMacroExpansion,
 };
 
 struct Token {
@@ -96,11 +97,11 @@ struct Token {
     std::string text;
     int line;
     int column;
-    std::variant<int64_t, double> numericValue;
-    bool hasNumericValue = false;
+    std::variant<int64_t, double> numeric_value;
+    bool has_numeric_value = false;
     size_t expansion_idx = static_cast<size_t>(-1);
 
-    Token() : type(TokenType::END_OF_FILE), line(0), column(0) {}
+    Token() : type(TokenType::EndOfFile), line(0), column(0) {}
 
     Token(TokenType t, std::string txt, int ln, int col)
         : type(t), text(std::move(txt)), line(ln), column(col) {}
@@ -108,19 +109,19 @@ struct Token {
     Token(TokenType t, std::string txt, int ln, int col,
           const std::variant<int64_t, double>& val)
         : type(t), text(std::move(txt)), line(ln), column(col),
-          numericValue(val), hasNumericValue(true) {}
+          numeric_value(val), has_numeric_value(true) {}
 };
 
 class PreprocessorTokenizer {
   public:
-    explicit PreprocessorTokenizer(std::string_view source) : Source(source) {}
+    explicit PreprocessorTokenizer(std::string_view source) : source(source) {}
 
     std::vector<Token> tokenize() {
         std::vector<Token> tokens;
         while (!eof()) {
             Token tok = nextToken();
             tokens.push_back(tok);
-            if (tok.type == TokenType::END_OF_FILE) {
+            if (tok.type == TokenType::EndOfFile) {
                 break;
             }
         }
@@ -128,25 +129,25 @@ class PreprocessorTokenizer {
     }
 
   private:
-    std::string_view Source;
-    size_t Pos = 0;
-    int Line = 1;
-    int Column = 1;
+    std::string_view source;
+    size_t pos = 0;
+    int line = 1;
+    int column = 1;
 
-    [[nodiscard]] bool eof() const { return Pos >= Source.length(); }
+    [[nodiscard]] bool eof() const { return pos >= source.length(); }
 
     [[nodiscard]] char peek(size_t offset = 0) const {
-        size_t p = Pos + offset;
-        return p < Source.length() ? Source[p] : '\0';
+        size_t p = pos + offset;
+        return p < source.length() ? source[p] : '\0';
     }
 
     [[nodiscard]] char peekSigned(int offset) const {
         if (offset < 0) {
-            auto absOffset = static_cast<size_t>(-offset);
-            if (absOffset > Pos) {
+            auto abs_offset = static_cast<size_t>(-offset);
+            if (abs_offset > pos) {
                 return '\0';
             }
-            return Source[Pos - absOffset];
+            return source[pos - abs_offset];
         }
         return peek(static_cast<size_t>(offset));
     }
@@ -155,73 +156,73 @@ class PreprocessorTokenizer {
         if (eof()) {
             return '\0';
         }
-        char c = Source[Pos++];
+        char c = source[pos++];
         if (c == '\n') {
-            Line++;
-            Column = 1;
+            line++;
+            column = 1;
         } else {
-            Column++;
+            column++;
         }
         return c;
     }
 
     Token nextToken() {
         if (eof()) {
-            return {TokenType::END_OF_FILE, "", Line, Column};
+            return {TokenType::EndOfFile, "", line, column};
         }
 
-        int startLine = Line;
-        int startColumn = Column;
+        int start_line = line;
+        int start_column = column;
         char c = peek();
 
         if (c == ' ' || c == '\t' || c == '\r') {
-            return consumeWhitespace(startLine, startColumn);
+            return consumeWhitespace(start_line, start_column);
         }
         if (c == '\n') {
             consume();
-            return {TokenType::NEWLINE, "\n", startLine, startColumn};
+            return {TokenType::Newline, "\n", start_line, start_column};
         }
         if (c == '#') {
-            return consumeComment(startLine, startColumn);
+            return consumeComment(start_line, start_column);
         }
         if (std::isdigit(c) != 0 || (c == '.' && std::isdigit(peek(1)) != 0)) {
-            return consumeNumber(startLine, startColumn);
+            return consumeNumber(start_line, start_column);
         }
         if (c == '@') {
             if (peek(1) == '@') {
                 consume();
                 consume();
-                return {TokenType::CONCAT, "@@", startLine, startColumn};
+                return {TokenType::Concat, "@@", start_line, start_column};
             }
-            return consumeDirective(startLine, startColumn);
+            return consumeDirective(start_line, start_column);
         }
         if (std::isalpha(c) != 0 || c == '_' || c == '$') {
-            return consumeIdentifier(startLine, startColumn);
+            return consumeIdentifier(start_line, start_column);
         }
-        return consumeOperator(startLine, startColumn);
+        return consumeOperator(start_line, start_column);
     }
 
-    Token consumeWhitespace(int startLine, int startColumn) {
-        size_t start = Pos;
+    Token consumeWhitespace(int start_line, int start_column) {
+        size_t start = pos;
         while (!eof() && (peek() == ' ' || peek() == '\t' || peek() == '\r')) {
             consume();
         }
-        std::string text(Source.substr(start, Pos - start));
-        return {TokenType::WHITESPACE, text, startLine, startColumn};
+        std::string text(source.substr(start, pos - start));
+        return {TokenType::Whitespace, text, start_line, start_column};
     }
 
-    Token consumeComment(int startLine, int startColumn) {
-        size_t start = Pos;
+    Token consumeComment(int start_line, int start_column) {
+        size_t start = pos;
         consume();
         while (!eof() && peek() != '\n') {
             consume();
         }
-        std::string text(Source.substr(start, Pos - start));
-        return {TokenType::COMMENT, text, startLine, startColumn};
+        std::string text(source.substr(start, pos - start));
+        return {TokenType::Comment, text, start_line, start_column};
     }
 
-    Token consumeNumber(int startLine, int startColumn) {
-        size_t start = Pos;
+    Token consumeNumber(int start_line, int start_column) {
+        size_t start = pos;
 
         if (peek() == '0' && (peek(1) == 'x' || peek(1) == 'X')) {
             consume();
@@ -245,204 +246,204 @@ class PreprocessorTokenizer {
             }
         }
 
-        std::string text(Source.substr(start, Pos - start));
+        std::string text(source.substr(start, pos - start));
 
         try {
             if (text.find('.') != std::string::npos ||
                 text.find('e') != std::string::npos ||
                 text.find('E') != std::string::npos) {
                 double val = std::stod(text);
-                return {TokenType::NUMBER, text, startLine, startColumn, val};
+                return {TokenType::Number, text, start_line, start_column, val};
             }
             int64_t val = std::stoll(text, nullptr, 0);
-            return {TokenType::NUMBER, text, startLine, startColumn, val};
+            return {TokenType::Number, text, start_line, start_column, val};
         } catch (...) {
-            return {TokenType::NUMBER, text, startLine, startColumn};
+            return {TokenType::Number, text, start_line, start_column};
         }
     }
 
-    Token consumeDirective(int startLine, int startColumn) {
+    Token consumeDirective(int start_line, int start_column) {
         consume();
 
         if (eof() || (std::isalpha(peek()) == 0 && peek() != '_')) {
-            return {TokenType::AT, "@", startLine, startColumn};
+            return {TokenType::At, "@", start_line, start_column};
         }
 
-        size_t start = Pos;
+        size_t start = pos;
         while (!eof() && (std::isalnum(peek()) != 0 || peek() == '_')) {
             consume();
         }
 
-        std::string directive(Source.substr(start, Pos - start));
-        std::string fullText = "@" + directive;
+        std::string directive(source.substr(start, pos - start));
+        std::string full_text = "@" + directive;
 
-        TokenType type = TokenType::AT;
+        TokenType type = TokenType::At;
         if (directive == "define") {
-            type = TokenType::AT_DEFINE;
+            type = TokenType::AtDefine;
         } else if (directive == "undef") {
-            type = TokenType::AT_UNDEF;
+            type = TokenType::AtUndef;
         } else if (directive == "ifdef") {
-            type = TokenType::AT_IFDEF;
+            type = TokenType::AtIfdef;
         } else if (directive == "ifndef") {
-            type = TokenType::AT_IFNDEF;
+            type = TokenType::AtIfndef;
         } else if (directive == "if") {
-            type = TokenType::AT_IF;
+            type = TokenType::AtIf;
         } else if (directive == "else") {
-            type = TokenType::AT_ELSE;
+            type = TokenType::AtElse;
         } else if (directive == "endif") {
-            type = TokenType::AT_ENDIF;
+            type = TokenType::AtEndif;
         } else if (directive == "error") {
-            type = TokenType::AT_ERROR;
+            type = TokenType::AtError;
         } else if (directive == "requires") {
-            type = TokenType::AT_REQUIRES;
+            type = TokenType::AtRequires;
         }
 
-        return {type, fullText, startLine, startColumn};
+        return {type, full_text, start_line, start_column};
     }
 
-    Token consumeIdentifier(int startLine, int startColumn) {
-        size_t start = Pos;
+    Token consumeIdentifier(int start_line, int start_column) {
+        size_t start = pos;
         while (!eof() &&
                (std::isalnum(peek()) != 0 || peek() == '_' || peek() == '$')) {
             consume();
         }
-        std::string text(Source.substr(start, Pos - start));
-        return {TokenType::IDENTIFIER, text, startLine, startColumn};
+        std::string text(source.substr(start, pos - start));
+        return {TokenType::Identifier, text, start_line, start_column};
     }
 
-    Token consumeOperator(int startLine, int startColumn) {
+    Token consumeOperator(int start_line, int start_column) {
         char c = peek();
         char next = peek(1);
 
         if (c == '*' && next == '*') {
             consume();
             consume();
-            return {TokenType::POWER, "**", startLine, startColumn};
+            return {TokenType::Power, "**", start_line, start_column};
         }
         if (c == '=' && next == '=') {
             consume();
             consume();
-            return {TokenType::EQUAL, "==", startLine, startColumn};
+            return {TokenType::Equal, "==", start_line, start_column};
         }
         if (c == '!' && next == '=') {
             consume();
             consume();
-            return {TokenType::NOT_EQUAL, "!=", startLine, startColumn};
+            return {TokenType::NotEqual, "!=", start_line, start_column};
         }
         if (c == '>' && next == '=') {
             consume();
             consume();
-            return {TokenType::GREATER_EQUAL, ">=", startLine, startColumn};
+            return {TokenType::GreaterEqual, ">=", start_line, start_column};
         }
         if (c == '<' && next == '=') {
             consume();
             consume();
-            return {TokenType::LESS_EQUAL, "<=", startLine, startColumn};
+            return {TokenType::LessEqual, "<=", start_line, start_column};
         }
         if (c == '&' && next == '&') {
             consume();
             consume();
-            return {TokenType::LOGICAL_AND, "&&", startLine, startColumn};
+            return {TokenType::LogicalAnd, "&&", start_line, start_column};
         }
         if (c == '|' && next == '|') {
             consume();
             consume();
-            return {TokenType::LOGICAL_OR, "||", startLine, startColumn};
+            return {TokenType::LogicalOr, "||", start_line, start_column};
         }
 
         consume();
-        TokenType type = TokenType::END_OF_FILE;
+        TokenType type = TokenType::EndOfFile;
         std::string text(1, c);
 
         switch (c) {
         case '+':
-            type = TokenType::PLUS;
+            type = TokenType::Plus;
             break;
         case '-':
-            type = TokenType::MINUS;
+            type = TokenType::Minus;
             break;
         case '*':
-            type = TokenType::MULTIPLY;
+            type = TokenType::Multiply;
             break;
         case '/':
-            type = TokenType::DIVIDE;
+            type = TokenType::Divide;
             break;
         case '%':
-            type = TokenType::MODULO;
+            type = TokenType::Modulo;
             break;
         case '>':
-            type = TokenType::GREATER;
+            type = TokenType::Greater;
             break;
         case '<':
-            type = TokenType::LESS;
+            type = TokenType::Less;
             break;
         case '!':
-            type = TokenType::LOGICAL_NOT;
+            type = TokenType::LogicalNot;
             break;
         case '&':
-            type = TokenType::BIT_AND;
+            type = TokenType::BitAnd;
             break;
         case '|':
-            type = TokenType::BIT_OR;
+            type = TokenType::BitOr;
             break;
         case '^':
-            type = TokenType::BIT_XOR;
+            type = TokenType::BitXor;
             break;
         case '~':
-            type = TokenType::BIT_NOT;
+            type = TokenType::BitNot;
             break;
         case '(':
-            type = TokenType::LPAREN;
+            type = TokenType::Lparen;
             break;
         case ')':
-            type = TokenType::RPAREN;
+            type = TokenType::Rparen;
             break;
         case '[':
-            type = TokenType::LBRACKET;
+            type = TokenType::Lbracket;
             break;
         case ']':
-            type = TokenType::RBRACKET;
+            type = TokenType::Rbracket;
             break;
         case '{':
-            type = TokenType::LBRACE;
+            type = TokenType::Lbrace;
             break;
         case '}':
-            type = TokenType::RBRACE;
+            type = TokenType::Rbrace;
             break;
         case ',':
-            type = TokenType::COMMA;
+            type = TokenType::Comma;
             break;
         case '.':
-            type = TokenType::DOT;
+            type = TokenType::Dot;
             break;
         case '?':
-            type = TokenType::QUESTION;
+            type = TokenType::Question;
             break;
         case ':':
-            type = TokenType::COLON;
+            type = TokenType::Colon;
             break;
         case ';':
-            type = TokenType::SEMICOLON;
+            type = TokenType::Semicolon;
             break;
         case '=':
-            type = TokenType::ASSIGN;
+            type = TokenType::Assign;
             break;
         default:
             throw PreprocessorError(
                 std::format("Unexpected character '{}' at line {}, column {}",
-                            c, startLine, startColumn));
+                            c, start_line, start_column));
         }
 
-        return {type, text, startLine, startColumn};
+        return {type, text, start_line, start_column};
     }
 };
 
 std::string tokensToString(const std::vector<Token>& tokens,
-                           bool preserveWhitespace = false) {
+                           bool preserve_whitespace = false) {
     std::string result;
     for (const auto& tok : tokens) {
-        if (!preserveWhitespace && (tok.type == TokenType::WHITESPACE ||
-                                    tok.type == TokenType::COMMENT)) {
+        if (!preserve_whitespace && (tok.type == TokenType::Whitespace ||
+                                     tok.type == TokenType::Comment)) {
             continue;
         }
         result += tok.text;
@@ -457,14 +458,14 @@ std::vector<Token> trimTokens(const std::vector<Token>& tokens) {
 
     size_t start = 0;
     while (start < tokens.size() &&
-           (tokens[start].type == TokenType::WHITESPACE ||
-            tokens[start].type == TokenType::COMMENT)) {
+           (tokens[start].type == TokenType::Whitespace ||
+            tokens[start].type == TokenType::Comment)) {
         start++;
     }
 
     size_t end = tokens.size();
-    while (end > start && (tokens[end - 1].type == TokenType::WHITESPACE ||
-                           tokens[end - 1].type == TokenType::COMMENT)) {
+    while (end > start && (tokens[end - 1].type == TokenType::Whitespace ||
+                           tokens[end - 1].type == TokenType::Comment)) {
         end--;
     }
 
@@ -473,9 +474,9 @@ std::vector<Token> trimTokens(const std::vector<Token>& tokens) {
 }
 
 bool isSkippable(const Token& t) {
-    return t.type == TokenType::WHITESPACE || t.type == TokenType::COMMENT ||
-           t.type == TokenType::BEGIN_MACRO_EXPANSION ||
-           t.type == TokenType::END_MACRO_EXPANSION;
+    return t.type == TokenType::Whitespace || t.type == TokenType::Comment ||
+           t.type == TokenType::BeginMacroExpansion ||
+           t.type == TokenType::EndMacroExpansion;
 }
 
 } // namespace preprocessor_detail
@@ -524,21 +525,21 @@ class TokenStream {
     }
 
     [[nodiscard]] bool is_eof() const {
-        return tokens.empty() || tokens.front().type == TokenType::END_OF_FILE;
+        return tokens.empty() || tokens.front().type == TokenType::EndOfFile;
     }
 
     [[nodiscard]] Token peek(size_t offset = 0) const {
         if (offset >= tokens.size()) {
-            static Token eofToken{TokenType::END_OF_FILE, "", 0, 0};
-            return eofToken;
+            static Token eof_token{TokenType::EndOfFile, "", 0, 0};
+            return eof_token;
         }
         return tokens[offset];
     }
 
     Token consume() {
         if (is_eof()) {
-            static Token eofToken{TokenType::END_OF_FILE, "", 0, 0};
-            return eofToken;
+            static Token eof_token{TokenType::EndOfFile, "", 0, 0};
+            return eof_token;
         }
         Token tok = std::move(tokens.front());
         tokens.pop_front();
@@ -643,23 +644,22 @@ class Evaluator {
     size_t pos = 0;
 
     [[nodiscard]] bool is_eof() const {
-        return pos >= tokens.size() ||
-               tokens[pos].type == TokenType::END_OF_FILE;
+        return pos >= tokens.size() || tokens[pos].type == TokenType::EndOfFile;
     }
 
     [[nodiscard]] const Token& peek(size_t offset = 0) const {
         size_t p = pos + offset;
         if (p >= tokens.size()) {
-            static Token eofToken{TokenType::END_OF_FILE, "", 0, 0};
-            return eofToken;
+            static Token eof_token{TokenType::EndOfFile, "", 0, 0};
+            return eof_token;
         }
         return tokens[p];
     }
 
     Token consume() {
         if (is_eof()) {
-            static Token eofToken{TokenType::END_OF_FILE, "", 0, 0};
-            return eofToken;
+            static Token eof_token{TokenType::EndOfFile, "", 0, 0};
+            return eof_token;
         }
         return tokens[pos++];
     }
@@ -675,10 +675,10 @@ class Evaluator {
 
         const Token& tok = peek();
 
-        if (tok.type == TokenType::NUMBER) {
+        if (tok.type == TokenType::Number) {
             consume();
-            if (tok.hasNumericValue) {
-                return Value(tok.numericValue);
+            if (tok.has_numeric_value) {
+                return Value(tok.numeric_value);
             }
             try {
                 if (tok.text.find('.') != std::string::npos ||
@@ -692,18 +692,18 @@ class Evaluator {
             }
         }
 
-        if (tok.type == TokenType::IDENTIFIER) {
+        if (tok.type == TokenType::Identifier) {
             std::string name = tok.text;
             throw std::runtime_error(
                 "Unexpanded identifier in constant expression: " + name);
         }
 
-        if (tok.type == TokenType::LPAREN) {
+        if (tok.type == TokenType::Lparen) {
             consume();
             skipWhitespace();
             Value val = parseConditional();
             skipWhitespace();
-            if (peek().type != TokenType::RPAREN) {
+            if (peek().type != TokenType::Rparen) {
                 throw std::runtime_error("Expected ')'");
             }
             consume();
@@ -716,7 +716,7 @@ class Evaluator {
     Value parseUnary() {
         skipWhitespace();
 
-        if (peek().type == TokenType::MINUS) {
+        if (peek().type == TokenType::Minus) {
             consume();
             skipWhitespace();
             Value val = parseUnary();
@@ -726,19 +726,19 @@ class Evaluator {
             return {-std::get<int64_t>(val.val)};
         }
 
-        if (peek().type == TokenType::LOGICAL_NOT) {
+        if (peek().type == TokenType::LogicalNot) {
             consume();
             skipWhitespace();
             return {static_cast<int64_t>(!parseUnary().is_truthy())};
         }
 
-        if (peek().type == TokenType::PLUS) {
+        if (peek().type == TokenType::Plus) {
             consume();
             skipWhitespace();
             return parseUnary();
         }
 
-        if (peek().type == TokenType::BIT_NOT) {
+        if (peek().type == TokenType::BitNot) {
             consume();
             skipWhitespace();
             Value val = parseUnary();
@@ -755,7 +755,7 @@ class Evaluator {
         Value left = parseUnary();
         skipWhitespace();
 
-        if (peek().type == TokenType::POWER) {
+        if (peek().type == TokenType::Power) {
             consume();
             skipWhitespace();
             Value right = parsePower();
@@ -772,8 +772,8 @@ class Evaluator {
             skipWhitespace();
             const Token& op = peek();
 
-            if (op.type != TokenType::MULTIPLY &&
-                op.type != TokenType::DIVIDE && op.type != TokenType::MODULO) {
+            if (op.type != TokenType::Multiply &&
+                op.type != TokenType::Divide && op.type != TokenType::Modulo) {
                 break;
             }
 
@@ -786,13 +786,13 @@ class Evaluator {
                 double r = right.to_double();
 
                 switch (op.type) {
-                case TokenType::MULTIPLY:
+                case TokenType::Multiply:
                     left = Value(l * r);
                     break;
-                case TokenType::DIVIDE:
+                case TokenType::Divide:
                     left = Value(l / r);
                     break;
-                case TokenType::MODULO:
+                case TokenType::Modulo:
                     throw std::runtime_error(
                         "Modulo requires integer operands");
                 default:
@@ -803,13 +803,13 @@ class Evaluator {
                 int64_t r = std::get<int64_t>(right.val);
 
                 switch (op.type) {
-                case TokenType::MULTIPLY:
+                case TokenType::Multiply:
                     left = Value(l * r);
                     break;
-                case TokenType::DIVIDE:
+                case TokenType::Divide:
                     left = Value(l / r);
                     break;
-                case TokenType::MODULO:
+                case TokenType::Modulo:
                     left = Value(l % r);
                     break;
                 default:
@@ -828,7 +828,7 @@ class Evaluator {
             skipWhitespace();
             const Token& op = peek();
 
-            if (op.type != TokenType::PLUS && op.type != TokenType::MINUS) {
+            if (op.type != TokenType::Plus && op.type != TokenType::Minus) {
                 break;
             }
 
@@ -839,11 +839,11 @@ class Evaluator {
             if (left.is_double() || right.is_double()) {
                 double l = left.to_double();
                 double r = right.to_double();
-                left = Value(op.type == TokenType::PLUS ? (l + r) : (l - r));
+                left = Value(op.type == TokenType::Plus ? (l + r) : (l - r));
             } else {
                 int64_t l = std::get<int64_t>(left.val);
                 int64_t r = std::get<int64_t>(right.val);
-                left = Value(op.type == TokenType::PLUS ? (l + r) : (l - r));
+                left = Value(op.type == TokenType::Plus ? (l + r) : (l - r));
             }
         }
 
@@ -857,7 +857,7 @@ class Evaluator {
             skipWhitespace();
             const Token& op = peek();
 
-            if (op.type != TokenType::BIT_OR) {
+            if (op.type != TokenType::BitOr) {
                 break;
             }
 
@@ -886,7 +886,7 @@ class Evaluator {
             skipWhitespace();
             const Token& op = peek();
 
-            if (op.type != TokenType::BIT_XOR) {
+            if (op.type != TokenType::BitXor) {
                 break;
             }
 
@@ -915,7 +915,7 @@ class Evaluator {
             skipWhitespace();
             const Token& op = peek();
 
-            if (op.type != TokenType::BIT_AND) {
+            if (op.type != TokenType::BitAnd) {
                 break;
             }
 
@@ -944,19 +944,18 @@ class Evaluator {
             skipWhitespace();
             const Token& op = peek();
 
-            if (op.type != TokenType::EQUAL &&
-                op.type != TokenType::NOT_EQUAL) {
+            if (op.type != TokenType::Equal && op.type != TokenType::NotEqual) {
                 break;
             }
 
-            TokenType opType = op.type;
+            TokenType op_type = op.type;
             consume();
             skipWhitespace();
             Value right = parseComparison();
 
             double l = left.to_double();
             double r = right.to_double();
-            bool result = (opType == TokenType::EQUAL) ? (l == r) : (l != r);
+            bool result = (op_type == TokenType::Equal) ? (l == r) : (l != r);
 
             left = Value(static_cast<int64_t>(result));
         }
@@ -971,14 +970,13 @@ class Evaluator {
             skipWhitespace();
             const Token& op = peek();
 
-            if (op.type != TokenType::GREATER &&
-                op.type != TokenType::GREATER_EQUAL &&
-                op.type != TokenType::LESS &&
-                op.type != TokenType::LESS_EQUAL) {
+            if (op.type != TokenType::Greater &&
+                op.type != TokenType::GreaterEqual &&
+                op.type != TokenType::Less && op.type != TokenType::LessEqual) {
                 break;
             }
 
-            TokenType opType = op.type;
+            TokenType op_type = op.type;
             consume();
             skipWhitespace();
             Value right = parseTerm();
@@ -987,17 +985,17 @@ class Evaluator {
             double r = right.to_double();
             bool result = false;
 
-            switch (opType) {
-            case TokenType::GREATER:
+            switch (op_type) {
+            case TokenType::Greater:
                 result = l > r;
                 break;
-            case TokenType::GREATER_EQUAL:
+            case TokenType::GreaterEqual:
                 result = l >= r;
                 break;
-            case TokenType::LESS:
+            case TokenType::Less:
                 result = l < r;
                 break;
-            case TokenType::LESS_EQUAL:
+            case TokenType::LessEqual:
                 result = l <= r;
                 break;
             default:
@@ -1015,7 +1013,7 @@ class Evaluator {
 
         while (true) {
             skipWhitespace();
-            if (peek().type != TokenType::LOGICAL_AND) {
+            if (peek().type != TokenType::LogicalAnd) {
                 break;
             }
             consume();
@@ -1033,7 +1031,7 @@ class Evaluator {
 
         while (true) {
             skipWhitespace();
-            if (peek().type != TokenType::LOGICAL_OR) {
+            if (peek().type != TokenType::LogicalOr) {
                 break;
             }
             consume();
@@ -1050,35 +1048,35 @@ class Evaluator {
         Value condition = parseLogicalOr();
         skipWhitespace();
 
-        if (peek().type != TokenType::QUESTION) {
+        if (peek().type != TokenType::Question) {
             return condition;
         }
 
         consume();
-        bool condTruthy = condition.is_truthy();
+        bool cond_truthy = condition.is_truthy();
         skipWhitespace();
 
-        if (condTruthy) {
-            Value thenVal = parseConditional();
+        if (cond_truthy) {
+            Value then_val = parseConditional();
             skipWhitespace();
-            if (peek().type != TokenType::COLON) {
+            if (peek().type != TokenType::Colon) {
                 throw std::runtime_error(
                     "Expected ':' in conditional expression");
             }
             consume();
             skipElseBranch();
-            return thenVal;
+            return then_val;
         }
 
         skipThenBranchToColon();
         skipWhitespace();
-        if (peek().type != TokenType::COLON) {
+        if (peek().type != TokenType::Colon) {
             throw std::runtime_error("Expected ':' in conditional expression");
         }
         consume();
         skipWhitespace();
-        Value elseVal = parseConditional();
-        return elseVal;
+        Value else_val = parseConditional();
+        return else_val;
     }
 
     void skipThenBranchToColon() {
@@ -1086,10 +1084,10 @@ class Evaluator {
         while (!is_eof()) {
             const Token& tok = peek();
 
-            if (tok.type == TokenType::QUESTION) {
+            if (tok.type == TokenType::Question) {
                 nested++;
                 consume();
-            } else if (tok.type == TokenType::COLON) {
+            } else if (tok.type == TokenType::Colon) {
                 if (nested == 0) {
                     break;
                 }
@@ -1103,26 +1101,26 @@ class Evaluator {
 
     void skipElseBranch() {
         int nested = 0;
-        int parenDepth = 0;
+        int paren_depth = 0;
 
         while (!is_eof()) {
             const Token& tok = peek();
 
-            if (tok.type == TokenType::LPAREN) {
-                parenDepth++;
+            if (tok.type == TokenType::Lparen) {
+                paren_depth++;
                 consume();
-            } else if (tok.type == TokenType::RPAREN) {
-                if (parenDepth == 0) {
+            } else if (tok.type == TokenType::Rparen) {
+                if (paren_depth == 0) {
                     break;
                 }
-                parenDepth--;
+                paren_depth--;
                 consume();
-            } else if (tok.type == TokenType::COMMA && parenDepth == 0) {
+            } else if (tok.type == TokenType::Comma && paren_depth == 0) {
                 break;
-            } else if (tok.type == TokenType::QUESTION) {
+            } else if (tok.type == TokenType::Question) {
                 nested++;
                 consume();
-            } else if (tok.type == TokenType::COLON) {
+            } else if (tok.type == TokenType::Colon) {
                 if (nested == 0) {
                     break;
                 }
@@ -1137,8 +1135,8 @@ class Evaluator {
 
 class Expander {
   public:
-    Expander(const MacroTable& macros, int recursionDepth = 0)
-        : macros(macros), recursion_depth(recursionDepth) {}
+    Expander(const MacroTable& macros, int recursion_depth = 0)
+        : macros(macros), recursion_depth(recursion_depth) {}
 
     std::vector<Token> expand(const std::vector<Token>& input) {
         TokenStream stream(input);
@@ -1147,7 +1145,7 @@ class Expander {
         while (!stream.is_eof()) {
             const auto tok = stream.peek();
 
-            if (tok.type == TokenType::IDENTIFIER) {
+            if (tok.type == TokenType::Identifier) {
                 if (tok.text == "defined") {
                     handleDefinedOperator(stream, result);
                     continue;
@@ -1169,12 +1167,13 @@ class Expander {
                     continue;
                 }
 
-                Token macroToken = stream.consume();
+                Token macro_token = stream.consume();
 
                 if (macro->is_function_like) {
-                    expandFunctionLikeMacro(stream, result, macroToken, *macro);
+                    expandFunctionLikeMacro(stream, result, macro_token,
+                                            *macro);
                 } else {
-                    expandObjectLikeMacro(stream, result, macroToken, *macro);
+                    expandObjectLikeMacro(stream, result, macro_token, *macro);
                 }
             } else {
                 result.push_back(stream.consume());
@@ -1198,92 +1197,92 @@ class Expander {
     void handleDefinedOperator(TokenStream& stream,
                                std::vector<Token>& result) {
         const auto tok = stream.peek();
-        int defLine = tok.line;
-        int defCol = tok.column;
+        int def_line = tok.line;
+        int def_col = tok.column;
         stream.consume();
         stream.skipWhitespace();
 
-        bool hasParen = false;
-        if (!stream.is_eof() && stream.peek().type == TokenType::LPAREN) {
-            hasParen = true;
+        bool has_paren = false;
+        if (!stream.is_eof() && stream.peek().type == TokenType::Lparen) {
+            has_paren = true;
             stream.consume();
             stream.skipWhitespace();
         }
 
-        if (!stream.is_eof() && stream.peek().type == TokenType::IDENTIFIER) {
-            Token macroToken = stream.consume();
-            std::string macroName = macroToken.text;
+        if (!stream.is_eof() && stream.peek().type == TokenType::Identifier) {
+            Token macro_token = stream.consume();
+            std::string macro_name = macro_token.text;
 
-            if (hasParen) {
+            if (has_paren) {
                 stream.skipWhitespace();
                 if (!stream.is_eof() &&
-                    stream.peek().type == TokenType::RPAREN) {
+                    stream.peek().type == TokenType::Rparen) {
                     stream.consume();
                 }
             }
 
-            std::string value = macros.contains(macroName) ? "1" : "0";
+            std::string value = macros.contains(macro_name) ? "1" : "0";
             result.emplace_back(
-                TokenType::NUMBER, value, defLine, defCol,
-                static_cast<int64_t>(macros.contains(macroName) ? 1 : 0));
+                TokenType::Number, value, def_line, def_col,
+                static_cast<int64_t>(macros.contains(macro_name) ? 1 : 0));
         }
     }
 
     void handleConstevalIntrinsics(TokenStream& stream,
                                    std::vector<Token>& result,
                                    const Token& tok) {
-        bool isProbe = (tok.text == "is_consteval");
-        int startLine = tok.line;
-        int startCol = tok.column;
+        bool is_probe = (tok.text == "is_consteval");
+        int start_line = tok.line;
+        int start_col = tok.column;
 
         stream.consume();
         stream.skipWhitespace();
 
-        if (stream.is_eof() || stream.peek().type != TokenType::LPAREN) {
-            result.emplace_back(TokenType::IDENTIFIER, tok.text, startLine,
-                                startCol);
+        if (stream.is_eof() || stream.peek().type != TokenType::Lparen) {
+            result.emplace_back(TokenType::Identifier, tok.text, start_line,
+                                start_col);
             return;
         }
 
         stream.consume();
 
-        std::vector<Token> argTokens;
+        std::vector<Token> arg_tokens;
         int depth = 0;
         bool found = false;
 
         while (!stream.is_eof()) {
             const auto t = stream.peek();
 
-            if (t.type == TokenType::LPAREN) {
+            if (t.type == TokenType::Lparen) {
                 depth++;
-                argTokens.push_back(stream.consume());
-            } else if (t.type == TokenType::RPAREN) {
+                arg_tokens.push_back(stream.consume());
+            } else if (t.type == TokenType::Rparen) {
                 if (depth == 0) {
                     found = true;
                     stream.consume();
                     break;
                 }
                 depth--;
-                argTokens.push_back(stream.consume());
+                arg_tokens.push_back(stream.consume());
             } else {
-                argTokens.push_back(stream.consume());
+                arg_tokens.push_back(stream.consume());
             }
         }
 
         if (!found) {
-            result.emplace_back(TokenType::IDENTIFIER, tok.text, startLine,
-                                startCol);
+            result.emplace_back(TokenType::Identifier, tok.text, start_line,
+                                start_col);
             return;
         }
 
-        argTokens = expand(argTokens);
+        arg_tokens = expand(arg_tokens);
 
         std::optional<std::variant<int64_t, double>> maybe;
         try {
-            Evaluator evaluator(argTokens);
+            Evaluator evaluator(arg_tokens);
             maybe = evaluator.tryEvaluate();
         } catch (const PreprocessorError&) {
-            if (isProbe) {
+            if (is_probe) {
                 maybe = std::nullopt;
             } else {
                 throw;
@@ -1292,9 +1291,9 @@ class Expander {
             maybe = std::nullopt;
         }
 
-        if (isProbe) {
+        if (is_probe) {
             std::string value = maybe ? "1" : "0";
-            result.emplace_back(TokenType::NUMBER, value, startLine, startCol,
+            result.emplace_back(TokenType::Number, value, start_line, start_col,
                                 static_cast<int64_t>(maybe ? 1 : 0));
         } else {
             if (!maybe) {
@@ -1302,7 +1301,7 @@ class Expander {
                     "consteval() requires a constant expression");
             }
             std::string value = Evaluator::toString(*maybe);
-            result.emplace_back(TokenType::NUMBER, value, startLine, startCol,
+            result.emplace_back(TokenType::Number, value, start_line, start_col,
                                 *maybe);
         }
     }
@@ -1310,15 +1309,15 @@ class Expander {
     void handleStaticAssertIntrinsic(TokenStream& stream,
                                      std::vector<Token>& result,
                                      const Token& tok) {
-        int startLine = tok.line;
-        int startCol = tok.column;
+        int start_line = tok.line;
+        int start_col = tok.column;
 
         stream.consume();
         stream.skipWhitespace();
 
-        if (stream.is_eof() || stream.peek().type != TokenType::LPAREN) {
-            result.emplace_back(TokenType::IDENTIFIER, tok.text, startLine,
-                                startCol);
+        if (stream.is_eof() || stream.peek().type != TokenType::Lparen) {
+            result.emplace_back(TokenType::Identifier, tok.text, start_line,
+                                start_col);
             return;
         }
 
@@ -1330,13 +1329,13 @@ class Expander {
                 "static_assert() expects 2 arguments: condition, message");
         }
 
-        Expander nestedExpander(macros, recursion_depth + 1);
-        std::vector<Token> condTokens = nestedExpander.expand(args[0]);
-        std::vector<Token> msgTokens = nestedExpander.expand(args[1]);
+        Expander nested_expander(macros, recursion_depth + 1);
+        std::vector<Token> cond_tokens = nested_expander.expand(args[0]);
+        std::vector<Token> msg_tokens = nested_expander.expand(args[1]);
 
         std::optional<std::variant<int64_t, double>> maybe;
         try {
-            Evaluator evaluator(condTokens);
+            Evaluator evaluator(cond_tokens);
             maybe = evaluator.tryEvaluate();
         } catch (const PreprocessorError&) {
             throw;
@@ -1351,7 +1350,7 @@ class Expander {
 
         if (!Evaluator::is_truthy(*maybe)) {
             std::string message =
-                preprocessor_detail::tokensToString(msgTokens, true);
+                preprocessor_detail::tokensToString(msg_tokens, true);
             if (message.empty()) {
                 message = "static_assert condition is false";
             }
@@ -1359,37 +1358,37 @@ class Expander {
                 std::format("static_assert failed: {}", message));
         }
 
-        result.emplace_back(TokenType::NUMBER, "1", startLine, startCol,
+        result.emplace_back(TokenType::Number, "1", start_line, start_col,
                             static_cast<int64_t>(1));
     }
 
     std::vector<std::vector<Token>> parseMacroArguments(TokenStream& stream) {
         std::vector<std::vector<Token>> arguments;
-        std::vector<Token> currentArg;
-        int parenDepth = 0;
+        std::vector<Token> current_arg;
+        int paren_depth = 0;
 
         while (!stream.is_eof()) {
-            const auto argTok = stream.peek();
+            const auto arg_tok = stream.peek();
 
-            if (argTok.type == TokenType::LPAREN) {
-                parenDepth++;
-                currentArg.push_back(stream.consume());
-            } else if (argTok.type == TokenType::RPAREN) {
-                if (parenDepth == 0) {
+            if (arg_tok.type == TokenType::Lparen) {
+                paren_depth++;
+                current_arg.push_back(stream.consume());
+            } else if (arg_tok.type == TokenType::Rparen) {
+                if (paren_depth == 0) {
                     arguments.push_back(
-                        preprocessor_detail::trimTokens(currentArg));
+                        preprocessor_detail::trimTokens(current_arg));
                     stream.consume();
                     break;
                 }
-                parenDepth--;
-                currentArg.push_back(stream.consume());
-            } else if (argTok.type == TokenType::COMMA && parenDepth == 0) {
+                paren_depth--;
+                current_arg.push_back(stream.consume());
+            } else if (arg_tok.type == TokenType::Comma && paren_depth == 0) {
                 arguments.push_back(
-                    preprocessor_detail::trimTokens(currentArg));
-                currentArg.clear();
+                    preprocessor_detail::trimTokens(current_arg));
+                current_arg.clear();
                 stream.consume();
             } else {
-                currentArg.push_back(stream.consume());
+                current_arg.push_back(stream.consume());
             }
         }
 
@@ -1399,19 +1398,19 @@ class Expander {
     void expandFunctionLikeMacro(TokenStream& stream,
                                  std::vector<Token>& result, const Token& tok,
                                  const Macro& macro) {
-        size_t preWsStart = result.size();
+        size_t pre_ws_start = result.size();
         while (!stream.is_eof() &&
-               stream.peek().type == TokenType::WHITESPACE) {
+               stream.peek().type == TokenType::Whitespace) {
             result.push_back(stream.consume());
         }
 
-        if (stream.is_eof() || stream.peek().type != TokenType::LPAREN) {
-            result.emplace_back(TokenType::IDENTIFIER, tok.text, tok.line,
+        if (stream.is_eof() || stream.peek().type != TokenType::Lparen) {
+            result.emplace_back(TokenType::Identifier, tok.text, tok.line,
                                 tok.column);
             return;
         }
 
-        result.erase(result.begin() + static_cast<std::ptrdiff_t>(preWsStart),
+        result.erase(result.begin() + static_cast<std::ptrdiff_t>(pre_ws_start),
                      result.end());
 
         stream.consume();
@@ -1433,53 +1432,53 @@ class Expander {
             throw PreprocessorError("Macro expansion recursion limit reached");
         }
 
-        std::set<std::string> paramsNextToConcat;
+        std::set<std::string> params_next_to_concat;
         for (size_t i = 0; i < macro.body.size(); ++i) {
-            if (macro.body[i].type != TokenType::IDENTIFIER) {
+            if (macro.body[i].type != TokenType::Identifier) {
                 continue;
             }
 
-            bool isParam =
+            bool is_param =
                 std::ranges::contains(macro.params, macro.body[i].text);
-            if (!isParam) {
+            if (!is_param) {
                 continue;
             }
 
-            if (i > 0 && macro.body[i - 1].type == TokenType::CONCAT) {
-                paramsNextToConcat.insert(macro.body[i].text);
+            if (i > 0 && macro.body[i - 1].type == TokenType::Concat) {
+                params_next_to_concat.insert(macro.body[i].text);
             }
             if (i + 1 < macro.body.size() &&
-                macro.body[i + 1].type == TokenType::CONCAT) {
-                paramsNextToConcat.insert(macro.body[i].text);
+                macro.body[i + 1].type == TokenType::Concat) {
+                params_next_to_concat.insert(macro.body[i].text);
             }
         }
 
-        std::vector<std::vector<Token>> processedArgs;
-        Expander argExpander(macros, recursion_depth + 1);
+        std::vector<std::vector<Token>> processed_args;
+        Expander arg_expander(macros, recursion_depth + 1);
         for (size_t i = 0; i < arguments.size(); ++i) {
-            const auto& paramName = macro.params[i];
+            const auto& param_name = macro.params[i];
             const auto& arg = arguments[i];
 
-            if (paramsNextToConcat.contains(paramName)) {
-                processedArgs.push_back(arg);
+            if (params_next_to_concat.contains(param_name)) {
+                processed_args.push_back(arg);
             } else {
-                std::vector<Token> expandedArg = argExpander.expand(arg);
-                processedArgs.push_back(expandedArg);
+                std::vector<Token> expanded_arg = arg_expander.expand(arg);
+                processed_args.push_back(expanded_arg);
             }
         }
 
         std::vector<Token> substituted =
-            substituteParams(macro.body, macro.params, processedArgs);
+            substituteParams(macro.body, macro.params, processed_args);
 
-        std::string initialReplacement =
+        std::string initial_replacement =
             preprocessor_detail::tokensToString(substituted, false);
 
         substituted = foldTopLevelTernary(substituted);
 
-        Expander nestedExpander(macros, recursion_depth + 1);
-        substituted = nestedExpander.expand(substituted);
+        Expander nested_expander(macros, recursion_depth + 1);
+        substituted = nested_expander.expand(substituted);
 
-        auto nestedExpansions = nestedExpander.getExpansions();
+        auto nested_expansions = nested_expander.getExpansions();
 
         try {
             Evaluator evaluator(substituted);
@@ -1487,7 +1486,7 @@ class Expander {
             if (evaluated) {
                 std::string value = Evaluator::toString(*evaluated);
                 substituted.clear();
-                substituted.emplace_back(TokenType::NUMBER, value, tok.line,
+                substituted.emplace_back(TokenType::Number, value, tok.line,
                                          tok.column, *evaluated);
             }
         } catch (...) {
@@ -1497,21 +1496,21 @@ class Expander {
         expansion.macro_name = tok.text;
         expansion.original_line = tok.line;
         expansion.original_column = tok.column;
-        expansion.replacement_text = initialReplacement;
+        expansion.replacement_text = initial_replacement;
 
         size_t expansion_idx = expansions.size();
         expansions.push_back(expansion);
 
-        expansions.insert(expansions.end(), nestedExpansions.begin(),
-                          nestedExpansions.end());
+        expansions.insert(expansions.end(), nested_expansions.begin(),
+                          nested_expansions.end());
 
         if (!substituted.empty()) {
-            Token begin_tok(TokenType::BEGIN_MACRO_EXPANSION, "", tok.line,
+            Token begin_tok(TokenType::BeginMacroExpansion, "", tok.line,
                             tok.column);
             begin_tok.expansion_idx = expansion_idx;
             substituted.insert(substituted.begin(), begin_tok);
 
-            Token end_tok(TokenType::END_MACRO_EXPANSION, "", tok.line,
+            Token end_tok(TokenType::EndMacroExpansion, "", tok.line,
                           tok.column);
             end_tok.expansion_idx = expansion_idx;
             substituted.push_back(end_tok);
@@ -1527,32 +1526,32 @@ class Expander {
             throw PreprocessorError("Macro expansion recursion limit reached");
         }
 
-        std::string replacementText =
+        std::string replacement_text =
             preprocessor_detail::tokensToString(macro.body, false);
 
-        Expander nestedExpander(macros, recursion_depth + 1);
-        std::vector<Token> expanded = nestedExpander.expand(macro.body);
-        auto nestedExpansions = nestedExpander.getExpansions();
+        Expander nested_expander(macros, recursion_depth + 1);
+        std::vector<Token> expanded = nested_expander.expand(macro.body);
+        auto nested_expansions = nested_expander.getExpansions();
 
         MacroExpansion expansion;
         expansion.macro_name = tok.text;
         expansion.original_line = tok.line;
         expansion.original_column = tok.column;
-        expansion.replacement_text = replacementText;
+        expansion.replacement_text = replacement_text;
 
         size_t expansion_idx = expansions.size();
         expansions.push_back(expansion);
 
-        expansions.insert(expansions.end(), nestedExpansions.begin(),
-                          nestedExpansions.end());
+        expansions.insert(expansions.end(), nested_expansions.begin(),
+                          nested_expansions.end());
 
         if (!expanded.empty()) {
-            Token begin_tok(TokenType::BEGIN_MACRO_EXPANSION, "", tok.line,
+            Token begin_tok(TokenType::BeginMacroExpansion, "", tok.line,
                             tok.column);
             begin_tok.expansion_idx = expansion_idx;
             expanded.insert(expanded.begin(), begin_tok);
 
-            Token end_tok(TokenType::END_MACRO_EXPANSION, "", tok.line,
+            Token end_tok(TokenType::EndMacroExpansion, "", tok.line,
                           tok.column);
             end_tok.expansion_idx = expansion_idx;
             expanded.push_back(end_tok);
@@ -1567,21 +1566,21 @@ class Expander {
         }
 
         auto first = std::ranges::find_if(tokens, [](const Token& t) {
-            return t.type != TokenType::WHITESPACE;
+            return t.type != TokenType::Whitespace;
         });
 
-        if (first == tokens.end() || first->type != TokenType::LPAREN) {
+        if (first == tokens.end() || first->type != TokenType::Lparen) {
             return tokens;
         }
 
         auto last =
             std::ranges::find_if(
                 std::ranges::reverse_view(tokens),
-                [](const Token& t) { return t.type != TokenType::WHITESPACE; })
+                [](const Token& t) { return t.type != TokenType::Whitespace; })
                 .base() -
             1;
 
-        if (last == tokens.begin() || last->type != TokenType::RPAREN) {
+        if (last == tokens.begin() || last->type != TokenType::Rparen) {
             return tokens;
         }
 
@@ -1593,12 +1592,12 @@ class Expander {
 
         for (size_t i = 0; i < core_tokens.size(); ++i) {
             const auto& token = core_tokens[i];
-            if (token.type == TokenType::LPAREN) {
+            if (token.type == TokenType::Lparen) {
                 paren_balance++;
-            } else if (token.type == TokenType::RPAREN) {
+            } else if (token.type == TokenType::Rparen) {
                 paren_balance--;
             } else if (paren_balance == 0 &&
-                       token.type == TokenType::QUESTION) {
+                       token.type == TokenType::Question) {
                 if (question_pos == std::string::npos) {
                     question_pos = i;
                 }
@@ -1612,14 +1611,14 @@ class Expander {
         int ternary_balance = 0;
         for (size_t i = question_pos + 1; i < core_tokens.size(); ++i) {
             const auto& token = core_tokens[i];
-            if (token.type == TokenType::LPAREN) {
+            if (token.type == TokenType::Lparen) {
                 paren_balance++;
-            } else if (token.type == TokenType::RPAREN) {
+            } else if (token.type == TokenType::Rparen) {
                 paren_balance--;
             } else if (paren_balance == 0 &&
-                       token.type == TokenType::QUESTION) {
+                       token.type == TokenType::Question) {
                 ternary_balance++;
-            } else if (paren_balance == 0 && token.type == TokenType::COLON) {
+            } else if (paren_balance == 0 && token.type == TokenType::Colon) {
                 if (ternary_balance == 0) {
                     colon_pos = i;
                     break;
@@ -1637,8 +1636,8 @@ class Expander {
             core_tokens.begin() + static_cast<std::ptrdiff_t>(question_pos));
 
         try {
-            Expander condExpander(macros, recursion_depth + 1);
-            auto expanded_cond = condExpander.expand(cond_tokens);
+            Expander cond_expander(macros, recursion_depth + 1);
+            auto expanded_cond = cond_expander.expand(cond_tokens);
             Evaluator evaluator(expanded_cond);
             auto result = evaluator.tryEvaluate();
             if (!result) {
@@ -1667,7 +1666,7 @@ class Expander {
         std::vector<Token> result;
 
         for (const auto& tok : body) {
-            if (tok.type == TokenType::IDENTIFIER) {
+            if (tok.type == TokenType::Identifier) {
                 auto it = std::ranges::find(params, tok.text);
                 if (it != params.end()) {
                     size_t idx = std::ranges::distance(params.begin(), it);
@@ -1683,7 +1682,7 @@ class Expander {
 
         while (true) {
             auto it = std::ranges::find_if(result, [](const Token& t) {
-                return t.type == TokenType::CONCAT;
+                return t.type == TokenType::Concat;
             });
 
             if (it == result.end()) {
@@ -1721,23 +1720,23 @@ class Expander {
             std::string lhs_text = left_has_value ? lhs_it->text : "";
             std::string rhs_text = (rhs_it != result.end()) ? rhs_it->text : "";
 
-            std::string newText = lhs_text + rhs_text;
+            std::string new_text = lhs_text + rhs_text;
 
-            PreprocessorTokenizer tokenizer(newText);
-            auto newTokens = tokenizer.tokenize();
-            newTokens.erase(std::ranges::remove_if(
-                                newTokens,
-                                [](const Token& t) {
-                                    return t.type == TokenType::END_OF_FILE;
-                                })
-                                .begin(),
-                            newTokens.end());
+            PreprocessorTokenizer tokenizer(new_text);
+            auto new_tokens = tokenizer.tokenize();
+            new_tokens.erase(std::ranges::remove_if(
+                                 new_tokens,
+                                 [](const Token& t) {
+                                     return t.type == TokenType::EndOfFile;
+                                 })
+                                 .begin(),
+                             new_tokens.end());
 
             auto erase_end =
                 (rhs_it == result.end()) ? result.end() : (rhs_it + 1);
 
             auto insert_pos = result.erase(lhs_it, erase_end);
-            result.insert(insert_pos, newTokens.begin(), newTokens.end());
+            result.insert(insert_pos, new_tokens.begin(), new_tokens.end());
         }
 
         return result;
@@ -1756,16 +1755,16 @@ class Preprocessor::Impl {
 
     void addPredefinedMacro(std::string name, const std::string& value) {
         PreprocessorTokenizer tokenizer(value);
-        std::vector<Token> bodyTokens = tokenizer.tokenize();
+        std::vector<Token> body_tokens = tokenizer.tokenize();
 
-        std::erase_if(bodyTokens, [](const Token& t) {
-            return t.type == TokenType::END_OF_FILE;
+        std::erase_if(body_tokens, [](const Token& t) {
+            return t.type == TokenType::EndOfFile;
         });
 
         preprocessor::Macro macro;
         macro.name = std::move(name);
         macro.is_function_like = false;
-        macro.body = std::move(bodyTokens);
+        macro.body = std::move(body_tokens);
 
         macros.define(std::move(macro));
     }
@@ -1827,80 +1826,80 @@ class Preprocessor::Impl {
     int library_line_count = 0;
 
     void processTokens(std::vector<Token>& tokens) {
-        std::vector<Token> currentLineTokens;
-        int currentLineNumber = 1;
+        std::vector<Token> current_line_tokens;
+        int current_line_number = 1;
 
         for (const Token& tok : tokens) {
-            if (tok.type == TokenType::NEWLINE) {
-                processLineTokens(currentLineTokens, currentLineNumber);
-                currentLineTokens.clear();
-                currentLineNumber = tok.line + 1;
+            if (tok.type == TokenType::Newline) {
+                processLineTokens(current_line_tokens, current_line_number);
+                current_line_tokens.clear();
+                current_line_number = tok.line + 1;
                 continue;
             }
 
-            if (tok.type != TokenType::END_OF_FILE) {
-                currentLineTokens.push_back(tok);
+            if (tok.type != TokenType::EndOfFile) {
+                current_line_tokens.push_back(tok);
             } else {
                 break;
             }
         }
 
-        if (!currentLineTokens.empty()) {
-            processLineTokens(currentLineTokens, currentLineNumber);
+        if (!current_line_tokens.empty()) {
+            processLineTokens(current_line_tokens, current_line_number);
         }
     }
 
-    void processLineTokens(std::vector<Token>& lineTokens, int lineNumber) {
-        if (lineTokens.empty()) {
-            addOutputLine("", lineNumber);
+    void processLineTokens(std::vector<Token>& line_tokens, int line_number) {
+        if (line_tokens.empty()) {
+            addOutputLine("", line_number);
             return;
         }
 
-        size_t firstNonWs = 0;
-        while (firstNonWs < lineTokens.size() &&
-               (lineTokens[firstNonWs].type == TokenType::WHITESPACE ||
-                lineTokens[firstNonWs].type == TokenType::COMMENT)) {
-            firstNonWs++;
+        size_t first_non_ws = 0;
+        while (first_non_ws < line_tokens.size() &&
+               (line_tokens[first_non_ws].type == TokenType::Whitespace ||
+                line_tokens[first_non_ws].type == TokenType::Comment)) {
+            first_non_ws++;
         }
 
-        if (firstNonWs >= lineTokens.size()) {
-            addOutputLine("", lineNumber);
+        if (first_non_ws >= line_tokens.size()) {
+            addOutputLine("", line_number);
             return;
         }
 
-        const Token& firstTok = lineTokens[firstNonWs];
-        if (firstTok.type >= TokenType::AT_DEFINE &&
-            firstTok.type <= TokenType::AT_REQUIRES) {
-            handleDirective(lineTokens, lineNumber);
-            addOutputLine("", lineNumber);
+        const Token& first_tok = line_tokens[first_non_ws];
+        if (first_tok.type >= TokenType::AtDefine &&
+            first_tok.type <= TokenType::AtRequires) {
+            handleDirective(line_tokens, line_number);
+            addOutputLine("", line_number);
         } else if (!isCurrentBlockActive()) {
-            addOutputLine("", lineNumber);
+            addOutputLine("", line_number);
         } else {
             try {
                 preprocessor::Expander expander(macros);
-                std::vector<Token> expanded = expander.expand(lineTokens);
+                std::vector<Token> expanded = expander.expand(line_tokens);
                 auto expansions = expander.getExpansions();
 
-                std::string lineText;
+                std::string line_text;
                 int current_column = 1;
                 for (const auto& tok : expanded) {
-                    if (tok.type == TokenType::BEGIN_MACRO_EXPANSION) {
+                    if (tok.type == TokenType::BeginMacroExpansion) {
                         if (tok.expansion_idx < expansions.size()) {
                             expansions[tok.expansion_idx]
                                 .preprocessed_start_column = current_column;
                         }
-                    } else if (tok.type == TokenType::END_MACRO_EXPANSION) {
+                    } else if (tok.type == TokenType::EndMacroExpansion) {
                         if (tok.expansion_idx < expansions.size()) {
                             expansions[tok.expansion_idx]
                                 .preprocessed_end_column = current_column;
                         }
                     } else {
-                        lineText += tok.text;
+                        line_text += tok.text;
                         current_column += static_cast<int>(tok.text.length());
                     }
                 }
 
-                addOutputLine(lineText, lineNumber);
+                addOutputLine(line_text, line_number);
 
                 if (!line_mappings.empty()) {
                     line_mappings.back().expansions.insert(
@@ -1908,73 +1907,73 @@ class Preprocessor::Impl {
                         expansions.begin(), expansions.end());
                 }
             } catch (const PreprocessorError& e) {
-                addError(e.what(), lineNumber);
-                addOutputLine("", lineNumber);
+                addError(e.what(), line_number);
+                addOutputLine("", line_number);
             }
         }
     }
 
-    void handleDirective(std::vector<Token>& lineTokens, int lineNumber) {
-        preprocessor::TokenStream stream(lineTokens);
+    void handleDirective(std::vector<Token>& line_tokens, int line_number) {
+        preprocessor::TokenStream stream(line_tokens);
 
         stream.skipWhitespace();
         if (stream.is_eof()) {
             return;
         }
 
-        const Token& directiveTok = stream.consume();
+        const Token& directive_tok = stream.consume();
 
-        switch (directiveTok.type) {
-        case TokenType::AT_DEFINE:
+        switch (directive_tok.type) {
+        case TokenType::AtDefine:
             if (isCurrentBlockActive()) {
-                handleDefine(stream, lineNumber);
+                handleDefine(stream, line_number);
             }
             break;
-        case TokenType::AT_UNDEF:
+        case TokenType::AtUndef:
             if (isCurrentBlockActive()) {
-                handleUndef(stream, lineNumber);
+                handleUndef(stream, line_number);
             }
             break;
-        case TokenType::AT_IFDEF:
-            handleIfdef(stream, lineNumber, true);
+        case TokenType::AtIfdef:
+            handleIfdef(stream, line_number, true);
             break;
-        case TokenType::AT_IFNDEF:
-            handleIfdef(stream, lineNumber, false);
+        case TokenType::AtIfndef:
+            handleIfdef(stream, line_number, false);
             break;
-        case TokenType::AT_IF:
-            handleIf(stream, lineNumber);
+        case TokenType::AtIf:
+            handleIf(stream, line_number);
             break;
-        case TokenType::AT_ELSE:
-            handleElse(lineNumber);
+        case TokenType::AtElse:
+            handleElse(line_number);
             break;
-        case TokenType::AT_ENDIF:
-            handleEndif(lineNumber);
+        case TokenType::AtEndif:
+            handleEndif(line_number);
             break;
-        case TokenType::AT_ERROR:
+        case TokenType::AtError:
             if (isCurrentBlockActive()) {
-                handleError(stream, lineNumber);
+                handleError(stream, line_number);
             }
             break;
-        case TokenType::AT_REQUIRES:
+        case TokenType::AtRequires:
             if (isCurrentBlockActive()) {
-                handleRequires(stream, lineNumber);
+                handleRequires(stream, line_number);
             }
             break;
         default:
             if (isCurrentBlockActive()) {
                 addError(
-                    std::format("Unknown directive '{}'", directiveTok.text),
-                    lineNumber);
+                    std::format("Unknown directive '{}'", directive_tok.text),
+                    line_number);
             }
             break;
         }
     }
 
-    void handleDefine(preprocessor::TokenStream& stream, int lineNumber) {
+    void handleDefine(preprocessor::TokenStream& stream, int line_number) {
         stream.skipWhitespace();
 
-        if (stream.is_eof() || stream.peek().type != TokenType::IDENTIFIER) {
-            addError("@define requires a macro name", lineNumber);
+        if (stream.is_eof() || stream.peek().type != TokenType::Identifier) {
+            addError("@define requires a macro name", line_number);
             return;
         }
 
@@ -1984,18 +1983,18 @@ class Preprocessor::Impl {
         macro.name = name;
         macro.is_function_like = false;
 
-        if (!stream.is_eof() && stream.peek().type == TokenType::LPAREN) {
+        if (!stream.is_eof() && stream.peek().type == TokenType::Lparen) {
             macro.is_function_like = true;
             stream.consume();
 
             stream.skipWhitespace();
             while (!stream.is_eof() &&
-                   stream.peek().type != TokenType::RPAREN) {
+                   stream.peek().type != TokenType::Rparen) {
                 stream.skipWhitespace();
 
-                if (stream.peek().type != TokenType::IDENTIFIER) {
+                if (stream.peek().type != TokenType::Identifier) {
                     addError("Expected parameter name in macro definition",
-                             lineNumber);
+                             line_number);
                     return;
                 }
 
@@ -2006,7 +2005,7 @@ class Preprocessor::Impl {
                         std::format("Duplicate parameter name '{}' in macro "
                                     "definition",
                                     param),
-                        lineNumber);
+                        line_number);
                     return;
                 }
 
@@ -2015,22 +2014,22 @@ class Preprocessor::Impl {
 
                 if (stream.is_eof()) {
                     addError("Unterminated parameter list in macro definition",
-                             lineNumber);
+                             line_number);
                     return;
                 }
 
-                if (stream.peek().type == TokenType::COMMA) {
+                if (stream.peek().type == TokenType::Comma) {
                     stream.consume();
-                } else if (stream.peek().type != TokenType::RPAREN) {
+                } else if (stream.peek().type != TokenType::Rparen) {
                     addError("Unterminated parameter list in macro definition",
-                             lineNumber);
+                             line_number);
                     return;
                 }
             }
 
-            if (stream.is_eof() || stream.peek().type != TokenType::RPAREN) {
+            if (stream.is_eof() || stream.peek().type != TokenType::Rparen) {
                 addError("Unterminated parameter list in macro definition",
-                         lineNumber);
+                         line_number);
                 return;
             }
 
@@ -2038,40 +2037,40 @@ class Preprocessor::Impl {
         }
 
         stream.skipWhitespace();
-        std::vector<Token> bodyTokens;
+        std::vector<Token> body_tokens;
         while (!stream.is_eof()) {
-            bodyTokens.push_back(stream.consume());
+            body_tokens.push_back(stream.consume());
         }
 
-        bodyTokens = preprocessor_detail::trimTokens(bodyTokens);
+        body_tokens = preprocessor_detail::trimTokens(body_tokens);
 
-        if (!macro.is_function_like && !bodyTokens.empty()) {
+        if (!macro.is_function_like && !body_tokens.empty()) {
             try {
                 preprocessor::Expander expander(macros);
-                bodyTokens = expander.expand(bodyTokens);
+                body_tokens = expander.expand(body_tokens);
 
-                preprocessor::Evaluator evaluator(bodyTokens);
+                preprocessor::Evaluator evaluator(body_tokens);
                 auto evaluated = evaluator.tryEvaluate();
                 if (evaluated) {
                     std::string value =
                         preprocessor::Evaluator::toString(*evaluated);
-                    bodyTokens.clear();
-                    bodyTokens.emplace_back(TokenType::NUMBER, value,
-                                            lineNumber, 0, *evaluated);
+                    body_tokens.clear();
+                    body_tokens.emplace_back(TokenType::Number, value,
+                                             line_number, 0, *evaluated);
                 }
             } catch (...) {
             }
         }
 
-        macro.body = std::move(bodyTokens);
+        macro.body = std::move(body_tokens);
         macros.define(std::move(macro));
     }
 
-    void handleUndef(preprocessor::TokenStream& stream, int lineNumber) {
+    void handleUndef(preprocessor::TokenStream& stream, int line_number) {
         stream.skipWhitespace();
 
-        if (stream.is_eof() || stream.peek().type != TokenType::IDENTIFIER) {
-            addError("@undef requires a macro name", lineNumber);
+        if (stream.is_eof() || stream.peek().type != TokenType::Identifier) {
+            addError("@undef requires a macro name", line_number);
             return;
         }
 
@@ -2079,254 +2078,254 @@ class Preprocessor::Impl {
         macros.undef(name);
     }
 
-    void handleIfdef(preprocessor::TokenStream& stream, int lineNumber,
-                     bool checkDefined) {
+    void handleIfdef(preprocessor::TokenStream& stream, int line_number,
+                     bool check_defined) {
         stream.skipWhitespace();
 
-        if (stream.is_eof() || stream.peek().type != TokenType::IDENTIFIER) {
-            const char* directive = checkDefined ? "@ifdef" : "@ifndef";
+        if (stream.is_eof() || stream.peek().type != TokenType::Identifier) {
+            const char* directive = check_defined ? "@ifdef" : "@ifndef";
             addError(std::format("{} requires a macro name", directive),
-                     lineNumber);
-            conditional_stack.push_back({lineNumber, false, true});
+                     line_number);
+            conditional_stack.push_back({line_number, false, true});
             return;
         }
 
         std::string name = stream.consume().text;
 
-        bool parentActive = isCurrentBlockActive();
-        bool macroDefined = macros.contains(name);
-        bool conditionMet = checkDefined ? macroDefined : !macroDefined;
-        bool isActive = parentActive && conditionMet;
+        bool parent_active = isCurrentBlockActive();
+        bool macro_defined = macros.contains(name);
+        bool condition_met = check_defined ? macro_defined : !macro_defined;
+        bool is_active = parent_active && condition_met;
 
-        conditional_stack.push_back({lineNumber, isActive, conditionMet});
+        conditional_stack.push_back({line_number, is_active, condition_met});
     }
 
-    void handleIf(preprocessor::TokenStream& stream, int lineNumber) {
+    void handleIf(preprocessor::TokenStream& stream, int line_number) {
         stream.skipWhitespace();
 
-        std::vector<Token> exprTokens;
+        std::vector<Token> expr_tokens;
         while (!stream.is_eof()) {
-            exprTokens.push_back(stream.consume());
+            expr_tokens.push_back(stream.consume());
         }
 
-        if (exprTokens.empty()) {
-            addError("@if requires an expression", lineNumber);
-            conditional_stack.push_back({lineNumber, false, false});
+        if (expr_tokens.empty()) {
+            addError("@if requires an expression", line_number);
+            conditional_stack.push_back({line_number, false, false});
             return;
         }
 
-        bool parentActive = isCurrentBlockActive();
-        bool conditionMet = false;
+        bool parent_active = isCurrentBlockActive();
+        bool condition_met = false;
 
-        if (parentActive) {
+        if (parent_active) {
             try {
                 preprocessor::Expander expander(macros);
-                exprTokens = expander.expand(exprTokens);
+                expr_tokens = expander.expand(expr_tokens);
 
-                preprocessor::Evaluator evaluator(exprTokens);
+                preprocessor::Evaluator evaluator(expr_tokens);
                 auto result = evaluator.evaluate();
-                conditionMet = preprocessor::Evaluator::is_truthy(result);
+                condition_met = preprocessor::Evaluator::is_truthy(result);
             } catch (const PreprocessorError& e) {
-                addError(e.what(), lineNumber);
+                addError(e.what(), line_number);
             } catch (const std::runtime_error& e) {
                 addError(std::format("Failed to evaluate @if expression: {}",
                                      e.what()),
-                         lineNumber);
+                         line_number);
             }
         }
 
-        bool isActive = parentActive && conditionMet;
-        conditional_stack.push_back({lineNumber, isActive, conditionMet});
+        bool is_active = parent_active && condition_met;
+        conditional_stack.push_back({line_number, is_active, condition_met});
     }
 
-    void handleElse(int lineNumber) {
+    void handleElse(int line_number) {
         if (conditional_stack.empty()) {
-            addError("@else without matching @ifdef/@ifndef", lineNumber);
+            addError("@else without matching @ifdef/@ifndef", line_number);
             return;
         }
 
         auto& block = conditional_stack.back();
 
-        bool parentActive = true;
+        bool parent_active = true;
         if (conditional_stack.size() > 1) {
-            parentActive =
+            parent_active =
                 conditional_stack[conditional_stack.size() - 2].is_active;
         }
 
-        block.is_active = parentActive && !block.had_true_branch;
+        block.is_active = parent_active && !block.had_true_branch;
     }
 
-    void handleEndif(int lineNumber) {
+    void handleEndif(int line_number) {
         if (conditional_stack.empty()) {
-            addError("@endif without matching @ifdef/@ifndef", lineNumber);
+            addError("@endif without matching @ifdef/@ifndef", line_number);
             return;
         }
 
         conditional_stack.pop_back();
     }
 
-    void handleError(preprocessor::TokenStream& stream, int lineNumber) {
+    void handleError(preprocessor::TokenStream& stream, int line_number) {
         stream.skipWhitespace();
 
-        std::vector<Token> messageTokens;
+        std::vector<Token> message_tokens;
         while (!stream.is_eof()) {
-            messageTokens.push_back(stream.consume());
+            message_tokens.push_back(stream.consume());
         }
 
-        messageTokens = preprocessor_detail::trimTokens(messageTokens);
+        message_tokens = preprocessor_detail::trimTokens(message_tokens);
         std::string message =
-            preprocessor_detail::tokensToString(messageTokens, true);
+            preprocessor_detail::tokensToString(message_tokens, true);
 
         addError(message.empty() ? "@error directive encountered"
                                  : std::format("@error: {}", message),
-                 lineNumber);
+                 line_number);
     }
 
-    void handleRequires(preprocessor::TokenStream& stream, int lineNumber) {
+    void handleRequires(preprocessor::TokenStream& stream, int line_number) {
         stream.skipWhitespace();
 
-        if (stream.is_eof() || stream.peek().type != TokenType::IDENTIFIER) {
-            addError("@requires requires a library name", lineNumber);
+        if (stream.is_eof() || stream.peek().type != TokenType::Identifier) {
+            addError("@requires requires a library name", line_number);
             return;
         }
 
-        std::string libName = stream.consume().text;
+        std::string lib_name = stream.consume().text;
 
-        std::vector<std::string_view> librariesToInclude;
+        std::vector<std::string_view> libraries_to_include;
         try {
-            librariesToInclude =
-                StandardLibraryManager::resolveDependencies(libName);
+            libraries_to_include =
+                StandardLibraryManager::resolveDependencies(lib_name);
         } catch (const std::exception& e) {
-            addError(std::format("Failed to resolve library '{}': {}", libName,
+            addError(std::format("Failed to resolve library '{}': {}", lib_name,
                                  e.what()),
-                     lineNumber);
+                     line_number);
             return;
         }
 
-        std::string_view explicitlyRequestedLib = libName;
+        std::string_view explicitly_requested_lib = lib_name;
 
-        for (const auto& lib : librariesToInclude) {
+        for (const auto& lib : libraries_to_include) {
             if (included_libraries.contains(lib)) {
                 continue;
             }
 
-            auto libCodeOpt = StandardLibraryManager::getLibraryCode(lib);
-            if (!libCodeOpt) {
+            auto lib_code_opt = StandardLibraryManager::getLibraryCode(lib);
+            if (!lib_code_opt) {
                 addError(
                     std::format("Library '{}' not found", std::string(lib)),
-                    lineNumber);
+                    line_number);
                 continue;
             }
 
-            std::string libCode = std::string(libCodeOpt.value());
+            std::string lib_code = std::string(lib_code_opt.value());
 
-            Preprocessor libPreprocessor(libCode);
+            Preprocessor lib_preprocessor(lib_code);
             for (const auto& [name, macro] : macros) {
-                libPreprocessor.impl->macros.define(macro);
+                lib_preprocessor.impl->macros.define(macro);
             }
-            auto libResult = libPreprocessor.process();
+            auto lib_result = lib_preprocessor.process();
 
-            if (!libResult.success) {
+            if (!lib_result.success) {
                 addError(std::format("Failed to preprocess library '{}': {}",
                                      std::string(lib),
-                                     libResult.errors.empty()
+                                     lib_result.errors.empty()
                                          ? "unknown error"
-                                         : libResult.errors[0]),
-                         lineNumber);
+                                         : lib_result.errors[0]),
+                         line_number);
                 continue;
             }
 
-            for (const auto& [name, macro] : libPreprocessor.impl->macros) {
+            for (const auto& [name, macro] : lib_preprocessor.impl->macros) {
                 macros.define(macro);
             }
 
-            std::vector<std::string> libLines;
-            std::istringstream libStream(libResult.source);
-            std::string libLine;
-            while (std::getline(libStream, libLine)) {
-                libLines.push_back(libLine);
+            std::vector<std::string> lib_lines;
+            std::istringstream lib_stream(lib_result.source);
+            std::string lib_line;
+            while (std::getline(lib_stream, lib_line)) {
+                lib_lines.push_back(lib_line);
             }
 
-            if (lib == explicitlyRequestedLib) {
-                auto exportsOpt = StandardLibraryManager::getExports(lib);
-                if (exportsOpt) {
-                    std::string libNameUpper;
+            if (lib == explicitly_requested_lib) {
+                auto exports_opt = StandardLibraryManager::getExports(lib);
+                if (exports_opt) {
+                    std::string lib_name_upper;
                     for (char c : lib) {
-                        libNameUpper += static_cast<char>(std::toupper(c));
+                        lib_name_upper += static_cast<char>(std::toupper(c));
                     }
 
-                    bool isExpr = macros.contains("__EXPR__");
-                    bool isSingleExpr = macros.contains("__SINGLEEXPR__");
+                    bool is_expr = macros.contains("__EXPR__");
+                    bool is_single_expr = macros.contains("__SINGLEEXPR__");
 
-                    for (const auto& exported : *exportsOpt) {
+                    for (const auto& exported : *exports_opt) {
                         if (exported.mode == stdlib::ExportMode::Expr &&
-                            !isExpr) {
+                            !is_expr) {
                             continue;
                         }
                         if (exported.mode == stdlib::ExportMode::SingleExpr &&
-                            !isSingleExpr) {
+                            !is_single_expr) {
                             continue;
                         }
 
-                        preprocessor::Macro aliasMacro;
-                        aliasMacro.name = std::string(exported.name);
+                        preprocessor::Macro alias_macro;
+                        alias_macro.name = std::string(exported.name);
 
                         if (exported.param_count == 0) {
-                            std::string bodyStr;
+                            std::string body_str;
                             if (!exported.internal_name_override.empty()) {
-                                bodyStr = std::string(
+                                body_str = std::string(
                                     exported.internal_name_override);
                             } else {
-                                bodyStr =
-                                    std::format("___STDLIB_{}_{}", libNameUpper,
-                                                std::string(exported.name));
+                                body_str = std::format(
+                                    "___STDLIB_{}_{}", lib_name_upper,
+                                    std::string(exported.name));
                             }
-                            PreprocessorTokenizer tokenizer(bodyStr);
-                            aliasMacro.body = tokenizer.tokenize();
-                            std::erase_if(aliasMacro.body, [](const Token& t) {
-                                return t.type == TokenType::END_OF_FILE;
+                            PreprocessorTokenizer tokenizer(body_str);
+                            alias_macro.body = tokenizer.tokenize();
+                            std::erase_if(alias_macro.body, [](const Token& t) {
+                                return t.type == TokenType::EndOfFile;
                             });
-                            aliasMacro.is_function_like = false;
+                            alias_macro.is_function_like = false;
                         } else {
-                            std::string internalName;
+                            std::string internal_name;
                             if (!exported.internal_name_override.empty()) {
-                                internalName = std::string(
+                                internal_name = std::string(
                                     exported.internal_name_override);
                             } else {
-                                internalName = std::format(
+                                internal_name = std::format(
                                     "___stdlib_{}_{}", std::string(lib),
                                     std::string(exported.name));
                             }
 
-                            aliasMacro.is_function_like = true;
+                            alias_macro.is_function_like = true;
                             for (int i = 0; i < exported.param_count; ++i) {
-                                aliasMacro.params.push_back(
+                                alias_macro.params.push_back(
                                     std::format("__arg{}", i));
                             }
 
-                            std::string bodyStr = internalName + "(";
+                            std::string body_str = internal_name + "(";
                             for (int i = 0; i < exported.param_count; ++i) {
                                 if (i > 0) {
-                                    bodyStr += ", ";
+                                    body_str += ", ";
                                 }
-                                bodyStr += std::format("__arg{}", i);
+                                body_str += std::format("__arg{}", i);
                             }
-                            bodyStr += ")";
+                            body_str += ")";
 
-                            PreprocessorTokenizer tokenizer(bodyStr);
-                            aliasMacro.body = tokenizer.tokenize();
-                            std::erase_if(aliasMacro.body, [](const Token& t) {
-                                return t.type == TokenType::END_OF_FILE;
+                            PreprocessorTokenizer tokenizer(body_str);
+                            alias_macro.body = tokenizer.tokenize();
+                            std::erase_if(alias_macro.body, [](const Token& t) {
+                                return t.type == TokenType::EndOfFile;
                             });
                         }
 
-                        macros.define(std::move(aliasMacro));
+                        macros.define(std::move(alias_macro));
                     }
                 }
             }
 
-            for (const auto& libLine : libLines | std::views::reverse) {
-                output_lines.insert(output_lines.begin(), libLine);
+            for (const auto& lib_line : lib_lines | std::views::reverse) {
+                output_lines.insert(output_lines.begin(), lib_line);
 
                 LineMapping mapping;
                 mapping.preprocessed_line = 1;
@@ -2334,21 +2333,21 @@ class Preprocessor::Impl {
                 line_mappings.insert(line_mappings.begin(), mapping);
             }
 
-            library_line_count += static_cast<int>(libLines.size());
+            library_line_count += static_cast<int>(lib_lines.size());
 
-            for (size_t i = libLines.size(); i < line_mappings.size(); ++i) {
+            for (size_t i = lib_lines.size(); i < line_mappings.size(); ++i) {
                 if (line_mappings[i].original_line > 0) {
                     line_mappings[i].preprocessed_line +=
-                        static_cast<int>(libLines.size());
+                        static_cast<int>(lib_lines.size());
                 }
             }
 
-            for (size_t i = 0; i < libLines.size() && i < line_mappings.size();
+            for (size_t i = 0; i < lib_lines.size() && i < line_mappings.size();
                  ++i) {
                 line_mappings[i].preprocessed_line = static_cast<int>(i + 1);
             }
 
-            current_output_line += static_cast<int>(libLines.size());
+            current_output_line += static_cast<int>(lib_lines.size());
 
             included_libraries.insert(lib);
         }
@@ -2364,12 +2363,12 @@ class Preprocessor::Impl {
         errors.push_back(std::format("Line {}: {}", line, message));
     }
 
-    void addOutputLine(const std::string& line, int originalLine) {
+    void addOutputLine(const std::string& line, int original_line) {
         output_lines.push_back(line);
 
         LineMapping mapping;
         mapping.preprocessed_line = current_output_line;
-        mapping.original_line = originalLine;
+        mapping.original_line = original_line;
 
         line_mappings.push_back(mapping);
         current_output_line++;

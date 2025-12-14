@@ -33,12 +33,12 @@ StandardLibraryManager::resolveDependencies(std::string_view library_name) {
             (
                 [&] {
                     using LibType = std::decay_t<decltype(libs)>;
-                    if (result.empty() && LibType::name == library_name) {
+                    if (result.empty() && LibType::NAME == library_name) {
                         using Resolved = ResolveLibraryDependencies<LibType>;
                         std::apply(
                             [&](auto... rs) {
                                 (result.push_back(
-                                     std::decay_t<decltype(rs)>::name),
+                                     std::decay_t<decltype(rs)>::NAME),
                                  ...);
                             },
                             Resolved{});
@@ -65,8 +65,8 @@ StandardLibraryManager::getLibraryCode(std::string_view library_name) {
             (
                 [&] {
                     using LibType = std::decay_t<decltype(libs)>;
-                    if (!result.has_value() && LibType::name == library_name) {
-                        result = LibType::code;
+                    if (!result.has_value() && LibType::NAME == library_name) {
+                        result = LibType::CODE;
                     }
                 }(),
                 ...);
@@ -85,10 +85,10 @@ StandardLibraryManager::getExports(std::string_view library_name) {
             (
                 [&] {
                     using LibType = std::decay_t<decltype(libs)>;
-                    if (!result.has_value() && LibType::name == library_name) {
+                    if (!result.has_value() && LibType::NAME == library_name) {
                         std::vector<ExportedFunction> out;
-                        out.reserve(std::size(LibType::exports));
-                        for (const auto& e : LibType::exports) {
+                        out.reserve(std::size(LibType::EXPORTS));
+                        for (const auto& e : LibType::EXPORTS) {
                             out.push_back(e);
                         }
                         result = std::move(out);

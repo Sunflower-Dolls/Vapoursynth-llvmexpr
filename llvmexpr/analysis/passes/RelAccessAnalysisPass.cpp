@@ -20,6 +20,7 @@
 #include "RelAccessAnalysisPass.hpp"
 #include "../../frontend/Tokenizer.hpp"
 #include "../framework/AnalysisManager.hpp"
+
 #include <set>
 
 namespace analysis {
@@ -32,9 +33,9 @@ RelAccessAnalysisPass::run(const std::vector<Token>& tokens,
 
     std::set<RelYAccess> seen;
     for (const auto& token : tokens) {
-        if (token.type == TokenType::CLIP_REL) {
+        if (token.type == TokenType::ClipRel) {
             const auto& payload =
-                std::get<TokenPayload_ClipAccess>(token.payload);
+                std::get<TokenPayloadClipAccess>(token.payload);
             bool use_mirror =
                 payload.has_mode ? payload.use_mirror : result.mirror_boundary;
             RelYAccess access{.clip_idx = payload.clip_idx,
@@ -46,9 +47,9 @@ RelAccessAnalysisPass::run(const std::vector<Token>& tokens,
             }
             result.min_rel_x = std::min(result.min_rel_x, payload.rel_x);
             result.max_rel_x = std::max(result.max_rel_x, payload.rel_x);
-        } else if (token.type == TokenType::CLIP_CUR) {
+        } else if (token.type == TokenType::ClipCur) {
             const auto& payload =
-                std::get<TokenPayload_ClipAccess>(token.payload);
+                std::get<TokenPayloadClipAccess>(token.payload);
             RelYAccess access{.clip_idx = payload.clip_idx,
                               .rel_y = 0,
                               .use_mirror = result.mirror_boundary};

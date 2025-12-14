@@ -21,6 +21,7 @@
 #define LLVMEXPR_INFIX2POSTFIX_PARSER_HPP
 
 #include "AST.hpp"
+
 #include <set>
 #include <vector>
 
@@ -84,7 +85,7 @@ class Parser {
     [[nodiscard]] bool isAtEnd() const;
     void error(const Token& token, const std::string& message);
     void synchronize();
-    void report_error(const Token& token, const std::string& message);
+    void reportError(const Token& token, const std::string& message);
 
     std::vector<Token> tokens;
     int current = 0;

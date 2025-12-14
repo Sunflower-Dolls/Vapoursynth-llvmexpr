@@ -17,10 +17,11 @@
  * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef LLVMEXPR_INFIXCONVERTER_HPP
-#define LLVMEXPR_INFIXCONVERTER_HPP
+#ifndef LLVMEXPR_FRONTEND_INFIXCONVERTER_HPP
+#define LLVMEXPR_FRONTEND_INFIXCONVERTER_HPP
 
 #include "infix2postfix/types.hpp"
+
 #include <map>
 #include <string>
 

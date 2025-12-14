@@ -22,6 +22,7 @@
 #include "../framework/AnalysisError.hpp"
 #include "../framework/AnalysisManager.hpp"
 #include "BlockAnalysisPass.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <format>
@@ -54,8 +55,7 @@ ConstPropPass::Result ConstPropPass::run(const std::vector<Token>& tokens,
             // IN[i] = Merge of OUT[p] for all predecessors p
             ConstStack new_in;
             if (i > 0 && !cfg_blocks[i].predecessors.empty()) {
-                new_in =
-                    result.const_stack_out[cfg_blocks[i].predecessors[0]];
+                new_in = result.const_stack_out[cfg_blocks[i].predecessors[0]];
                 for (size_t j = 1; j < cfg_blocks[i].predecessors.size(); ++j) {
                     int p_idx = cfg_blocks[i].predecessors[j];
                     const auto& other_stack = result.const_stack_out[p_idx];
@@ -63,8 +63,8 @@ ConstPropPass::Result ConstPropPass::run(const std::vector<Token>& tokens,
                     if (new_in.size() != other_stack.size()) {
                         throw AnalysisError(
                             std::format("Stack depth mismatch during constant "
-                                       "propagation at block {}: {} vs {}",
-                                       i, new_in.size(), other_stack.size()));
+                                        "propagation at block {}: {} vs {}",
+                                        i, new_in.size(), other_stack.size()));
                     }
 
                     // Merge: if values differ, mark as non-constant
@@ -121,56 +121,56 @@ ConstPropPass::Result ConstPropPass::run(const std::vector<Token>& tokens,
 
                 // Evaluate constant expressions
                 switch (token.type) {
-                case TokenType::NUMBER:
+                case TokenType::Number:
                     push_result(
-                        std::get<TokenPayload_Number>(token.payload).value);
+                        std::get<TokenPayloadNumber>(token.payload).value);
                     break;
-                case TokenType::CONSTANT_PI:
+                case TokenType::ConstantPi:
                     push_result(std::numbers::pi_v<double>);
                     break;
 
-                case TokenType::ADD:
+                case TokenType::Add:
                     push_result(can_compute ? std::optional(args[0].value() +
                                                             args[1].value())
                                             : std::nullopt);
                     break;
-                case TokenType::SUB:
+                case TokenType::Sub:
                     push_result(can_compute ? std::optional(args[0].value() -
                                                             args[1].value())
                                             : std::nullopt);
                     break;
-                case TokenType::MUL:
+                case TokenType::Mul:
                     push_result(can_compute ? std::optional(args[0].value() *
                                                             args[1].value())
                                             : std::nullopt);
                     break;
-                case TokenType::DIV:
+                case TokenType::Div:
                     push_result(can_compute ? std::optional(args[0].value() /
                                                             args[1].value())
                                             : std::nullopt);
                     break;
-                case TokenType::MOD:
+                case TokenType::Mod:
                     push_result(can_compute
                                     ? std::optional(std::fmod(args[0].value(),
                                                               args[1].value()))
                                     : std::nullopt);
                     break;
 
-                case TokenType::GT:
+                case TokenType::Gt:
                     push_result(
                         can_compute
                             ? std::optional(
                                   args[0].value() > args[1].value() ? 1.0 : 0.0)
                             : std::nullopt);
                     break;
-                case TokenType::LT:
+                case TokenType::Lt:
                     push_result(
                         can_compute
                             ? std::optional(
                                   args[0].value() < args[1].value() ? 1.0 : 0.0)
                             : std::nullopt);
                     break;
-                case TokenType::EQ:
+                case TokenType::Eq:
                     push_result(
                         can_compute
                             ? std::optional(args[0].value() == args[1].value()
@@ -178,7 +178,7 @@ ConstPropPass::Result ConstPropPass::run(const std::vector<Token>& tokens,
                                                 : 0.0)
                             : std::nullopt);
                     break;
-                case TokenType::GE:
+                case TokenType::Ge:
                     push_result(
                         can_compute
                             ? std::optional(args[0].value() >= args[1].value()
@@ -186,7 +186,7 @@ ConstPropPass::Result ConstPropPass::run(const std::vector<Token>& tokens,
                                                 : 0.0)
                             : std::nullopt);
                     break;
-                case TokenType::LE:
+                case TokenType::Le:
                     push_result(
                         can_compute
                             ? std::optional(args[0].value() <= args[1].value()
@@ -196,7 +196,7 @@ ConstPropPass::Result ConstPropPass::run(const std::vector<Token>& tokens,
                     break;
 
                 // Logical operators
-                case TokenType::AND:
+                case TokenType::And:
                     push_result(can_compute
                                     ? std::optional((args[0].value() > 0 &&
                                                      args[1].value() > 0)
@@ -204,7 +204,7 @@ ConstPropPass::Result ConstPropPass::run(const std::vector<Token>& tokens,
                                                         : 0.0)
                                     : std::nullopt);
                     break;
-                case TokenType::OR:
+                case TokenType::Or:
                     push_result(can_compute
                                     ? std::optional((args[0].value() > 0 ||
                                                      args[1].value() > 0)
@@ -212,7 +212,7 @@ ConstPropPass::Result ConstPropPass::run(const std::vector<Token>& tokens,
                                                         : 0.0)
                                     : std::nullopt);
                     break;
-                case TokenType::XOR:
+                case TokenType::Xor:
                     push_result(can_compute
                                     ? std::optional(((args[0].value() > 0) !=
                                                      (args[1].value() > 0))
@@ -220,135 +220,135 @@ ConstPropPass::Result ConstPropPass::run(const std::vector<Token>& tokens,
                                                         : 0.0)
                                     : std::nullopt);
                     break;
-                case TokenType::NOT:
+                case TokenType::Not:
                     push_result(
                         can_compute
                             ? std::optional(args[0].value() > 0 ? 0.0 : 1.0)
                             : std::nullopt);
                     break;
 
-                case TokenType::POW:
+                case TokenType::Pow:
                     push_result(can_compute
                                     ? std::optional(std::pow(args[0].value(),
                                                              args[1].value()))
                                     : std::nullopt);
                     break;
-                case TokenType::SQRT:
+                case TokenType::Sqrt:
                     push_result(can_compute
                                     ? std::optional(std::sqrt(args[0].value()))
                                     : std::nullopt);
                     break;
 
-                case TokenType::EXP:
+                case TokenType::Exp:
                     push_result(can_compute
                                     ? std::optional(std::exp(args[0].value()))
                                     : std::nullopt);
                     break;
-                case TokenType::EXP2:
+                case TokenType::Exp2:
                     push_result(can_compute
                                     ? std::optional(std::exp2(args[0].value()))
                                     : std::nullopt);
                     break;
-                case TokenType::LOG:
+                case TokenType::Log:
                     push_result(can_compute
                                     ? std::optional(std::log(args[0].value()))
                                     : std::nullopt);
                     break;
-                case TokenType::LOG2:
+                case TokenType::Log2:
                     push_result(can_compute
                                     ? std::optional(std::log2(args[0].value()))
                                     : std::nullopt);
                     break;
-                case TokenType::LOG10:
+                case TokenType::Log10:
                     push_result(can_compute
                                     ? std::optional(std::log10(args[0].value()))
                                     : std::nullopt);
                     break;
 
-                case TokenType::SIN:
+                case TokenType::Sin:
                     push_result(can_compute
                                     ? std::optional(std::sin(args[0].value()))
                                     : std::nullopt);
                     break;
-                case TokenType::COS:
+                case TokenType::Cos:
                     push_result(can_compute
                                     ? std::optional(std::cos(args[0].value()))
                                     : std::nullopt);
                     break;
-                case TokenType::TAN:
+                case TokenType::Tan:
                     push_result(can_compute
                                     ? std::optional(std::tan(args[0].value()))
                                     : std::nullopt);
                     break;
-                case TokenType::ASIN:
+                case TokenType::Asin:
                     push_result(can_compute
                                     ? std::optional(std::asin(args[0].value()))
                                     : std::nullopt);
                     break;
-                case TokenType::ACOS:
+                case TokenType::Acos:
                     push_result(can_compute
                                     ? std::optional(std::acos(args[0].value()))
                                     : std::nullopt);
                     break;
-                case TokenType::ATAN:
+                case TokenType::Atan:
                     push_result(can_compute
                                     ? std::optional(std::atan(args[0].value()))
                                     : std::nullopt);
                     break;
-                case TokenType::ATAN2:
+                case TokenType::Atan2:
                     push_result(can_compute
                                     ? std::optional(std::atan2(args[0].value(),
                                                                args[1].value()))
                                     : std::nullopt);
                     break;
 
-                case TokenType::SINH:
+                case TokenType::Sinh:
                     push_result(can_compute
                                     ? std::optional(std::sinh(args[0].value()))
                                     : std::nullopt);
                     break;
-                case TokenType::COSH:
+                case TokenType::Cosh:
                     push_result(can_compute
                                     ? std::optional(std::cosh(args[0].value()))
                                     : std::nullopt);
                     break;
-                case TokenType::TANH:
+                case TokenType::Tanh:
                     push_result(can_compute
                                     ? std::optional(std::tanh(args[0].value()))
                                     : std::nullopt);
                     break;
 
-                case TokenType::FLOOR:
+                case TokenType::Floor:
                     push_result(can_compute
                                     ? std::optional(std::floor(args[0].value()))
                                     : std::nullopt);
                     break;
-                case TokenType::CEIL:
+                case TokenType::Ceil:
                     push_result(can_compute
                                     ? std::optional(std::ceil(args[0].value()))
                                     : std::nullopt);
                     break;
-                case TokenType::ROUND:
+                case TokenType::Round:
                     push_result(can_compute
                                     ? std::optional(std::round(args[0].value()))
                                     : std::nullopt);
                     break;
-                case TokenType::TRUNC:
+                case TokenType::Trunc:
                     push_result(can_compute
                                     ? std::optional(std::trunc(args[0].value()))
                                     : std::nullopt);
                     break;
 
-                case TokenType::ABS:
+                case TokenType::Abs:
                     push_result(can_compute
                                     ? std::optional(std::abs(args[0].value()))
                                     : std::nullopt);
                     break;
-                case TokenType::NEG:
+                case TokenType::Neg:
                     push_result(can_compute ? std::optional(-args[0].value())
                                             : std::nullopt);
                     break;
-                case TokenType::SGN:
+                case TokenType::Sgn:
                     push_result(can_compute ? std::optional([&]() -> double {
                         double val = args[0].value();
                         if (val < 0) {
@@ -361,13 +361,13 @@ ConstPropPass::Result ConstPropPass::run(const std::vector<Token>& tokens,
                     }())
                                             : std::nullopt);
                     break;
-                case TokenType::COPYSIGN:
+                case TokenType::Copysign:
                     push_result(can_compute
                                     ? std::optional(std::copysign(
                                           args[0].value(), args[1].value()))
                                     : std::nullopt);
                     break;
-                case TokenType::FMA:
+                case TokenType::Fma:
                     push_result(can_compute
                                     ? std::optional(std::fma(args[0].value(),
                                                              args[1].value(),
@@ -375,19 +375,19 @@ ConstPropPass::Result ConstPropPass::run(const std::vector<Token>& tokens,
                                     : std::nullopt);
                     break;
 
-                case TokenType::MAX:
+                case TokenType::Max:
                     push_result(can_compute
                                     ? std::optional(std::max(args[0].value(),
                                                              args[1].value()))
                                     : std::nullopt);
                     break;
-                case TokenType::MIN:
+                case TokenType::Min:
                     push_result(can_compute
                                     ? std::optional(std::min(args[0].value(),
                                                              args[1].value()))
                                     : std::nullopt);
                     break;
-                case TokenType::CLAMP:
+                case TokenType::Clamp:
                     push_result(can_compute
                                     ? std::optional(std::clamp(args[0].value(),
                                                                args[1].value(),
@@ -395,7 +395,7 @@ ConstPropPass::Result ConstPropPass::run(const std::vector<Token>& tokens,
                                     : std::nullopt);
                     break;
 
-                case TokenType::TERNARY:
+                case TokenType::Ternary:
                     push_result(can_compute
                                     ? std::optional(args[0].value() > 0
                                                         ? args[1].value()
@@ -403,7 +403,7 @@ ConstPropPass::Result ConstPropPass::run(const std::vector<Token>& tokens,
                                     : std::nullopt);
                     break;
 
-                case TokenType::BITAND:
+                case TokenType::Bitand:
                     push_result(can_compute
                                     ? std::optional(static_cast<double>(
                                           static_cast<int64_t>(
@@ -412,7 +412,7 @@ ConstPropPass::Result ConstPropPass::run(const std::vector<Token>& tokens,
                                               std::nearbyint(args[1].value()))))
                                     : std::nullopt);
                     break;
-                case TokenType::BITOR:
+                case TokenType::Bitor:
                     push_result(can_compute
                                     ? std::optional(static_cast<double>(
                                           static_cast<int64_t>(
@@ -421,7 +421,7 @@ ConstPropPass::Result ConstPropPass::run(const std::vector<Token>& tokens,
                                               std::nearbyint(args[1].value()))))
                                     : std::nullopt);
                     break;
-                case TokenType::BITXOR:
+                case TokenType::Bitxor:
                     push_result(can_compute
                                     ? std::optional(static_cast<double>(
                                           static_cast<int64_t>(
@@ -430,7 +430,7 @@ ConstPropPass::Result ConstPropPass::run(const std::vector<Token>& tokens,
                                               std::nearbyint(args[1].value()))))
                                     : std::nullopt);
                     break;
-                case TokenType::BITNOT:
+                case TokenType::Bitnot:
                     push_result(can_compute
                                     ? std::optional(static_cast<double>(
                                           ~static_cast<int64_t>(

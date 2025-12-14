@@ -191,11 +191,11 @@ python benchmark/benchmark.py
 | bitwise and                  | 2982.76 FPS | 1637.53 FPS | 2913.48 FPS    |
 | gain                         | 1337.62 FPS | 1627.09 FPS | 1651.66 FPS    |
 | power with loop              | 2971.21 FPS | 1635.15 FPS | FAILED (Error) |
-| 3D rendering                 | 359.66 FPS  | 1300.06 FPS  | 187.07 FPS     |
-| 3D rendering 2 (icosahedron) | 526.46 FPS  | 1444.96 FPS  | 315.62 FPS     |
-| rotate clip                  | 205.34 FPS  | 1420.82 FPS  | 334.82 FPS     |
-| 8x8 dct                      | 173.91 FPS  | 1151.15 FPS  | 177.54 FPS     |
-| 8x8 idct                     | 184.99 FPS  | 1205.86 FPS  | 159.09 FPS     |
+| 3D rendering                 | 359.66 FPS  | 1300.06 FPS | 187.07 FPS     |
+| 3D rendering 2 (icosahedron) | 526.46 FPS  | 1444.96 FPS | 315.62 FPS     |
+| rotate clip                  | 205.34 FPS  | 1420.82 FPS | 334.82 FPS     |
+| 8x8 dct                      | 173.91 FPS  | 1151.15 FPS | 177.54 FPS     |
+| 8x8 idct                     | 184.99 FPS  | 1205.86 FPS | 159.09 FPS     |
 
 Geometric mean FPS (common successful tests only):
   llvmexpr: 1223.78 FPS

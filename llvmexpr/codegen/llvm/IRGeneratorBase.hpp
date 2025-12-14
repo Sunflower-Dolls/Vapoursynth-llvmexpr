@@ -20,6 +20,10 @@
 #ifndef LLVMEXPR_IRGENERATORBASE_HPP
 #define LLVMEXPR_IRGENERATORBASE_HPP
 
+#include "../../analysis/AnalysisResults.hpp"
+#include "../../frontend/Tokenizer.hpp"
+#include "Math.hpp"
+
 #include <map>
 #include <string>
 #include <vector>
@@ -30,10 +34,6 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/MDBuilder.h"
 #include "llvm/IR/Module.h"
-
-#include "../../analysis/AnalysisResults.hpp"
-#include "../../frontend/Tokenizer.hpp"
-#include "Math.hpp"
 
 class IRGeneratorBase {
   public:
@@ -93,9 +93,9 @@ class IRGeneratorBase {
 
     // NOLINTEND(cppcoreguidelines-non-private-member-variables-in-classes)
 
-    virtual void define_function_signature() = 0;
+    virtual void defineFunctionSignature() = 0;
 
-    virtual void generate_loops() = 0;
+    virtual void generateLoops() = 0;
 
     llvm::AllocaInst* createAllocaInEntry(llvm::Type* type,
                                           const std::string& name);
@@ -104,44 +104,44 @@ class IRGeneratorBase {
     llvm::Value* createIntrinsicCall(llvm::Intrinsic::ID intrinsic_id,
                                      Args... args);
 
-    void assumeAligned(llvm::Value* ptrValue, unsigned alignment);
+    void assumeAligned(llvm::Value* ptr_value, unsigned alignment);
 
     template <typename MemInstT>
     void setMemoryInstAttrs(MemInstT* inst, unsigned alignment,
                             int rwptr_index);
 
-    llvm::Value* get_final_coord(llvm::Value* coord, llvm::Value* max_dim,
-                                 bool use_mirror);
+    llvm::Value* getFinalCoord(llvm::Value* coord, llvm::Value* max_dim,
+                               bool use_mirror);
 
-    llvm::Value* generate_load_from_row_ptr(llvm::Value* row_ptr, int clip_idx,
-                                            llvm::Value* x, int rel_x,
-                                            bool use_mirror,
-                                            bool no_x_bounds_check);
+    llvm::Value* generateLoadFromRowPtr(llvm::Value* row_ptr, int clip_idx,
+                                        llvm::Value* x, int rel_x,
+                                        bool use_mirror,
+                                        bool no_x_bounds_check);
 
-    void add_loop_metadata(llvm::BranchInst* loop_br);
+    void addLoopMetadata(llvm::BranchInst* loop_br);
 
-    llvm::Value* generate_pixel_load(int clip_idx, llvm::Value* x,
-                                     llvm::Value* y, bool mirror);
+    llvm::Value* generatePixelLoad(int clip_idx, llvm::Value* x, llvm::Value* y,
+                                   bool mirror);
 
-    void generate_pixel_store(llvm::Value* value_to_store, llvm::Value* x,
-                              llvm::Value* y);
+    void generatePixelStore(llvm::Value* value_to_store, llvm::Value* x,
+                            llvm::Value* y);
 
-    void generate_ir_from_tokens(llvm::Value* x, llvm::Value* y,
-                                 llvm::Value* x_fp, llvm::Value* y_fp,
-                                 bool no_x_bounds_check);
+    void generateIRFromTokens(llvm::Value* x, llvm::Value* y, llvm::Value* x_fp,
+                              llvm::Value* y_fp, bool no_x_bounds_check);
 
-    bool process_common_token(const Token& token,
-                              std::vector<llvm::Value*>& rpn_stack,
-                              llvm::Type* float_ty, llvm::Type* i32_ty,
-                              bool use_approx_math);
+    bool processCommonToken(const Token& token,
+                            std::vector<llvm::Value*>& rpn_stack,
+                            llvm::Type* float_ty, llvm::Type* i32_ty,
+                            bool use_approx_math);
 
-    virtual bool process_mode_specific_token(
-        const Token& token, std::vector<llvm::Value*>& rpn_stack,
-        llvm::Value* x, llvm::Value* y, llvm::Value* x_fp, llvm::Value* y_fp,
-        bool no_x_bounds_check) = 0;
+    virtual bool processModeSpecificToken(const Token& token,
+                                          std::vector<llvm::Value*>& rpn_stack,
+                                          llvm::Value* x, llvm::Value* y,
+                                          llvm::Value* x_fp, llvm::Value* y_fp,
+                                          bool no_x_bounds_check) = 0;
 
-    virtual void finalize_and_store_result(llvm::Value* result_val,
-                                           llvm::Value* x, llvm::Value* y) = 0;
+    virtual void finalizeAndStoreResult(llvm::Value* result_val, llvm::Value* x,
+                                        llvm::Value* y) = 0;
 };
 
 template <typename... Args>

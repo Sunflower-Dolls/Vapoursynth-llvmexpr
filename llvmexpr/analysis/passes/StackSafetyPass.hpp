@@ -21,6 +21,7 @@
 #define LLVMEXPR_ANALYSIS_STACK_SAFETY_PASS_HPP
 
 #include "../framework/Pass.hpp"
+
 #include <vector>
 
 namespace analysis {
@@ -42,7 +43,9 @@ class StackSafetyPass
   public:
     using Result = StackSafetyResult;
 
-    [[nodiscard]] const char* getName() const override { return "Stack Safety Pass"; }
+    [[nodiscard]] const char* getName() const override {
+        return "Stack Safety Pass";
+    }
 
     Result run(const std::vector<Token>& tokens, AnalysisManager& am) override;
 };

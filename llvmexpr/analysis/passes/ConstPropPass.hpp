@@ -21,6 +21,7 @@
 #define LLVMEXPR_ANALYSIS_CONST_PROP_PASS_HPP
 
 #include "../framework/Pass.hpp"
+
 #include <optional>
 #include <vector>
 

@@ -21,29 +21,30 @@
 #define LLVMEXPR_INFIX2POSTFIX_STDLIB_ALGORITHMS_HPP
 
 #include "LibraryBase.hpp"
+
 #include <array>
 #include <string_view>
 #include <tuple>
 
 namespace infix2postfix::stdlib {
 
-struct algorithms {
-    static constexpr std::string_view name = "algorithms";
+struct Algorithms {
+    static constexpr std::string_view NAME = "algorithms";
 
     //NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)
-    static constexpr char code_data[] = {
+    static constexpr char CODE_DATA[] = {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wc23-extensions"
 #embed "algorithms.expr"
 #pragma clang diagnostic pop
         , 0 // null terminator
     };
-    static constexpr std::string_view code = std::string_view(
-        static_cast<const char*>(code_data), sizeof(code_data) - 1);
+    static constexpr std::string_view CODE = std::string_view(
+        static_cast<const char*>(CODE_DATA), sizeof(CODE_DATA) - 1);
 
     using dependencies = std::tuple<>;
 
-    static constexpr std::array<ExportedFunction, 4> exports = {{
+    static constexpr std::array<ExportedFunction, 4> EXPORTS = {{
         ExportedFunction{.name = "sort", .param_count = 3},
         ExportedFunction{.name = "reverse", .param_count = 3},
         ExportedFunction{.name = "swap", .param_count = 3},

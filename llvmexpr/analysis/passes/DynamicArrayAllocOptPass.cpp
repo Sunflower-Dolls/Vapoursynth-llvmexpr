@@ -21,6 +21,7 @@
 #include "../../frontend/Tokenizer.hpp"
 #include "../framework/AnalysisManager.hpp"
 #include "BlockAnalysisPass.hpp"
+
 #include <map>
 #include <queue>
 #include <set>
@@ -31,7 +32,8 @@ namespace analysis {
 
 namespace {
 
-int findBlockForToken(int token_idx, const std::vector<CFGBlock>& cfg_blocks) {
+int find_block_for_token(int token_idx,
+                         const std::vector<CFGBlock>& cfg_blocks) {
     for (size_t i = 0; i < cfg_blocks.size(); ++i) {
         if (token_idx >= cfg_blocks[i].start_token_idx &&
             token_idx < cfg_blocks[i].end_token_idx) {
@@ -41,14 +43,14 @@ int findBlockForToken(int token_idx, const std::vector<CFGBlock>& cfg_blocks) {
     return -1;
 }
 
-bool isArrayUsedInRange(const std::string& array_name,
-                        const std::vector<Token>& tokens, int start_token_idx,
-                        int end_token_idx) {
+bool is_array_used_in_range(const std::string& array_name,
+                            const std::vector<Token>& tokens,
+                            int start_token_idx, int end_token_idx) {
     for (int i = start_token_idx; i < end_token_idx; ++i) {
         const auto& token = tokens[i];
-        if (token.type == TokenType::ARRAY_LOAD ||
-            token.type == TokenType::ARRAY_STORE) {
-            const auto& payload = std::get<TokenPayload_ArrayOp>(token.payload);
+        if (token.type == TokenType::ArrayLoad ||
+            token.type == TokenType::ArrayStore) {
+            const auto& payload = std::get<TokenPayloadArrayOp>(token.payload);
             if (payload.name == array_name) {
                 return true;
             }
@@ -57,20 +59,20 @@ bool isArrayUsedInRange(const std::string& array_name,
     return false;
 }
 
-bool isArrayUsedBetween(const std::string& array_name,
-                        const std::vector<Token>& tokens,
-                        const std::vector<CFGBlock>& cfg_blocks,
-                        int start_token_idx, int end_token_idx) {
-    int start_block = findBlockForToken(start_token_idx, cfg_blocks);
-    int end_block = findBlockForToken(end_token_idx, cfg_blocks);
+bool is_array_used_between(const std::string& array_name,
+                           const std::vector<Token>& tokens,
+                           const std::vector<CFGBlock>& cfg_blocks,
+                           int start_token_idx, int end_token_idx) {
+    int start_block = find_block_for_token(start_token_idx, cfg_blocks);
+    int end_block = find_block_for_token(end_token_idx, cfg_blocks);
 
     if (start_block == -1 || end_block == -1) {
         return true; // Assume used if we can't determine
     }
 
     if (start_block == end_block) {
-        return isArrayUsedInRange(array_name, tokens, start_token_idx + 1,
-                                  end_token_idx);
+        return is_array_used_in_range(array_name, tokens, start_token_idx + 1,
+                                      end_token_idx);
     }
 
     std::queue<int> to_visit;
@@ -96,7 +98,8 @@ bool isArrayUsedBetween(const std::string& array_name,
             check_end = end_token_idx;
         }
 
-        if (isArrayUsedInRange(array_name, tokens, check_start, check_end)) {
+        if (is_array_used_in_range(array_name, tokens, check_start,
+                                   check_end)) {
             return true;
         }
 
@@ -128,8 +131,8 @@ PreservedAnalyses DynamicArrayAllocOptPass::run(std::vector<Token>& tokens,
 
     for (size_t i = 0; i < tokens.size(); ++i) {
         const auto& token = tokens[i];
-        if (token.type == TokenType::ARRAY_ALLOC_DYN) {
-            const auto& payload = std::get<TokenPayload_ArrayOp>(token.payload);
+        if (token.type == TokenType::ArrayAllocDyn) {
+            const auto& payload = std::get<TokenPayloadArrayOp>(token.payload);
             dynamic_allocations[payload.name].push_back(static_cast<int>(i));
         }
     }
@@ -143,8 +146,8 @@ PreservedAnalyses DynamicArrayAllocOptPass::run(std::vector<Token>& tokens,
             int first_alloc = alloc_indices[i];
             int second_alloc = alloc_indices[i + 1];
 
-            bool used = isArrayUsedBetween(array_name, tokens, cfg_blocks,
-                                           first_alloc, second_alloc);
+            bool used = is_array_used_between(array_name, tokens, cfg_blocks,
+                                              first_alloc, second_alloc);
 
             if (!used) {
                 allocations_to_remove.insert(first_alloc);
@@ -158,9 +161,9 @@ PreservedAnalyses DynamicArrayAllocOptPass::run(std::vector<Token>& tokens,
 
     for (int token_idx : allocations_to_remove) {
         auto& token = tokens[token_idx];
-        token.type = TokenType::DROP;
+        token.type = TokenType::Drop;
         token.text = "drop1";
-        token.payload = TokenPayload_StackOp{.n = 1};
+        token.payload = TokenPayloadStackOp{.n = 1};
     }
 
     return PreservedAnalyses::none();

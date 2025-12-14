@@ -24,11 +24,11 @@
 
 namespace infix2postfix::stdlib {
 
-struct meta {
-    static constexpr std::string_view name = "meta";
+struct Meta {
+    static constexpr std::string_view NAME = "meta";
 
     // NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)
-    static constexpr char code_data[] = {
+    static constexpr char CODE_DATA[] = {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wc23-extensions"
 #embed "meta.expr"
@@ -36,12 +36,12 @@ struct meta {
         ,
         0 // null terminator
     };
-    static constexpr std::string_view code = std::string_view(
-        static_cast<const char*>(code_data), sizeof(code_data) - 1);
+    static constexpr std::string_view CODE = std::string_view(
+        static_cast<const char*>(CODE_DATA), sizeof(CODE_DATA) - 1);
 
     using dependencies = std::tuple<>;
 
-    static constexpr std::array<ExportedFunction, 5> exports = {{
+    static constexpr std::array<ExportedFunction, 5> EXPORTS = {{
         ExportedFunction{.name = "ASSERT_CONST", .param_count = 3},
         ExportedFunction{.name = "ERROR", .param_count = 1},
         ExportedFunction{.name = "JOIN", .param_count = 3},

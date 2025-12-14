@@ -1,3 +1,22 @@
+/**
+ * Copyright (C) 2025 yuygfgg
+ * 
+ * This file is part of Vapoursynth-llvmexpr.
+ * 
+ * Vapoursynth-llvmexpr is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ * 
+ * Vapoursynth-llvmexpr is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 #ifndef LLVMEXPR_RUNTIME_VULKAN_VULKANMEMORY_HPP
 #define LLVMEXPR_RUNTIME_VULKAN_VULKANMEMORY_HPP
 
@@ -21,13 +40,13 @@ class VulkanContext;
 struct VulkanBuffer {
     VkBuffer buffer = VK_NULL_HANDLE;
     VmaAllocation allocation = VK_NULL_HANDLE;
-    VmaAllocationInfo allocInfo = {};
+    VmaAllocationInfo alloc_info = {};
     VkDeviceSize size = 0;
 
     VulkanBuffer() = default;
     VulkanBuffer(VkBuffer buf, VmaAllocation alloc, VmaAllocationInfo info,
                  VkDeviceSize sz)
-        : buffer(buf), allocation(alloc), allocInfo(info), size(sz) {}
+        : buffer(buf), allocation(alloc), alloc_info(info), size(sz) {}
 
     VulkanBuffer(const VulkanBuffer&) = delete;
     VulkanBuffer& operator=(const VulkanBuffer&) = delete;
@@ -35,7 +54,7 @@ struct VulkanBuffer {
 
     VulkanBuffer(VulkanBuffer&& other) noexcept
         : buffer(other.buffer), allocation(other.allocation),
-          allocInfo(other.allocInfo), size(other.size) {
+          alloc_info(other.alloc_info), size(other.size) {
         other.buffer = VK_NULL_HANDLE;
         other.allocation = VK_NULL_HANDLE;
         other.size = 0;
@@ -45,7 +64,7 @@ struct VulkanBuffer {
         if (this != &other) {
             buffer = other.buffer;
             allocation = other.allocation;
-            allocInfo = other.allocInfo;
+            alloc_info = other.alloc_info;
             size = other.size;
             other.buffer = VK_NULL_HANDLE;
             other.allocation = VK_NULL_HANDLE;
@@ -55,7 +74,7 @@ struct VulkanBuffer {
     }
 
     [[nodiscard]] bool isValid() const { return buffer != VK_NULL_HANDLE; }
-    [[nodiscard]] void* getMappedData() const { return allocInfo.pMappedData; }
+    [[nodiscard]] void* getMappedData() const { return alloc_info.pMappedData; }
 };
 
 class VulkanMemory {
@@ -74,15 +93,15 @@ class VulkanMemory {
                                    VK_BUFFER_USAGE_TRANSFER_DST_BIT |
                                    VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
 
-    VulkanBuffer createStagingBuffer(VkDeviceSize size, bool forUpload = true);
+    VulkanBuffer createStagingBuffer(VkDeviceSize size, bool for_upload = true);
 
     void destroyBuffer(VulkanBuffer& buffer);
 
-    void uploadToBuffer(VulkanBuffer& gpuBuffer, const void* data,
+    void uploadToBuffer(VulkanBuffer& gpu_buffer, const void* data,
                         VkDeviceSize size, VkDeviceSize offset = 0);
 
     // blocks until transfer completes
-    void downloadFromBuffer(VulkanBuffer& gpuBuffer, void* data,
+    void downloadFromBuffer(VulkanBuffer& gpu_buffer, void* data,
                             VkDeviceSize size, VkDeviceSize offset = 0);
 
     void copyBuffer(VulkanBuffer& src, VulkanBuffer& dst, VkDeviceSize size);
@@ -93,9 +112,9 @@ class VulkanMemory {
   private:
     VulkanContext& context;
     VmaAllocator allocator = VK_NULL_HANDLE;
-    vk::raii::CommandPool transferPool = nullptr;
-    vk::raii::CommandBuffer transferCmd = nullptr;
-    vk::raii::Fence transferFence = nullptr;
+    vk::raii::CommandPool transfer_pool = nullptr;
+    vk::raii::CommandBuffer transfer_cmd = nullptr;
+    vk::raii::Fence transfer_fence = nullptr;
 };
 
 } // namespace llvmexpr

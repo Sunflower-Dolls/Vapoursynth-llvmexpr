@@ -20,6 +20,7 @@
 #include "BuildCFGPass.hpp"
 #include "../framework/AnalysisError.hpp"
 #include "../framework/AnalysisManager.hpp"
+
 #include <format>
 
 namespace analysis {
@@ -39,9 +40,9 @@ BuildCFGPass::Result BuildCFGPass::run(const std::vector<Token>& tokens,
         token_idx_to_block_idx[block_start_idx] = block_idx;
 
         // Register label if this block starts with one
-        if (tokens[current_token_idx].type == TokenType::LABEL_DEF) {
+        if (tokens[current_token_idx].type == TokenType::LabelDef) {
             const auto& payload =
-                std::get<TokenPayload_Label>(tokens[current_token_idx].payload);
+                std::get<TokenPayloadLabel>(tokens[current_token_idx].payload);
             if (result.label_to_block_idx.contains(payload.name)) {
                 throw AnalysisError(
                     std::format("Duplicate label: {}", payload.name),
@@ -54,12 +55,12 @@ BuildCFGPass::Result BuildCFGPass::run(const std::vector<Token>& tokens,
         int scan_idx = current_token_idx;
         while (static_cast<size_t>(scan_idx) < tokens.size()) {
             const auto& token = tokens[scan_idx];
-            if (token.type == TokenType::JUMP) {
+            if (token.type == TokenType::Jump) {
                 scan_idx++;
                 break;
             }
             if (scan_idx > block_start_idx &&
-                token.type == TokenType::LABEL_DEF) {
+                token.type == TokenType::LabelDef) {
                 break;
             }
             scan_idx++;
@@ -74,9 +75,9 @@ BuildCFGPass::Result BuildCFGPass::run(const std::vector<Token>& tokens,
         CFGBlock& block = result.cfg_blocks[i];
         const auto& last_token = tokens[block.end_token_idx - 1];
 
-        if (last_token.type == TokenType::JUMP) {
+        if (last_token.type == TokenType::Jump) {
             const auto& payload =
-                std::get<TokenPayload_Label>(last_token.payload);
+                std::get<TokenPayloadLabel>(last_token.payload);
 
             if (!result.label_to_block_idx.contains(payload.name)) {
                 throw AnalysisError(

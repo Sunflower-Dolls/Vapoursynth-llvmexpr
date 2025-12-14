@@ -19,6 +19,7 @@
 
 #include "Parser.hpp"
 #include "Builtins.hpp"
+
 #include <algorithm>
 #include <cctype>
 #include <format>
@@ -56,7 +57,7 @@ ParseResult Parser::parse() {
 std::unique_ptr<Stmt> Parser::parseDeclaration() {
     std::unique_ptr<Stmt> stmt;
     if (peek().type == TokenType::Global) {
-        auto globalDecl = parseGlobalDecl();
+        auto global_decl = parseGlobalDecl();
 
         while (match({TokenType::Newline})) {
         }
@@ -66,13 +67,13 @@ std::unique_ptr<Stmt> Parser::parseDeclaration() {
             error(peek(), "Global declaration must be followed by a function "
                           "definition.");
         }
-        auto funcDef = parseFunctionDef();
+        auto func_def = parseFunctionDef();
         // Attach the global declaration to the function
-        funcDef->global_decl = std::move(globalDecl);
-        stmt = make_node<FunctionDef>(std::move(*funcDef));
+        func_def->global_decl = std::move(global_decl);
+        stmt = make_node<FunctionDef>(std::move(*func_def));
     } else if (peek().type == TokenType::Function) {
-        auto funcDef = parseFunctionDef();
-        stmt = std::make_unique<Stmt>(FunctionDef(std::move(*funcDef)));
+        auto func_def = parseFunctionDef();
+        stmt = std::make_unique<Stmt>(FunctionDef(std::move(*func_def)));
     } else {
         stmt = parseStatement();
     }
@@ -138,22 +139,22 @@ std::unique_ptr<Stmt> Parser::parseIfStatement() {
         error(peek(), "The body of an if statement must be a block statement "
                       "enclosed in {}.");
     }
-    auto thenBranch = std::make_unique<Stmt>(std::move(*parseBlock()));
+    auto then_branch = std::make_unique<Stmt>(std::move(*parseBlock()));
 
-    std::unique_ptr<Stmt> elseBranch = nullptr;
+    std::unique_ptr<Stmt> else_branch = nullptr;
     if (match({TokenType::Else})) {
         if (peek().type == TokenType::If) {
-            elseBranch = parseIfStatement();
+            else_branch = parseIfStatement();
         } else {
             if (peek().type != TokenType::LBrace) {
                 error(peek(), "The body of an else statement must be a block "
                               "statement enclosed in {}.");
             }
-            elseBranch = std::make_unique<Stmt>(std::move(*parseBlock()));
+            else_branch = std::make_unique<Stmt>(std::move(*parseBlock()));
         }
     }
-    return make_node<IfStmt>(std::move(condition), std::move(thenBranch),
-                             std::move(elseBranch));
+    return make_node<IfStmt>(std::move(condition), std::move(then_branch),
+                             std::move(else_branch));
 }
 
 std::unique_ptr<Stmt> Parser::parseWhileStatement() {
@@ -343,11 +344,11 @@ std::unique_ptr<GlobalDecl> Parser::parseGlobalDecl() {
     std::string content = keyword.value.substr(1, keyword.value.length() - 2);
     if (content == "global.all") {
         return std::make_unique<GlobalDecl>(
-            GlobalDecl(keyword, GlobalMode::ALL));
+            GlobalDecl(keyword, GlobalMode::All));
     }
     if (content == "global.none") {
         return std::make_unique<GlobalDecl>(
-            GlobalDecl(keyword, GlobalMode::NONE));
+            GlobalDecl(keyword, GlobalMode::None));
     }
 
     // <global<var1><var2>...>
@@ -412,17 +413,17 @@ std::unique_ptr<GlobalDecl> Parser::parseGlobalDecl() {
     }
 
     return std::make_unique<GlobalDecl>(
-        GlobalDecl(keyword, GlobalMode::SPECIFIC, globals));
+        GlobalDecl(keyword, GlobalMode::Specific, globals));
 }
 
 std::unique_ptr<Expr> Parser::parseTernary() {
     auto expr = parseLogicalOr();
     if (match({TokenType::Question})) {
-        auto thenBranch = parseTernary();
+        auto then_branch = parseTernary();
         consume(TokenType::Colon, "Expect ':' for ternary operator.");
-        auto elseBranch = parseTernary();
-        expr = make_node<TernaryExpr>(std::move(expr), std::move(thenBranch),
-                                      std::move(elseBranch));
+        auto else_branch = parseTernary();
+        expr = make_node<TernaryExpr>(std::move(expr), std::move(then_branch),
+                                      std::move(else_branch));
     }
     return expr;
 }
@@ -651,7 +652,7 @@ Token Parser::peek(int offset) const {
 Token Parser::previous() const { return tokens[current - 1]; }
 bool Parser::isAtEnd() const { return peek().type == TokenType::EndOfFile; }
 
-void Parser::report_error(const Token& token, const std::string& message) {
+void Parser::reportError(const Token& token, const std::string& message) {
     if (panic_mode) {
         return;
     }
@@ -667,7 +668,7 @@ void Parser::report_error(const Token& token, const std::string& message) {
 }
 
 void Parser::error(const Token& token, const std::string& message) {
-    report_error(token, message);
+    reportError(token, message);
     if (!panic_mode) {
         panic_mode = true;
     }

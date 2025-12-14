@@ -17,8 +17,8 @@
  * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef LLVMEXPR_UTILS_DIAGNOSTICS_HPP
-#define LLVMEXPR_UTILS_DIAGNOSTICS_HPP
+#ifndef LLVMEXPR_CODEGEN_LLVM_DIAGNOSTICS_HPP
+#define LLVMEXPR_CODEGEN_LLVM_DIAGNOSTICS_HPP
 
 #include <atomic>
 
@@ -33,14 +33,14 @@ class VectorizationDiagnosticHandler {
     setOriginalHandler(llvm::DiagnosticHandler::DiagnosticHandlerTy handler,
                        void* context);
 
-    void handleDiagnostic(const llvm::DiagnosticInfo& DI);
+    void handleDiagnostic(const llvm::DiagnosticInfo& di);
 
     [[nodiscard]] bool hasVectorizationFailed() const;
 
     void reset();
 
-    static void diagnosticHandlerCallback(const llvm::DiagnosticInfo* DI,
-                                          void* Context);
+    static void diagnosticHandlerCallback(const llvm::DiagnosticInfo* di,
+                                          void* context);
 
   private:
     std::atomic<bool> vectorization_failed;
@@ -48,4 +48,4 @@ class VectorizationDiagnosticHandler {
     void* original_context;
 };
 
-#endif // LLVMEXPR_UTILS_DIAGNOSTICS_HPP
+#endif // LLVMEXPR_CODEGEN_LLVM_DIAGNOSTICS_HPP

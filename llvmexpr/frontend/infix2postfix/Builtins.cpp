@@ -21,6 +21,7 @@
 #include "AST.hpp"
 #include "CodeGenerator.hpp"
 #include "PostfixBuilder.hpp"
+
 #include <format>
 #include <string>
 
@@ -33,10 +34,10 @@ PostfixBuilder handle_dyn_expr_3args(CodeGenerator* codegen,
     // Signature: dyn($clip, x, y)
     // Default boundary mode is clamped.
     PostfixBuilder b;
-    b.append(codegen->generate_expr(expr.args[1].get()).postfix);
-    b.append(codegen->generate_expr(expr.args[2].get()).postfix);
+    b.append(codegen->generateExpr(expr.args[1].get()).postfix);
+    b.append(codegen->generateExpr(expr.args[2].get()).postfix);
 
-    auto clip_res = codegen->generate_expr(expr.args[0].get());
+    auto clip_res = codegen->generateExpr(expr.args[0].get());
     std::string clip_name = clip_res.postfix.get_expression();
 
     b.add_dyn_pixel_access_expr(clip_name, ":c");
@@ -47,10 +48,10 @@ PostfixBuilder handle_dyn_expr_4args(CodeGenerator* codegen,
                                      const CallExpr& expr) {
     // Signature: dyn($clip, x, y, boundary_mode)
     PostfixBuilder b;
-    b.append(codegen->generate_expr(expr.args[1].get()).postfix);
-    b.append(codegen->generate_expr(expr.args[2].get()).postfix);
+    b.append(codegen->generateExpr(expr.args[1].get()).postfix);
+    b.append(codegen->generateExpr(expr.args[2].get()).postfix);
 
-    auto clip_res = codegen->generate_expr(expr.args[0].get());
+    auto clip_res = codegen->generateExpr(expr.args[0].get());
     std::string clip_name = clip_res.postfix.get_expression();
 
     auto* boundary_expr = get_if<NumberExpr>(expr.args[3].get());
@@ -77,15 +78,15 @@ PostfixBuilder handle_dyn_expr_4args(CodeGenerator* codegen,
 
 PostfixBuilder handle_dyn_single(CodeGenerator* codegen, const CallExpr& expr) {
     // Signature: dyn($clip, x, y, plane)
-    auto clip_res = codegen->generate_expr(expr.args[0].get());
+    auto clip_res = codegen->generateExpr(expr.args[0].get());
     std::string clip_name = clip_res.postfix.get_expression();
 
     auto* plane_expr = get_if<NumberExpr>(expr.args[3].get());
     std::string plane_idx = plane_expr->value.value;
 
     PostfixBuilder b;
-    b.append(codegen->generate_expr(expr.args[1].get()).postfix);
-    b.append(codegen->generate_expr(expr.args[2].get()).postfix);
+    b.append(codegen->generateExpr(expr.args[1].get()).postfix);
+    b.append(codegen->generateExpr(expr.args[2].get()).postfix);
     b.add_dyn_pixel_access_single(clip_name, plane_idx);
     return b;
 }
@@ -93,9 +94,9 @@ PostfixBuilder handle_dyn_single(CodeGenerator* codegen, const CallExpr& expr) {
 PostfixBuilder handle_store_expr(CodeGenerator* codegen, const CallExpr& expr) {
     // store(x, y, val)
     PostfixBuilder b;
-    b.append(codegen->generate_expr(expr.args[2].get()).postfix);
-    b.append(codegen->generate_expr(expr.args[0].get()).postfix);
-    b.append(codegen->generate_expr(expr.args[1].get()).postfix);
+    b.append(codegen->generateExpr(expr.args[2].get()).postfix);
+    b.append(codegen->generateExpr(expr.args[0].get()).postfix);
+    b.append(codegen->generateExpr(expr.args[1].get()).postfix);
     b.add_store_expr();
     return b;
 }
@@ -107,9 +108,9 @@ PostfixBuilder handle_store_single(CodeGenerator* codegen,
     std::string plane_idx = plane_expr->value.value;
 
     PostfixBuilder b;
-    b.append(codegen->generate_expr(expr.args[3].get()).postfix);
-    b.append(codegen->generate_expr(expr.args[0].get()).postfix);
-    b.append(codegen->generate_expr(expr.args[1].get()).postfix);
+    b.append(codegen->generateExpr(expr.args[3].get()).postfix);
+    b.append(codegen->generateExpr(expr.args[0].get()).postfix);
+    b.append(codegen->generateExpr(expr.args[1].get()).postfix);
     b.add_store_single(plane_idx);
     return b;
 }
@@ -121,7 +122,7 @@ PostfixBuilder handle_set_prop_typed(CodeGenerator* codegen,
     auto* prop_name_expr = get_if<VariableExpr>(expr.args[0].get());
 
     PostfixBuilder b;
-    b.append(codegen->generate_expr(expr.args[1].get()).postfix);
+    b.append(codegen->generateExpr(expr.args[1].get()).postfix);
     b.add_set_prop(prop_name_expr->name.value, suffix);
     return b;
 }
@@ -164,7 +165,7 @@ PostfixBuilder handle_exit([[maybe_unused]] CodeGenerator* codegen,
 PostfixBuilder handle_is_prop_exist(CodeGenerator* codegen,
                                     const CallExpr& expr) {
     // is_prop_exist(clip, prop_name)
-    auto clip_res = codegen->generate_expr(expr.args[0].get());
+    auto clip_res = codegen->generateExpr(expr.args[0].get());
     std::string clip_name = clip_res.postfix.get_expression();
 
     auto* prop_name_expr = get_if<VariableExpr>(expr.args[1].get());
@@ -303,7 +304,7 @@ const std::map<std::string, std::vector<BuiltinFunction>> builtin_functions = {
      {BuiltinFunction{.name = "set_prop",
                       .arity = 2,
                       .mode_restriction = Mode::Single,
-                      .param_types = {Type::Literal_string, Type::Value},
+                      .param_types = {Type::LiteralString, Type::Value},
                       .special_handler =
                           handle_set_propf, // alias for set_propf
                       .returns_value = false}}},
@@ -311,42 +312,42 @@ const std::map<std::string, std::vector<BuiltinFunction>> builtin_functions = {
      {BuiltinFunction{.name = "set_propf",
                       .arity = 2,
                       .mode_restriction = Mode::Single,
-                      .param_types = {Type::Literal_string, Type::Value},
+                      .param_types = {Type::LiteralString, Type::Value},
                       .special_handler = handle_set_propf,
                       .returns_value = false}}},
     {"set_propi",
      {BuiltinFunction{.name = "set_propi",
                       .arity = 2,
                       .mode_restriction = Mode::Single,
-                      .param_types = {Type::Literal_string, Type::Value},
+                      .param_types = {Type::LiteralString, Type::Value},
                       .special_handler = handle_set_propi,
                       .returns_value = false}}},
     {"set_propaf",
      {BuiltinFunction{.name = "set_propaf",
                       .arity = 2,
                       .mode_restriction = Mode::Single,
-                      .param_types = {Type::Literal_string, Type::Value},
+                      .param_types = {Type::LiteralString, Type::Value},
                       .special_handler = handle_set_propaf,
                       .returns_value = false}}},
     {"set_propai",
      {BuiltinFunction{.name = "set_propai",
                       .arity = 2,
                       .mode_restriction = Mode::Single,
-                      .param_types = {Type::Literal_string, Type::Value},
+                      .param_types = {Type::LiteralString, Type::Value},
                       .special_handler = handle_set_propai,
                       .returns_value = false}}},
     {"remove_prop",
      {BuiltinFunction{.name = "remove_prop",
                       .arity = 1,
                       .mode_restriction = Mode::Single,
-                      .param_types = {Type::Literal_string},
+                      .param_types = {Type::LiteralString},
                       .special_handler = handle_remove_prop,
                       .returns_value = false}}},
     {"is_prop_exist",
      {BuiltinFunction{.name = "is_prop_exist",
                       .arity = 2,
                       .mode_restriction = std::nullopt,
-                      .param_types = {Type::Clip, Type::Literal_string},
+                      .param_types = {Type::Clip, Type::LiteralString},
                       .special_handler = handle_is_prop_exist}}},
     {"dyn",
      {

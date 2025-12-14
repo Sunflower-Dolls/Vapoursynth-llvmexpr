@@ -18,7 +18,6 @@
  */
 
 #include "CoordinateUsagePass.hpp"
-
 #include "../../frontend/Tokenizer.hpp"
 #include "../framework/AnalysisManager.hpp"
 
@@ -29,10 +28,10 @@ CoordinateUsagePass::run(const std::vector<Token>& tokens,
                          [[maybe_unused]] AnalysisManager& am) {
     CoordinateUsageResult result;
     for (const auto& token : tokens) {
-        if (token.type == TokenType::CONSTANT_X) {
+        if (token.type == TokenType::ConstantX) {
             result.uses_x = true;
         }
-        if (token.type == TokenType::CONSTANT_Y) {
+        if (token.type == TokenType::ConstantY) {
             result.uses_y = true;
         }
         if (result.uses_x && result.uses_y) {

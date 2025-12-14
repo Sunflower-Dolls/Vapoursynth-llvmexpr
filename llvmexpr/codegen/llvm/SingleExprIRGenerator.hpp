@@ -17,8 +17,8 @@
  * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef LLVMEXPR_SINGLEEXPRIRGENERATOR_HPP
-#define LLVMEXPR_SINGLEEXPRIRGENERATOR_HPP
+#ifndef LLVMEXPR_CODEGEN_LLVM_SINGLEEXPRIRGENERATOR_HPP
+#define LLVMEXPR_CODEGEN_LLVM_SINGLEEXPRIRGENERATOR_HPP
 
 #include "IRGeneratorBase.hpp"
 
@@ -35,23 +35,23 @@ class SingleExprIRGenerator : public IRGeneratorBase {
         std::string func_name_in, int approx_math_in);
 
   protected:
-    void define_function_signature() override;
-    void generate_loops() override;
+    void defineFunctionSignature() override;
+    void generateLoops() override;
 
-    bool process_mode_specific_token(const Token& token,
-                                     std::vector<llvm::Value*>& rpn_stack,
-                                     llvm::Value* x, llvm::Value* y,
-                                     llvm::Value* x_fp, llvm::Value* y_fp,
-                                     bool no_x_bounds_check) override;
+    bool processModeSpecificToken(const Token& token,
+                                  std::vector<llvm::Value*>& rpn_stack,
+                                  llvm::Value* x, llvm::Value* y,
+                                  llvm::Value* x_fp, llvm::Value* y_fp,
+                                  bool no_x_bounds_check) override;
 
-    void finalize_and_store_result(llvm::Value* result_val, llvm::Value* x,
-                                   llvm::Value* y) override;
+    void finalizeAndStoreResult(llvm::Value* result_val, llvm::Value* x,
+                                llvm::Value* y) override;
 
   private:
-    llvm::Value* generate_pixel_load_plane(int clip_idx, int plane_idx,
-                                           llvm::Value* x, llvm::Value* y);
-    void generate_pixel_store_plane(llvm::Value* value_to_store, int plane_idx,
-                                    llvm::Value* x, llvm::Value* y);
+    llvm::Value* generatePixelLoadPlane(int clip_idx, int plane_idx,
+                                        llvm::Value* x, llvm::Value* y);
+    void generatePixelStorePlane(llvm::Value* value_to_store, int plane_idx,
+                                 llvm::Value* x, llvm::Value* y);
 
     std::vector<std::vector<llvm::Value*>> plane_base_ptrs;
     std::vector<std::vector<llvm::Value*>> plane_strides;
@@ -68,4 +68,4 @@ class SingleExprIRGenerator : public IRGeneratorBase {
     std::map<std::string, llvm::Value*> named_arrays;
 };
 
-#endif // LLVMEXPR_SINGLEEXPRIRGENERATOR_HPP
+#endif // LLVMEXPR_CODEGEN_LLVM_SINGLEEXPRIRGENERATOR_HPP

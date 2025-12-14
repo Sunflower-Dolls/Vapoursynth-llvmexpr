@@ -55,13 +55,13 @@
 #endif
 
 template <auto value> consteval std::string_view enum_name() {
-    constexpr std::string_view name = __PRETTY_FUNCTION__;
-    constexpr auto start = name.find('=') + 2;
-    constexpr auto end = name.size() - 1;
-    constexpr auto full = name.substr(start, end - start);
-    constexpr auto last_colon = full.rfind("::");
-    return last_colon == std::string_view::npos ? full
-                                                : full.substr(last_colon + 2);
+    constexpr std::string_view NAME = __PRETTY_FUNCTION__;
+    constexpr auto START = NAME.find('=') + 2;
+    constexpr auto END = NAME.size() - 1;
+    constexpr auto FULL = NAME.substr(START, END - START);
+    constexpr auto LAST_COLON = FULL.rfind("::");
+    return LAST_COLON == std::string_view::npos ? FULL
+                                                : FULL.substr(LAST_COLON + 2);
 }
 
 namespace llvmexpr_enum_detail {
@@ -83,18 +83,18 @@ consteval std::size_t binary_search_count() {
     if constexpr (High - Low <= 1) {
         return is_valid_enum<T, Low>() ? High : Low;
     } else {
-        constexpr std::size_t Mid = Low + ((High - Low) / 2);
-        if constexpr (is_valid_enum<T, Mid>()) {
-            return binary_search_count<T, Mid, High>();
+        constexpr std::size_t MID = Low + ((High - Low) / 2);
+        if constexpr (is_valid_enum<T, MID>()) {
+            return binary_search_count<T, MID, High>();
         } else {
-            return binary_search_count<T, Low, Mid>();
+            return binary_search_count<T, Low, MID>();
         }
     }
 }
 
 template <typename T> consteval std::size_t enum_count() {
-    constexpr std::size_t upper = find_upper_bound<T>();
-    return binary_search_count<T, upper / 2, upper>();
+    constexpr std::size_t UPPER = find_upper_bound<T>();
+    return binary_search_count<T, UPPER / 2, UPPER>();
 }
 
 template <typename T, std::size_t... Is>
@@ -114,9 +114,9 @@ template <typename T> constexpr std::size_t enum_max() {
 template <typename T>
     requires std::is_enum_v<T> && std::is_scoped_enum_v<T>
 constexpr std::string_view enum_name(T value) {
-    static constexpr auto names = llvmexpr_enum_detail::make_names<T>();
+    static constexpr auto NAMES = llvmexpr_enum_detail::make_names<T>();
     const auto index = static_cast<std::size_t>(std::to_underlying(value));
-    return index < names.size() ? names[index] : std::string_view{};
+    return index < NAMES.size() ? NAMES[index] : std::string_view{};
 }
 
 #endif // LLVMEXPR_UTILS_ENUMNAME_HPP

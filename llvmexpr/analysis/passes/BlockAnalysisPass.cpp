@@ -21,6 +21,7 @@
 #include "../../frontend/Tokenizer.hpp"
 #include "../framework/AnalysisManager.hpp"
 #include "BuildCFGPass.hpp"
+
 #include <algorithm>
 
 namespace analysis {

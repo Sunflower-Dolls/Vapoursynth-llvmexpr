@@ -1,3 +1,22 @@
+/**
+ * Copyright (C) 2025 yuygfgg
+ * 
+ * This file is part of Vapoursynth-llvmexpr.
+ * 
+ * Vapoursynth-llvmexpr is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ * 
+ * Vapoursynth-llvmexpr is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 #include "VulkanComputePipeline.hpp"
 #include "VulkanContext.hpp"
 #include "VulkanMemory.hpp"
@@ -21,24 +40,24 @@ std::mutex
 } // namespace
 
 VulkanComputePipeline::VulkanComputePipeline(VulkanContext& ctx,
-                                             const std::string& glslSource,
-                                             uint32_t numInputBuffers,
-                                             uint32_t numPropsFloats)
-    : context(ctx), numInputs(numInputBuffers),
-      hasPropsBuffer(numPropsFloats > 0) {
-    compileShader(glslSource);
-    createDescriptorSetLayout(numInputBuffers, hasPropsBuffer);
+                                             const std::string& glsl_source,
+                                             uint32_t num_input_buffers,
+                                             uint32_t num_props_floats)
+    : context(ctx), num_inputs(num_input_buffers),
+      has_props_buffer(num_props_floats > 0) {
+    compileShader(glsl_source);
+    createDescriptorSetLayout(num_input_buffers, has_props_buffer);
     createPipeline();
     createCommandResources();
 }
 
 VulkanComputePipeline::~VulkanComputePipeline() = default;
 
-void VulkanComputePipeline::compileShader(const std::string& glslSource) {
+void VulkanComputePipeline::compileShader(const std::string& glsl_source) {
     std::lock_guard<std::mutex> lock(g_shader_cache_mutex);
 
-    if (g_shader_cache.contains(glslSource)) {
-        spirvCode = g_shader_cache[glslSource];
+    if (g_shader_cache.contains(glsl_source)) {
+        spirv_code = g_shader_cache[glsl_source];
     } else {
         shaderc::Compiler compiler;
         shaderc::CompileOptions options;
@@ -49,7 +68,7 @@ void VulkanComputePipeline::compileShader(const std::string& glslSource) {
         options.SetTargetSpirv(shaderc_spirv_version_1_5);
 
         auto result = compiler.CompileGlslToSpv(
-            glslSource, shaderc_glsl_compute_shader, "compute.glsl", options);
+            glsl_source, shaderc_glsl_compute_shader, "compute.glsl", options);
 
         if (result.GetCompilationStatus() !=
             shaderc_compilation_status_success) {
@@ -57,188 +76,189 @@ void VulkanComputePipeline::compileShader(const std::string& glslSource) {
                                      std::string(result.GetErrorMessage()));
         }
 
-        spirvCode = {result.cbegin(), result.cend()};
-        g_shader_cache[glslSource] = spirvCode;
+        spirv_code = {result.cbegin(), result.cend()};
+        g_shader_cache[glsl_source] = spirv_code;
     }
 
-    vk::ShaderModuleCreateInfo moduleInfo;
-    moduleInfo.setCode(spirvCode);
-    shaderModule = vk::raii::ShaderModule(context.getDevice(), moduleInfo);
+    vk::ShaderModuleCreateInfo module_info;
+    module_info.setCode(spirv_code);
+    shader_module = vk::raii::ShaderModule(context.getDevice(), module_info);
 }
 
-void VulkanComputePipeline::createDescriptorSetLayout(uint32_t numInputBuffers,
-                                                      bool withPropsBuffer) {
+void VulkanComputePipeline::createDescriptorSetLayout(
+    uint32_t num_input_buffers, bool with_props_buffer) {
     std::vector<vk::DescriptorSetLayoutBinding> bindings;
-    uint32_t bindingIndex = 0;
+    uint32_t binding_index = 0;
 
     // Input buffer(s) - bindings 0 to numInputs-1
-    for (uint32_t i = 0; i < numInputBuffers; ++i) {
-        vk::DescriptorSetLayoutBinding inputBinding;
-        inputBinding.binding = bindingIndex++;
-        inputBinding.descriptorType = vk::DescriptorType::eStorageBuffer;
-        inputBinding.descriptorCount = 1;
-        inputBinding.stageFlags = vk::ShaderStageFlagBits::eCompute;
-        bindings.push_back(inputBinding);
+    for (uint32_t i = 0; i < num_input_buffers; ++i) {
+        vk::DescriptorSetLayoutBinding input_binding;
+        input_binding.binding = binding_index++;
+        input_binding.descriptorType = vk::DescriptorType::eStorageBuffer;
+        input_binding.descriptorCount = 1;
+        input_binding.stageFlags = vk::ShaderStageFlagBits::eCompute;
+        bindings.push_back(input_binding);
     }
 
     // Output buffer
-    vk::DescriptorSetLayoutBinding outputBinding;
-    outputBinding.binding = bindingIndex++;
-    outputBinding.descriptorType = vk::DescriptorType::eStorageBuffer;
-    outputBinding.descriptorCount = 1;
-    outputBinding.stageFlags = vk::ShaderStageFlagBits::eCompute;
-    bindings.push_back(outputBinding);
+    vk::DescriptorSetLayoutBinding output_binding;
+    output_binding.binding = binding_index++;
+    output_binding.descriptorType = vk::DescriptorType::eStorageBuffer;
+    output_binding.descriptorCount = 1;
+    output_binding.stageFlags = vk::ShaderStageFlagBits::eCompute;
+    bindings.push_back(output_binding);
 
     // Props buffer (if needed)
-    if (withPropsBuffer) {
-        vk::DescriptorSetLayoutBinding propsBinding;
-        propsBinding.binding = bindingIndex++;
-        propsBinding.descriptorType = vk::DescriptorType::eStorageBuffer;
-        propsBinding.descriptorCount = 1;
-        propsBinding.stageFlags = vk::ShaderStageFlagBits::eCompute;
-        bindings.push_back(propsBinding);
+    if (with_props_buffer) {
+        vk::DescriptorSetLayoutBinding props_binding;
+        props_binding.binding = binding_index++;
+        props_binding.descriptorType = vk::DescriptorType::eStorageBuffer;
+        props_binding.descriptorCount = 1;
+        props_binding.stageFlags = vk::ShaderStageFlagBits::eCompute;
+        bindings.push_back(props_binding);
     }
 
-    vk::DescriptorSetLayoutCreateInfo layoutInfo;
-    layoutInfo.setBindings(bindings);
-    descriptorSetLayout =
-        vk::raii::DescriptorSetLayout(context.getDevice(), layoutInfo);
+    vk::DescriptorSetLayoutCreateInfo layout_info;
+    layout_info.setBindings(bindings);
+    descriptor_set_layout =
+        vk::raii::DescriptorSetLayout(context.getDevice(), layout_info);
 
     // Create pipeline layout with push constants
-    vk::PushConstantRange pushConstRange;
-    pushConstRange.stageFlags = vk::ShaderStageFlagBits::eCompute;
-    pushConstRange.offset = 0;
-    pushConstRange.size = sizeof(PushConstants);
+    vk::PushConstantRange push_const_range;
+    push_const_range.stageFlags = vk::ShaderStageFlagBits::eCompute;
+    push_const_range.offset = 0;
+    push_const_range.size = sizeof(PushConstants);
 
-    vk::PipelineLayoutCreateInfo pipelineLayoutInfo;
-    pipelineLayoutInfo.setSetLayouts(*descriptorSetLayout);
-    pipelineLayoutInfo.setPushConstantRanges(pushConstRange);
-    pipelineLayout =
-        vk::raii::PipelineLayout(context.getDevice(), pipelineLayoutInfo);
+    vk::PipelineLayoutCreateInfo pipeline_layout_info;
+    pipeline_layout_info.setSetLayouts(*descriptor_set_layout);
+    pipeline_layout_info.setPushConstantRanges(push_const_range);
+    pipeline_layout =
+        vk::raii::PipelineLayout(context.getDevice(), pipeline_layout_info);
 
     // Create descriptor pool
-    vk::DescriptorPoolSize poolSize;
-    poolSize.type = vk::DescriptorType::eStorageBuffer;
+    vk::DescriptorPoolSize pool_size;
+    pool_size.type = vk::DescriptorType::eStorageBuffer;
     // inputs + output + optional props
-    poolSize.descriptorCount = numInputBuffers + 1 + (withPropsBuffer ? 1 : 0);
+    pool_size.descriptorCount =
+        num_input_buffers + 1 + (with_props_buffer ? 1 : 0);
 
-    vk::DescriptorPoolCreateInfo poolInfo;
-    poolInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
-    poolInfo.maxSets = 1;
-    poolInfo.setPoolSizes(poolSize);
-    descriptorPool = vk::raii::DescriptorPool(context.getDevice(), poolInfo);
+    vk::DescriptorPoolCreateInfo pool_info;
+    pool_info.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
+    pool_info.maxSets = 1;
+    pool_info.setPoolSizes(pool_size);
+    descriptor_pool = vk::raii::DescriptorPool(context.getDevice(), pool_info);
 
     // Allocate descriptor set
-    vk::DescriptorSetAllocateInfo allocInfo;
-    allocInfo.descriptorPool = *descriptorPool;
-    allocInfo.setSetLayouts(*descriptorSetLayout);
-    auto sets = vk::raii::DescriptorSets(context.getDevice(), allocInfo);
-    descriptorSet = std::move(sets[0]);
+    vk::DescriptorSetAllocateInfo alloc_info;
+    alloc_info.descriptorPool = *descriptor_pool;
+    alloc_info.setSetLayouts(*descriptor_set_layout);
+    auto sets = vk::raii::DescriptorSets(context.getDevice(), alloc_info);
+    descriptor_set = std::move(sets[0]);
 }
 
 void VulkanComputePipeline::createPipeline() {
-    vk::PipelineShaderStageCreateInfo stageInfo;
-    stageInfo.stage = vk::ShaderStageFlagBits::eCompute;
-    stageInfo.module = *shaderModule;
-    stageInfo.pName = "main";
+    vk::PipelineShaderStageCreateInfo stage_info;
+    stage_info.stage = vk::ShaderStageFlagBits::eCompute;
+    stage_info.module = *shader_module;
+    stage_info.pName = "main";
 
-    vk::ComputePipelineCreateInfo pipelineInfo;
-    pipelineInfo.stage = stageInfo;
-    pipelineInfo.layout = *pipelineLayout;
+    vk::ComputePipelineCreateInfo pipeline_info;
+    pipeline_info.stage = stage_info;
+    pipeline_info.layout = *pipeline_layout;
 
-    pipeline = vk::raii::Pipeline(context.getDevice(), nullptr, pipelineInfo);
+    pipeline = vk::raii::Pipeline(context.getDevice(), nullptr, pipeline_info);
 }
 
 void VulkanComputePipeline::createCommandResources() {
-    vk::CommandPoolCreateInfo poolInfo(
+    vk::CommandPoolCreateInfo pool_info(
         vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
         context.getQueueFamilyIndex());
-    commandPool = vk::raii::CommandPool(context.getDevice(), poolInfo);
+    command_pool = vk::raii::CommandPool(context.getDevice(), pool_info);
 
-    vk::CommandBufferAllocateInfo cmdInfo(*commandPool,
-                                          vk::CommandBufferLevel::ePrimary, 1);
-    auto cmdBuffers = vk::raii::CommandBuffers(context.getDevice(), cmdInfo);
-    commandBuffer = std::move(cmdBuffers[0]);
+    vk::CommandBufferAllocateInfo cmd_info(*command_pool,
+                                           vk::CommandBufferLevel::ePrimary, 1);
+    auto cmd_buffers = vk::raii::CommandBuffers(context.getDevice(), cmd_info);
+    command_buffer = std::move(cmd_buffers[0]);
 
-    vk::FenceCreateInfo fenceInfo;
-    fence = vk::raii::Fence(context.getDevice(), fenceInfo);
+    vk::FenceCreateInfo fence_info;
+    fence = vk::raii::Fence(context.getDevice(), fence_info);
 }
 
 void VulkanComputePipeline::updateDescriptorSets(
-    const std::vector<VulkanBuffer*>& inputBuffers, VulkanBuffer& outputBuffer,
-    VulkanBuffer* propsBuffer) {
+    const std::vector<VulkanBuffer*>& input_buffers,
+    VulkanBuffer& output_buffer, VulkanBuffer* props_buffer) {
 
     // Check if we can skip update
-    bool inputsChanged = false;
-    if (cachedInputBuffers.size() != inputBuffers.size()) {
-        inputsChanged = true;
+    bool inputs_changed = false;
+    if (cached_input_buffers.size() != input_buffers.size()) {
+        inputs_changed = true;
     } else {
-        for (size_t i = 0; i < inputBuffers.size(); ++i) {
-            if (cachedInputBuffers[i] != inputBuffers[i]->buffer) {
-                inputsChanged = true;
+        for (size_t i = 0; i < input_buffers.size(); ++i) {
+            if (cached_input_buffers[i] != input_buffers[i]->buffer) {
+                inputs_changed = true;
                 break;
             }
         }
     }
 
-    VkBuffer newPropsBufferHandle =
-        (propsBuffer != nullptr) ? propsBuffer->buffer : VK_NULL_HANDLE;
+    VkBuffer new_props_buffer_handle =
+        (props_buffer != nullptr) ? props_buffer->buffer : VK_NULL_HANDLE;
 
-    if (!inputsChanged && cachedOutputBuffer == outputBuffer.buffer &&
-        cachedPropsBuffer == newPropsBufferHandle) {
+    if (!inputs_changed && cached_output_buffer == output_buffer.buffer &&
+        cached_props_buffer == new_props_buffer_handle) {
         return;
     }
 
     std::vector<vk::WriteDescriptorSet> writes;
-    std::vector<vk::DescriptorBufferInfo> bufferInfos;
+    std::vector<vk::DescriptorBufferInfo> buffer_infos;
 
-    size_t numBuffers =
-        inputBuffers.size() + 1 + (propsBuffer != nullptr ? 1 : 0);
-    bufferInfos.reserve(numBuffers);
+    size_t num_buffers =
+        input_buffers.size() + 1 + (props_buffer != nullptr ? 1 : 0);
+    buffer_infos.reserve(num_buffers);
 
     // Update cache
-    cachedInputBuffers.clear();
-    cachedInputBuffers.reserve(inputBuffers.size());
-    for (auto* buf : inputBuffers) {
-        cachedInputBuffers.push_back(buf->buffer);
+    cached_input_buffers.clear();
+    cached_input_buffers.reserve(input_buffers.size());
+    for (auto* buf : input_buffers) {
+        cached_input_buffers.push_back(buf->buffer);
     }
-    cachedOutputBuffer = outputBuffer.buffer;
-    cachedPropsBuffer = newPropsBufferHandle;
+    cached_output_buffer = output_buffer.buffer;
+    cached_props_buffer = new_props_buffer_handle;
 
     // Input buffers
-    for (auto* inputBuffer : inputBuffers) {
-        vk::DescriptorBufferInfo bufInfo;
-        bufInfo.buffer = inputBuffer->buffer;
-        bufInfo.offset = 0;
-        bufInfo.range = VK_WHOLE_SIZE;
-        bufferInfos.push_back(bufInfo);
+    for (auto* input_buffer : input_buffers) {
+        vk::DescriptorBufferInfo buf_info;
+        buf_info.buffer = input_buffer->buffer;
+        buf_info.offset = 0;
+        buf_info.range = VK_WHOLE_SIZE;
+        buffer_infos.push_back(buf_info);
     }
 
     // Output buffer
-    vk::DescriptorBufferInfo outBufInfo;
-    outBufInfo.buffer = outputBuffer.buffer;
-    outBufInfo.offset = 0;
-    outBufInfo.range = VK_WHOLE_SIZE;
-    bufferInfos.push_back(outBufInfo);
+    vk::DescriptorBufferInfo out_buf_info;
+    out_buf_info.buffer = output_buffer.buffer;
+    out_buf_info.offset = 0;
+    out_buf_info.range = VK_WHOLE_SIZE;
+    buffer_infos.push_back(out_buf_info);
 
     // Props buffer
-    if (propsBuffer != nullptr) {
-        vk::DescriptorBufferInfo propsBufInfo;
-        propsBufInfo.buffer = propsBuffer->buffer;
-        propsBufInfo.offset = 0;
-        propsBufInfo.range = VK_WHOLE_SIZE;
-        bufferInfos.push_back(propsBufInfo);
+    if (props_buffer != nullptr) {
+        vk::DescriptorBufferInfo props_buf_info;
+        props_buf_info.buffer = props_buffer->buffer;
+        props_buf_info.offset = 0;
+        props_buf_info.range = VK_WHOLE_SIZE;
+        buffer_infos.push_back(props_buf_info);
     }
 
     // Create write descriptor sets
-    for (size_t i = 0; i < bufferInfos.size(); ++i) {
+    for (size_t i = 0; i < buffer_infos.size(); ++i) {
         vk::WriteDescriptorSet write;
-        write.dstSet = *descriptorSet;
+        write.dstSet = *descriptor_set;
         write.dstBinding = static_cast<uint32_t>(i);
         write.dstArrayElement = 0;
         write.descriptorCount = 1;
         write.descriptorType = vk::DescriptorType::eStorageBuffer;
-        write.setBufferInfo(bufferInfos[i]);
+        write.setBufferInfo(buffer_infos[i]);
         writes.push_back(write);
     }
 
@@ -246,41 +266,41 @@ void VulkanComputePipeline::updateDescriptorSets(
 }
 
 void VulkanComputePipeline::dispatch(
-    const std::vector<VulkanBuffer*>& inputBuffers, VulkanBuffer& outputBuffer,
-    VulkanBuffer* propsBuffer, uint32_t width, uint32_t height,
-    int32_t frameNumber) {
+    const std::vector<VulkanBuffer*>& input_buffers,
+    VulkanBuffer& output_buffer, VulkanBuffer* props_buffer, uint32_t width,
+    uint32_t height, int32_t frame_number) {
 
-    updateDescriptorSets(inputBuffers, outputBuffer, propsBuffer);
+    updateDescriptorSets(input_buffers, output_buffer, props_buffer);
 
     // Record command buffer
-    vk::CommandBufferBeginInfo beginInfo(
+    vk::CommandBufferBeginInfo begin_info(
         vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
-    commandBuffer.begin(beginInfo);
+    command_buffer.begin(begin_info);
 
-    commandBuffer.bindPipeline(vk::PipelineBindPoint::eCompute, *pipeline);
-    commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
-                                     *pipelineLayout, 0, *descriptorSet, {});
+    command_buffer.bindPipeline(vk::PipelineBindPoint::eCompute, *pipeline);
+    command_buffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
+                                      *pipeline_layout, 0, *descriptor_set, {});
 
     // Set push constants
     PushConstants pc = {.width = width,
                         .height = height,
-                        .numInputs = numInputs,
-                        .frameNumber = frameNumber};
-    commandBuffer.pushConstants<PushConstants>(
-        *pipelineLayout, vk::ShaderStageFlagBits::eCompute, 0, pc);
+                        .num_inputs = num_inputs,
+                        .frame_number = frame_number};
+    command_buffer.pushConstants<PushConstants>(
+        *pipeline_layout, vk::ShaderStageFlagBits::eCompute, 0, pc);
 
     // Dispatch
-    uint32_t totalPixels = width * height;
-    uint32_t numWorkgroups =
-        (totalPixels + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
-    commandBuffer.dispatch(numWorkgroups, 1, 1);
+    uint32_t total_pixels = width * height;
+    uint32_t num_workgroups =
+        (total_pixels + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
+    command_buffer.dispatch(num_workgroups, 1, 1);
 
-    commandBuffer.end();
+    command_buffer.end();
 
     // Submit and wait
-    vk::SubmitInfo submitInfo;
-    submitInfo.setCommandBuffers(*commandBuffer);
-    context.submit(submitInfo, *fence);
+    vk::SubmitInfo submit_info;
+    submit_info.setCommandBuffers(*command_buffer);
+    context.submit(submit_info, *fence);
 
     auto result =
         context.getDevice().waitForFences(*fence, VK_TRUE, UINT64_MAX);

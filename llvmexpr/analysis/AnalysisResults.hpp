@@ -25,9 +25,10 @@
 #include "passes/BuildCFGPass.hpp"
 #include "passes/CoordinateUsagePass.hpp"
 #include "passes/RelAccessAnalysisPass.hpp"
-#include "passes/StructurizeCFGPass.hpp"
 #include "passes/StackSafetyPass.hpp"
+#include "passes/StructurizeCFGPass.hpp"
 #include "passes/VariableUsagePass.hpp"
+
 #include <map>
 #include <string>
 #include <vector>

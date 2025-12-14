@@ -24,6 +24,7 @@
 #include "BlockAnalysisPass.hpp"
 #include "StaticAllocReachabilityPass.hpp"
 #include "VarInitPass.hpp"
+
 #include <format>
 
 namespace analysis {
@@ -49,31 +50,31 @@ ValidationPass::Result ValidationPass::run(const std::vector<Token>& tokens,
              j < cfg_blocks[i].end_token_idx; ++j) {
             const auto& token = tokens[j];
 
-            if (token.type == TokenType::VAR_LOAD) {
-                const auto& payload = std::get<TokenPayload_Var>(token.payload);
+            if (token.type == TokenType::VarLoad) {
+                const auto& payload = std::get<TokenPayloadVar>(token.payload);
                 if (!defined_in_block.contains(payload.name)) {
                     throw AnalysisError(
                         std::format("Variable is uninitialized: {}",
                                     payload.name),
                         j);
                 }
-            } else if (token.type == TokenType::VAR_STORE) {
+            } else if (token.type == TokenType::VarStore) {
                 defined_in_block.insert(
-                    std::get<TokenPayload_Var>(token.payload).name);
-            } else if (token.type == TokenType::ARRAY_LOAD ||
-                       token.type == TokenType::ARRAY_STORE) {
+                    std::get<TokenPayloadVar>(token.payload).name);
+            } else if (token.type == TokenType::ArrayLoad ||
+                       token.type == TokenType::ArrayStore) {
                 const auto& payload =
-                    std::get<TokenPayload_ArrayOp>(token.payload);
+                    std::get<TokenPayloadArrayOp>(token.payload);
                 std::string array_name = var_naming::getArrayName(payload.name);
                 if (!defined_in_block.contains(array_name)) {
                     throw AnalysisError(
                         std::format("Array is uninitialized: {}", payload.name),
                         j);
                 }
-            } else if (token.type == TokenType::ARRAY_ALLOC_STATIC ||
-                       token.type == TokenType::ARRAY_ALLOC_DYN) {
+            } else if (token.type == TokenType::ArrayAllocStatic ||
+                       token.type == TokenType::ArrayAllocDyn) {
                 const auto& payload =
-                    std::get<TokenPayload_ArrayOp>(token.payload);
+                    std::get<TokenPayloadArrayOp>(token.payload);
                 std::string array_name = var_naming::getArrayName(payload.name);
 
                 if (static_in_block.contains(array_name)) {
@@ -84,7 +85,7 @@ ValidationPass::Result ValidationPass::run(const std::vector<Token>& tokens,
                         j);
                 }
 
-                if (token.type == TokenType::ARRAY_ALLOC_STATIC) {
+                if (token.type == TokenType::ArrayAllocStatic) {
                     static_in_block.insert(array_name);
                 }
                 defined_in_block.insert(array_name);

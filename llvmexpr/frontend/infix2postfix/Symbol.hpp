@@ -21,6 +21,7 @@
 #define LLVMEXPR_INFIX2POSTFIX_SYMBOL_HPP
 
 #include "types.hpp"
+
 #include <cstdint>
 #include <string>
 
@@ -29,7 +30,7 @@ namespace infix2postfix {
 struct Stmt;
 struct Expr;
 
-enum class SymbolKind : std::uint8_t { VARIABLE, FUNCTION, PARAMETER, LABEL };
+enum class SymbolKind : std::uint8_t { Variable, Function, Parameter, Label };
 
 struct Symbol {
     SymbolKind kind;

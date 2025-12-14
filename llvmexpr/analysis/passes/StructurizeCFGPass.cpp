@@ -143,7 +143,7 @@ SCCDecomposition compute_scc_kosaraju(const std::vector<CFGBlock>& cfg,
     }
 
     std::vector<int> comp(n, -1);
-    int compCount = 0;
+    int comp_count = 0;
     for (int k = (int)order.size() - 1; k >= 0; --k) {
         int v0 = order[(size_t)k];
         if (comp[v0] != -1) {
@@ -151,21 +151,21 @@ SCCDecomposition compute_scc_kosaraju(const std::vector<CFGBlock>& cfg,
         }
         std::deque<int> q;
         q.push_back(v0);
-        comp[v0] = compCount;
+        comp[v0] = comp_count;
         while (!q.empty()) {
             int v = q.front();
             q.pop_front();
             for (int p : gr[v]) {
                 if (comp[p] == -1) {
-                    comp[p] = compCount;
+                    comp[p] = comp_count;
                     q.push_back(p);
                 }
             }
         }
-        compCount++;
+        comp_count++;
     }
 
-    std::vector<std::vector<int>> nodes((size_t)compCount);
+    std::vector<std::vector<int>> nodes((size_t)comp_count);
     for (int i = 0; i < n; ++i) {
         if (reachable[i] == 0 || comp[i] < 0) {
             continue;
@@ -393,7 +393,7 @@ bool tail_duplicate_trivial_joins(std::vector<CFGBlock>& cfg,
     int original_n = (int)cfg.size();
 
     // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
-    constexpr int kMaxTrivialTokens = 6;
+    constexpr int K_MAX_TRIVIAL_TOKENS = 6;
 
     for (int c = 1; c < original_n; ++c) {
         if (reachable[(size_t)c] == 0) {
@@ -410,7 +410,7 @@ bool tail_duplicate_trivial_joins(std::vector<CFGBlock>& cfg,
         }
         int tok_count =
             cfg[(size_t)c].end_token_idx - cfg[(size_t)c].start_token_idx;
-        if (tok_count > kMaxTrivialTokens) {
+        if (tok_count > K_MAX_TRIVIAL_TOKENS) {
             continue;
         }
 
@@ -472,20 +472,20 @@ std::vector<Bitset> compute_dominators(const std::vector<CFGBlock>& cfg,
     };
 
     auto compute_for_node = [&](int i) -> Bitset {
-        Bitset newDom(n);
-        newDom.setAll();
+        Bitset new_dom(n);
+        new_dom.setAll();
         if (cfg[i].predecessors.empty()) {
-            newDom.resetAll();
+            new_dom.resetAll();
         } else {
             for (int p : cfg[i].predecessors) {
                 if (!reachable[p]) {
                     continue;
                 }
-                newDom.intersectWith(dom[p]);
+                new_dom.intersectWith(dom[p]);
             }
         }
-        newDom.set(i);
-        return newDom;
+        new_dom.set(i);
+        return new_dom;
     };
 
     init();
@@ -497,9 +497,9 @@ std::vector<Bitset> compute_dominators(const std::vector<CFGBlock>& cfg,
             if (reachable[i] == 0) {
                 continue;
             }
-            Bitset newDom = compute_for_node(i);
-            if (!newDom.equals(dom[i])) {
-                dom[i] = std::move(newDom);
+            Bitset new_dom = compute_for_node(i);
+            if (!new_dom.equals(dom[i])) {
+                dom[i] = std::move(new_dom);
                 changed = true;
             }
         }
@@ -511,10 +511,10 @@ std::vector<Bitset> compute_dominators(const std::vector<CFGBlock>& cfg,
 std::vector<Bitset> compute_postdominators(const std::vector<CFGBlock>& cfg,
                                            const std::vector<int>& reachable) {
     int n = (int)cfg.size();
-    int N = n + 1; // including virtual exit node
+    int node_count = n + 1; // including virtual exit node
 
-    std::vector<std::vector<int>> succ(N);
-    std::vector<std::vector<int>> pred(N);
+    std::vector<std::vector<int>> succ((size_t)node_count);
+    std::vector<std::vector<int>> pred((size_t)node_count);
 
     auto build_reverse_graph = [&]() {
         for (int i = 0; i < n; ++i) {
@@ -536,11 +536,11 @@ std::vector<Bitset> compute_postdominators(const std::vector<CFGBlock>& cfg,
 
     auto init = [&]() {
         std::vector<Bitset> pdom;
-        pdom.reserve((size_t)N);
-        for (int i = 0; i < N; ++i) {
-            pdom.emplace_back(N);
+        pdom.reserve((size_t)node_count);
+        for (int i = 0; i < node_count; ++i) {
+            pdom.emplace_back(node_count);
         }
-        for (int i = 0; i < N; ++i) {
+        for (int i = 0; i < node_count; ++i) {
             pdom[i].setAll();
         }
         pdom[n].resetAll();
@@ -553,13 +553,13 @@ std::vector<Bitset> compute_postdominators(const std::vector<CFGBlock>& cfg,
     std::vector<Bitset> pdom = init();
 
     auto compute_for_node = [&](int i) -> Bitset {
-        Bitset newPdom(N);
-        newPdom.setAll();
+        Bitset new_pdom(node_count);
+        new_pdom.setAll();
         for (int s : succ[i]) {
-            newPdom.intersectWith(pdom[s]);
+            new_pdom.intersectWith(pdom[s]);
         }
-        newPdom.set(i);
-        return newPdom;
+        new_pdom.set(i);
+        return new_pdom;
     };
 
     bool changed = true;
@@ -569,9 +569,9 @@ std::vector<Bitset> compute_postdominators(const std::vector<CFGBlock>& cfg,
             if (reachable[i] == 0) {
                 continue;
             }
-            Bitset newPdom = compute_for_node(i);
-            if (!newPdom.equals(pdom[i])) {
-                pdom[i] = std::move(newPdom);
+            Bitset new_pdom = compute_for_node(i);
+            if (!new_pdom.equals(pdom[i])) {
+                pdom[i] = std::move(new_pdom);
                 changed = true;
             }
         }
@@ -583,11 +583,11 @@ std::vector<Bitset> compute_postdominators(const std::vector<CFGBlock>& cfg,
 int compute_ipdom_for_node(int node, const std::vector<Bitset>& pdom) {
     // ipdom(node) is the closest strict post-dominator of node in the
     // post-dominator tree.
-    int N = (int)pdom.size();
+    int node_count = static_cast<int>(pdom.size());
     // Collect strict post-dominators.
     std::vector<int> strict;
-    strict.reserve((size_t)N);
-    for (int i = 0; i < N; ++i) {
+    strict.reserve((size_t)node_count);
+    for (int i = 0; i < node_count; ++i) {
         if (i != node && pdom[node].test(i)) {
             strict.push_back(i);
         }
@@ -602,7 +602,7 @@ int compute_ipdom_for_node(int node, const std::vector<Bitset>& pdom) {
     // does NOT post-dominate any other strict post-dominator of `node`.
     int best = -1;
     for (int c : strict) {
-        bool postdominatesOther = false;
+        bool postdominates_other = false;
         for (int other : strict) {
             if (other == c) {
                 continue;
@@ -610,11 +610,11 @@ int compute_ipdom_for_node(int node, const std::vector<Bitset>& pdom) {
             // If c post-dominates `other`, then c cannot be the immediate
             // post-dominator of `node`
             if (pdom[other].test(c)) {
-                postdominatesOther = true;
+                postdominates_other = true;
                 break;
             }
         }
-        if (!postdominatesOther) {
+        if (!postdominates_other) {
             best = c;
             break;
         }
@@ -623,16 +623,16 @@ int compute_ipdom_for_node(int node, const std::vector<Bitset>& pdom) {
 }
 
 std::vector<int> compute_ipdom_vector(const std::vector<Bitset>& pdom,
-                                      int realNodeCount,
+                                      int real_node_count,
                                       const std::vector<int>& reachable) {
-    std::vector<int> ipdom(realNodeCount, -1);
-    int exitNode = realNodeCount;
-    for (int i = 0; i < realNodeCount; ++i) {
+    std::vector<int> ipdom(real_node_count, -1);
+    int exit_node = real_node_count;
+    for (int i = 0; i < real_node_count; ++i) {
         if (reachable[i] == 0) {
             continue;
         }
         int ip = compute_ipdom_for_node(i, pdom);
-        ipdom[i] = (ip == exitNode) ? -1 : ip;
+        ipdom[i] = (ip == exit_node) ? -1 : ip;
     }
     return ipdom;
 }
@@ -697,15 +697,15 @@ void compute_innermost_loop_header(StructurizeCFGResult& result,
         if (reachable[b] == 0) {
             continue;
         }
-        int bestHeader = -1;
-        size_t bestSize = std::numeric_limits<size_t>::max();
+        int best_header = -1;
+        size_t best_size = std::numeric_limits<size_t>::max();
         for (const auto& [header, body] : result.loop_body) {
-            if (body.contains(b) && body.size() < bestSize) {
-                bestSize = body.size();
-                bestHeader = header;
+            if (body.contains(b) && body.size() < best_size) {
+                best_size = body.size();
+                best_header = header;
             }
         }
-        result.innermost_loop_header[b] = bestHeader;
+        result.innermost_loop_header[b] = best_header;
     }
 }
 
@@ -735,8 +735,10 @@ StructurizeCFGPass::run(const std::vector<Token>& /*unused*/,
         origin_map[i] = static_cast<int>(i);
     }
 
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
-    size_t max_blocks = std::max<size_t>(cfg.size() * 8, 256);
+    constexpr size_t MAX_BLOCKS = 256;
+    constexpr size_t MAX_BLOCKS_RATIO = 8;
+    size_t max_blocks =
+        std::max<size_t>(cfg.size() * MAX_BLOCKS_RATIO, MAX_BLOCKS);
 
     bool changed =
         tail_duplicate_trivial_joins(work_cfg, origin_map, max_blocks);

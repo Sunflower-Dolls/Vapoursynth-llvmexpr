@@ -175,7 +175,7 @@ bool SemanticAnalyzer::analyze(const Program* program) {
             function_signatures[sig.name].push_back(sig);
             function_defs[sig.name].push_back(func_def);
 
-            auto func_symbol = defineSymbol(SymbolKind::FUNCTION, sig.name,
+            auto func_symbol = defineSymbol(SymbolKind::Function, sig.name,
                                             Type::Value, sig.range);
             func_symbol->signature = &function_signatures[sig.name].back();
             func_def->symbol = func_symbol;
@@ -269,18 +269,18 @@ bool SemanticAnalyzer::analyze(const Program* program) {
 
 bool SemanticAnalyzer::hasErrors() const {
     return std::ranges::any_of(diagnostics, [](const auto& diag) {
-        return diag.severity == DiagnosticSeverity::ERROR;
+        return diag.severity == DiagnosticSeverity::Error;
     });
 }
 
 void SemanticAnalyzer::reportError(const std::string& message,
                                    const Range& range) {
-    diagnostics.emplace_back(DiagnosticSeverity::ERROR, message, range);
+    diagnostics.emplace_back(DiagnosticSeverity::Error, message, range);
 }
 
 void SemanticAnalyzer::reportWarning(const std::string& message,
                                      const Range& range) {
-    diagnostics.emplace_back(DiagnosticSeverity::WARNING, message, range);
+    diagnostics.emplace_back(DiagnosticSeverity::Warning, message, range);
 }
 
 bool SemanticAnalyzer::detectCycleInCallGraph(
@@ -434,23 +434,23 @@ Type SemanticAnalyzer::analyze(VariableExpr& expr) {
     auto symbol = current_scope->resolve(name);
 
     if (!symbol && (current_function != nullptr)) {
-        if (current_function->global_mode == GlobalMode::ALL) {
+        if (current_function->global_mode == GlobalMode::All) {
             symbol = global_scope->resolve(name);
             // Global declaration is forward declared
             if (!symbol) {
                 symbol = std::make_shared<Symbol>();
-                symbol->kind = SymbolKind::VARIABLE;
+                symbol->kind = SymbolKind::Variable;
                 symbol->name = name;
                 symbol->type = Type::Value;
                 symbol->definition_range = expr.range;
             }
-        } else if (current_function->global_mode == GlobalMode::SPECIFIC) {
+        } else if (current_function->global_mode == GlobalMode::Specific) {
             // Global declaration is forward declared
             if (current_function->specific_globals.contains(name)) {
                 symbol = global_scope->resolve(name);
                 if (!symbol) {
                     symbol = std::make_shared<Symbol>();
-                    symbol->kind = SymbolKind::VARIABLE;
+                    symbol->kind = SymbolKind::Variable;
                     symbol->name = name;
                     symbol->type = Type::Value;
                     symbol->definition_range = expr.range;
@@ -713,12 +713,12 @@ const FunctionSignature* SemanticAnalyzer::resolveOverload(
             [&](const BuiltinFunction* builtin,
                 size_t j) -> std::optional<Type> {
                 Type param_type = builtin->param_types[j];
-                if (param_type == Type::Literal_string) {
+                if (param_type == Type::LiteralString) {
                     auto* var_expr = get_if<VariableExpr>(args[j].get());
                     if (!var_expr || var_expr->name.value.starts_with("$")) {
                         return std::nullopt;
                     }
-                    return Type::Literal_string;
+                    return Type::LiteralString;
                 }
 
                 if (!arg_types[j].has_value()) {
@@ -986,7 +986,7 @@ void SemanticAnalyzer::analyze(AssignStmt& stmt) {
                 }
             }
 
-            auto symbol = defineSymbol(SymbolKind::VARIABLE, var_name,
+            auto symbol = defineSymbol(SymbolKind::Variable, var_name,
                                        Type::Array, stmt.range);
             stmt.symbol = symbol;
 
@@ -1014,7 +1014,7 @@ void SemanticAnalyzer::analyze(AssignStmt& stmt) {
     }
 
     auto symbol =
-        defineSymbol(SymbolKind::VARIABLE, var_name, Type::Value, stmt.range);
+        defineSymbol(SymbolKind::Variable, var_name, Type::Value, stmt.range);
     stmt.symbol = symbol;
 }
 
@@ -1085,7 +1085,7 @@ void SemanticAnalyzer::analyze(const ReturnStmt& stmt) {
 }
 
 void SemanticAnalyzer::analyze(LabelStmt& stmt) {
-    auto symbol = defineSymbol(SymbolKind::LABEL, stmt.name.value, Type::Value,
+    auto symbol = defineSymbol(SymbolKind::Label, stmt.name.value, Type::Value,
                                stmt.range);
     stmt.symbol = symbol;
 
@@ -1101,7 +1101,7 @@ void SemanticAnalyzer::analyze(LabelStmt& stmt) {
         for (const auto& goto_info : pending_gotos) {
             for (const auto& [name, symbol_at_label] : symbols_at_label) {
 
-                if (symbol_at_label->kind == SymbolKind::VARIABLE &&
+                if (symbol_at_label->kind == SymbolKind::Variable &&
                     !goto_info.symbols_at_goto.contains(name)) {
                     reportError(
                         std::format(
@@ -1229,7 +1229,7 @@ void SemanticAnalyzer::analyze(FunctionDef& stmt) {
 
         // Add parameters
         for (const auto& param : stmt.params) {
-            defineSymbol(SymbolKind::PARAMETER, param.name.value, param.type,
+            defineSymbol(SymbolKind::Parameter, param.name.value, param.type,
                          stmt.range);
         }
 
@@ -1321,7 +1321,7 @@ bool SemanticAnalyzer::builtinParamTypeIsEvaluatable(
     const std::vector<BuiltinFunction>& overloads, size_t param_idx) {
     return std::ranges::all_of(overloads, [param_idx](const auto& o) {
         return !(o.param_types.size() > param_idx &&
-                 o.param_types[param_idx] == Type::Literal_string);
+                 o.param_types[param_idx] == Type::LiteralString);
     });
 }
 
@@ -1389,7 +1389,7 @@ void SemanticAnalyzer::validateFunctionCall(const CallExpr& expr) {
         return;
     }
 
-    if (sig->global_mode == GlobalMode::ALL) {
+    if (sig->global_mode == GlobalMode::All) {
         for (const auto& global_name : sig->used_globals) {
             if (global_name.starts_with("$")) {
                 reportError(
@@ -1406,7 +1406,7 @@ void SemanticAnalyzer::validateFunctionCall(const CallExpr& expr) {
                     expr.range);
             }
         }
-    } else if (sig->global_mode == GlobalMode::SPECIFIC) {
+    } else if (sig->global_mode == GlobalMode::Specific) {
         for (const auto& global_name : sig->specific_globals) {
             if (!defined_global_vars.contains(global_name)) {
                 reportError(

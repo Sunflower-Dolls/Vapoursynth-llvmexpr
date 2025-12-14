@@ -17,8 +17,8 @@
  * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef LLVMEXPR_TOKENIZER_HPP
-#define LLVMEXPR_TOKENIZER_HPP
+#ifndef LLVMEXPR_FRONTEND_TOKENIZER_HPP
+#define LLVMEXPR_FRONTEND_TOKENIZER_HPP
 
 #include <cstdint>
 #include <optional>
@@ -29,127 +29,127 @@
 
 enum class TokenType : std::uint8_t {
     // Literals & Constants
-    NUMBER,
-    CONSTANT_X,                 // X
-    CONSTANT_Y,                 // Y
-    CONSTANT_WIDTH,             // width
-    CONSTANT_HEIGHT,            // height
-    CONSTANT_PLANE_WIDTH,       // width^plane_no
-    CONSTANT_PLANE_HEIGHT,      // height^plane_no
-    CONSTANT_CLIP_WIDTH,        // srcN:width
-    CONSTANT_CLIP_HEIGHT,       // srcN:height
-    CONSTANT_CLIP_PLANE_WIDTH,  // srcN:width^plane_no
-    CONSTANT_CLIP_PLANE_HEIGHT, // srcN:height^plane_no
-    CONSTANT_N,                 // N
-    CONSTANT_PI,                // pi
+    Number,
+    ConstantX,               // X
+    ConstantY,               // Y
+    ConstantWidth,           // width
+    ConstantHeight,          // height
+    ConstantPlaneWidth,      // width^plane_no
+    ConstantPlaneHeight,     // height^plane_no
+    ConstantClipWidth,       // srcN:width
+    ConstantClipHeight,      // srcN:height
+    ConstantClipPlaneWidth,  // srcN:width^plane_no
+    ConstantClipPlaneHeight, // srcN:height^plane_no
+    ConstantN,               // N
+    ConstantPi,              // pi
 
     // Variable Ops
-    VAR_STORE, // my_var!
-    VAR_LOAD,  // my_var@
+    VarStore, // my_var!
+    VarLoad,  // my_var@
 
     // Array Ops
-    ARRAY_ALLOC_STATIC, // arr{}^N
-    ARRAY_ALLOC_DYN,    // arr{}^
-    ARRAY_STORE,        // arr{}!
-    ARRAY_LOAD,         // arr{}@
+    ArrayAllocStatic, // arr{}^N
+    ArrayAllocDyn,    // arr{}^
+    ArrayStore,       // arr{}!
+    ArrayLoad,        // arr{}@
 
     // Data Access
-    CLIP_REL,        // src[x,y]
-    CLIP_ABS,        // src[]
-    CLIP_CUR,        // src
-    PROP_ACCESS,     // src.prop
-    PROP_EXISTS,     // src.prop?
-    CLIP_ABS_PLANE,  // src^plane[]
-    STORE_ABS_PLANE, // @[]^plane
-    PROP_STORE,      // prop$
+    ClipRel,       // src[x,y]
+    ClipAbs,       // src[]
+    ClipCur,       // src
+    PropAccess,    // src.prop
+    PropExists,    // src.prop?
+    ClipAbsPlane,  // src^plane[]
+    StoreAbsPlane, // @[]^plane
+    PropStore,     // prop$
 
     // Binary Operators
-    ADD,
-    SUB,
-    MUL,
-    DIV,
-    MOD,
-    GT,
-    LT,
-    GE,
-    LE,
-    EQ,
-    AND,
-    OR,
-    XOR,
-    BITAND,
-    BITOR,
-    BITXOR,
-    POW,
-    ATAN2,
-    COPYSIGN,
-    MIN,
-    MAX,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
+    Gt,
+    Lt,
+    Ge,
+    Le,
+    Eq,
+    And,
+    Or,
+    Xor,
+    Bitand,
+    Bitor,
+    Bitxor,
+    Pow,
+    Atan2,
+    Copysign,
+    Min,
+    Max,
 
     // Unary Operators
-    NOT,
-    BITNOT,
-    SQRT,
-    EXP,
-    LOG,
-    ABS,
-    FLOOR,
-    CEIL,
-    TRUNC,
-    ROUND,
-    SIN,
-    COS,
-    TAN,
-    ASIN,
-    ACOS,
-    ATAN,
-    EXP2,
-    LOG10,
-    LOG2,
-    SINH,
-    COSH,
-    TANH,
-    SGN,
-    NEG,
+    Not,
+    Bitnot,
+    Sqrt,
+    Exp,
+    Log,
+    Abs,
+    Floor,
+    Ceil,
+    Trunc,
+    Round,
+    Sin,
+    Cos,
+    Tan,
+    Asin,
+    Acos,
+    Atan,
+    Exp2,
+    Log10,
+    Log2,
+    Sinh,
+    Cosh,
+    Tanh,
+    Sgn,
+    Neg,
 
     // Ternary and other multi-arg
-    TERNARY, // ?
-    CLIP,
-    CLAMP, // same op, 3 args
-    FMA,   // 3 args
+    Ternary, // ?
+    Clip,
+    Clamp, // same op, 3 args
+    Fma,   // 3 args
 
     // Stack manipulation
-    DUP,
-    DROP,
-    SWAP,
-    SORTN,
+    Dup,
+    Drop,
+    Swap,
+    SortN,
 
     // Control Flow
-    LABEL_DEF, // #my_label
-    JUMP,      // my_label#
+    LabelDef, // #my_label
+    Jump,     // my_label#
 
     // Custom output control
-    EXIT_NO_WRITE, // ^exit^
-    STORE_ABS,     // @[]
+    ExitNoWrite, // ^exit^
+    StoreAbs,    // @[]
 };
 
-struct TokenPayload_Number {
+struct TokenPayloadNumber {
     double value;
 };
 
-struct TokenPayload_Var {
+struct TokenPayloadVar {
     std::string name;
 };
 
-struct TokenPayload_Label {
+struct TokenPayloadLabel {
     std::string name;
 };
 
-struct TokenPayload_StackOp {
+struct TokenPayloadStackOp {
     int n;
 };
 
-struct TokenPayload_ClipAccess {
+struct TokenPayloadClipAccess {
     int clip_idx;
     int rel_x = 0;
     int rel_y = 0;
@@ -157,60 +157,58 @@ struct TokenPayload_ClipAccess {
     bool has_mode = false;
 };
 
-struct TokenPayload_PropAccess {
+struct TokenPayloadPropAccess {
     int clip_idx;
     std::string prop_name;
 };
 
-struct TokenPayload_ClipAccessPlane {
+struct TokenPayloadClipAccessPlane {
     int clip_idx;
     int plane_idx;
 };
 
-struct TokenPayload_StoreAbsPlane {
+struct TokenPayloadStoreAbsPlane {
     int plane_idx;
 };
 
 enum class PropWriteType : std::uint8_t {
-    FLOAT,      // $f or $
-    INT,        // $i
-    AUTO_INT,   // $ai
-    AUTO_FLOAT, // $af
-    DELETE,     // $d
+    Float,     // $f or $
+    Int,       // $i
+    AutoInt,   // $ai
+    AutoFloat, // $af
+    Delete,    // $d
 };
 
-struct TokenPayload_PropStore {
+struct TokenPayloadPropStore {
     std::string prop_name;
     PropWriteType type;
 };
 
-struct TokenPayload_PlaneDim {
+struct TokenPayloadPlaneDim {
     int plane_idx;
 };
 
-struct TokenPayload_ClipDim {
+struct TokenPayloadClipDim {
     int clip_idx;
 };
 
-struct TokenPayload_ClipPlaneDim {
+struct TokenPayloadClipPlaneDim {
     int clip_idx;
     int plane_idx;
 };
 
-struct TokenPayload_ArrayOp {
+struct TokenPayloadArrayOp {
     std::string name;
     int static_size = 0; // ARRAY_ALLOC_STATIC
 };
 
 struct Token {
-    using PayloadVariant =
-        std::variant<std::monostate, TokenPayload_Number, TokenPayload_Var,
-                     TokenPayload_Label, TokenPayload_StackOp,
-                     TokenPayload_ClipAccess, TokenPayload_PropAccess,
-                     TokenPayload_ClipAccessPlane, TokenPayload_StoreAbsPlane,
-                     TokenPayload_PropStore, TokenPayload_PlaneDim,
-                     TokenPayload_ClipDim, TokenPayload_ClipPlaneDim,
-                     TokenPayload_ArrayOp>;
+    using PayloadVariant = std::variant<
+        std::monostate, TokenPayloadNumber, TokenPayloadVar, TokenPayloadLabel,
+        TokenPayloadStackOp, TokenPayloadClipAccess, TokenPayloadPropAccess,
+        TokenPayloadClipAccessPlane, TokenPayloadStoreAbsPlane,
+        TokenPayloadPropStore, TokenPayloadPlaneDim, TokenPayloadClipDim,
+        TokenPayloadClipPlaneDim, TokenPayloadArrayOp>;
 
     TokenType type;
     std::string text;
@@ -226,8 +224,8 @@ using DynamicBehaviorFn = TokenBehavior (*)(const Token&);
 using BehaviorResolver = std::variant<TokenBehavior, DynamicBehaviorFn>;
 
 enum class ExprMode : std::uint8_t {
-    EXPR,
-    SINGLE_EXPR,
+    Expr,
+    SingleExpr,
 };
 
 // Utility functions
@@ -251,7 +249,7 @@ struct TokenDefinition {
 };
 
 std::vector<Token> tokenize(const std::string& expr, int num_inputs,
-                            ExprMode mode = ExprMode::EXPR);
+                            ExprMode mode = ExprMode::Expr);
 TokenBehavior get_token_behavior(const Token& token);
 
-#endif // LLVMEXPR_TOKENIZER_HPP
+#endif // LLVMEXPR_FRONTEND_TOKENIZER_HPP

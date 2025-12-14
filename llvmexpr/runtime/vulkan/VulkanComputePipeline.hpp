@@ -1,3 +1,22 @@
+/**
+ * Copyright (C) 2025 yuygfgg
+ * 
+ * This file is part of Vapoursynth-llvmexpr.
+ * 
+ * Vapoursynth-llvmexpr is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ * 
+ * Vapoursynth-llvmexpr is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 #ifndef LLVMEXPR_RUNTIME_VULKAN_VULKANCOMPUTEPIPELINE_HPP
 #define LLVMEXPR_RUNTIME_VULKAN_VULKANCOMPUTEPIPELINE_HPP
 
@@ -26,13 +45,13 @@ class VulkanComputePipeline {
     struct PushConstants {
         uint32_t width;
         uint32_t height;
-        uint32_t numInputs;
-        int32_t frameNumber;
+        uint32_t num_inputs;
+        int32_t frame_number;
     };
 
-    VulkanComputePipeline(VulkanContext& ctx, const std::string& glslSource,
-                          uint32_t numInputBuffers = 1,
-                          uint32_t numPropsFloats = 1);
+    VulkanComputePipeline(VulkanContext& ctx, const std::string& glsl_source,
+                          uint32_t num_input_buffers = 1,
+                          uint32_t num_props_floats = 1);
     ~VulkanComputePipeline();
 
     VulkanComputePipeline(const VulkanComputePipeline&) = delete;
@@ -40,39 +59,39 @@ class VulkanComputePipeline {
     VulkanComputePipeline(VulkanComputePipeline&&) = delete;
     VulkanComputePipeline& operator=(VulkanComputePipeline&&) = delete;
 
-    void dispatch(const std::vector<VulkanBuffer*>& inputBuffers,
-                  VulkanBuffer& outputBuffer, VulkanBuffer* propsBuffer,
-                  uint32_t width, uint32_t height, int32_t frameNumber);
+    void dispatch(const std::vector<VulkanBuffer*>& input_buffers,
+                  VulkanBuffer& output_buffer, VulkanBuffer* props_buffer,
+                  uint32_t width, uint32_t height, int32_t frame_number);
 
   private:
-    void compileShader(const std::string& glslSource);
-    void createDescriptorSetLayout(uint32_t numInputBuffers,
-                                   bool withPropsBuffer);
+    void compileShader(const std::string& glsl_source);
+    void createDescriptorSetLayout(uint32_t num_input_buffers,
+                                   bool with_props_buffer);
     void createPipeline();
     void createCommandResources();
-    void updateDescriptorSets(const std::vector<VulkanBuffer*>& inputBuffers,
-                              VulkanBuffer& outputBuffer,
-                              VulkanBuffer* propsBuffer);
+    void updateDescriptorSets(const std::vector<VulkanBuffer*>& input_buffers,
+                              VulkanBuffer& output_buffer,
+                              VulkanBuffer* props_buffer);
 
     VulkanContext& context;
-    uint32_t numInputs;
-    bool hasPropsBuffer;
+    uint32_t num_inputs;
+    bool has_props_buffer;
 
-    std::vector<VkBuffer> cachedInputBuffers;
-    VkBuffer cachedOutputBuffer = VK_NULL_HANDLE;
-    VkBuffer cachedPropsBuffer = VK_NULL_HANDLE;
+    std::vector<VkBuffer> cached_input_buffers;
+    VkBuffer cached_output_buffer = VK_NULL_HANDLE;
+    VkBuffer cached_props_buffer = VK_NULL_HANDLE;
 
-    std::vector<uint32_t> spirvCode;
-    vk::raii::ShaderModule shaderModule = nullptr;
-    vk::raii::DescriptorSetLayout descriptorSetLayout = nullptr;
-    vk::raii::PipelineLayout pipelineLayout = nullptr;
+    std::vector<uint32_t> spirv_code;
+    vk::raii::ShaderModule shader_module = nullptr;
+    vk::raii::DescriptorSetLayout descriptor_set_layout = nullptr;
+    vk::raii::PipelineLayout pipeline_layout = nullptr;
     vk::raii::Pipeline pipeline = nullptr;
 
-    vk::raii::DescriptorPool descriptorPool = nullptr;
-    vk::raii::DescriptorSet descriptorSet = nullptr;
+    vk::raii::DescriptorPool descriptor_pool = nullptr;
+    vk::raii::DescriptorSet descriptor_set = nullptr;
 
-    vk::raii::CommandPool commandPool = nullptr;
-    vk::raii::CommandBuffer commandBuffer = nullptr;
+    vk::raii::CommandPool command_pool = nullptr;
+    vk::raii::CommandBuffer command_buffer = nullptr;
     vk::raii::Fence fence = nullptr;
 };
 
