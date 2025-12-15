@@ -28,6 +28,8 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 class GLSLGenerator {
@@ -63,6 +65,39 @@ class GLSLGenerator {
 
     // Block -> entry stack variable names (for merge points)
     std::map<int, std::vector<std::string>> block_entry_stack;
+
+    struct CanKey {
+        int start_block = -1;
+        int stop_block = -1;
+        std::vector<int> header_stack;
+
+        bool operator==(const CanKey&) const = default;
+    };
+
+    struct CanKeyHash {
+        [[nodiscard]] size_t operator()(const CanKey& key) const noexcept {
+            // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
+            constexpr size_t HASH_MAGIC = 0x9e3779b97f4a7c15ULL;
+            auto hash_combine = [](size_t seed, size_t v) -> size_t {
+                return seed ^ (v + HASH_MAGIC + (seed << 6) + (seed >> 2));
+            };
+            // NOLINTEND(cppcoreguidelines-avoid-magic-numbers)
+
+            size_t h = 0;
+            h = hash_combine(h, std::hash<int>{}(key.start_block));
+            h = hash_combine(h, std::hash<int>{}(key.stop_block));
+            h = hash_combine(h, std::hash<size_t>{}(key.header_stack.size()));
+            for (int x : key.header_stack) {
+                h = hash_combine(h, std::hash<int>{}(x));
+            }
+            return h;
+        }
+    };
+
+    mutable std::unordered_map<CanKey, bool, CanKeyHash> can_structure_cache;
+    mutable std::unordered_set<CanKey, CanKeyHash> can_structure_in_progress;
+    mutable std::unordered_map<CanKey, bool, CanKeyHash> can_edge_cache;
+    mutable std::unordered_set<CanKey, CanKeyHash> can_edge_in_progress;
 
 #ifndef NDEBUG
     bool debug_structurize_cfg = false;

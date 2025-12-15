@@ -248,24 +248,24 @@ def test_stack_manipulation(backend: str) -> None:
     assert res_sort.get_frame(0)[0][0, 0] == pytest.approx(3.0)
 
 
-# _LARGE_SORT_TEST_DATA = []
-# _rng = random.Random(42)
-# for n in list(range(1, 65)) + [137, 279]:
-#     numbers = [_rng.uniform(-1000, 1000) for _ in range(n)]
-#     _LARGE_SORT_TEST_DATA.append((n, numbers))
+_LARGE_SORT_TEST_DATA = []
+_rng = random.Random(42)
+for n in list(range(1, 65)) + [137, 279]:
+    numbers = [_rng.uniform(-1000, 1000) for _ in range(n)]
+    _LARGE_SORT_TEST_DATA.append((n, numbers))
 
 
-# @pytest.mark.parametrize("n, numbers", _LARGE_SORT_TEST_DATA)
-# def test_large_sort(backend: str, n: int, numbers: list[float]) -> None:
-#     expr_func = get_expr_func(backend)
-#     c0 = core.std.BlankClip(format=vs.GRAYS, color=0.0)
-#     expr = " ".join(map(str, numbers)) + f" sort{n}"
+@pytest.mark.parametrize("n, numbers", _LARGE_SORT_TEST_DATA)
+def test_large_sort(backend: str, n: int, numbers: list[float]) -> None:
+    expr_func = get_expr_func(backend)
+    c0 = core.std.BlankClip(format=vs.GRAYS, color=0.0)
+    expr = " ".join(map(str, numbers)) + f" sort{n}"
 
-#     for i in range(n):
-#         full_expr = expr + f" drop{n - i - 1} a! drop{i} a@"
-#         res = expr_func(c0, full_expr, vs.GRAYS)
-#         val = res.get_frame(0)[0][0, 0]
-#         assert val == pytest.approx(sorted(numbers)[n - 1 - i])
+    for i in range(n):
+        full_expr = expr + f" drop{n - i - 1} a! drop{i} a@"
+        res = expr_func(c0, full_expr, vs.GRAYS)
+        val = res.get_frame(0)[0][0, 0]
+        assert val == pytest.approx(sorted(numbers)[n - 1 - i])
 
 
 def test_named_variables_and_loop_power(backend: str) -> None:
@@ -518,7 +518,9 @@ def test_subsampled_plane_access(
 
 
 def test_array_static_allocation_basic(backend: str) -> None:
-    """Test basic static array allocation and access."""
+    """
+    Test basic static array allocation and access.
+    """
     expr_func = get_expr_func(backend)
     clip = core.std.BlankClip(format=vs.GRAYS, width=10, height=10, color=0)
     expr = "buffer{}^10 42.0 5 buffer{}! 5 buffer{}@"
@@ -527,7 +529,9 @@ def test_array_static_allocation_basic(backend: str) -> None:
 
 
 def test_array_write_and_read_multiple(backend: str) -> None:
-    """Test writing and reading multiple values to/from array."""
+    """
+    Test writing and reading multiple values to/from array.
+    """
     expr_func = get_expr_func(backend)
     clip = core.std.BlankClip(format=vs.GRAYS, width=10, height=10, color=0)
     expr = """
@@ -542,7 +546,9 @@ def test_array_write_and_read_multiple(backend: str) -> None:
 
 
 def test_array_lookup_table(backend: str) -> None:
-    """Test using array as a lookup table."""
+    """
+    Test using array as a lookup table.
+    """
     expr_func = get_expr_func(backend)
     clip = core.std.BlankClip(format=vs.GRAYS, width=10, height=10, color=2.0)
     # Create a lookup table with powers of 2
@@ -560,7 +566,9 @@ def test_array_lookup_table(backend: str) -> None:
 
 
 def test_array_with_variables(backend: str) -> None:
-    """Test array operations combined with variables."""
+    """
+    Test array operations combined with variables.
+    """
     expr_func = get_expr_func(backend)
     clip = core.std.BlankClip(format=vs.GRAYS, width=10, height=10, color=3.0)
     expr = """
@@ -579,7 +587,9 @@ def test_array_with_variables(backend: str) -> None:
 
 
 def test_array_boundary_access(backend: str) -> None:
-    """Test accessing first and last elements of array."""
+    """
+    Test accessing first and last elements of array.
+    """
     expr_func = get_expr_func(backend)
     clip = core.std.BlankClip(format=vs.GRAYS, width=10, height=10, color=0)
     expr = """
@@ -595,7 +605,9 @@ def test_array_boundary_access(backend: str) -> None:
 
 
 def test_array_float_index_truncation(backend: str) -> None:
-    """Test that float indices are properly converted to integers."""
+    """
+    Test that float indices are properly converted to integers.
+    """
     expr_func = get_expr_func(backend)
     clip = core.std.BlankClip(format=vs.GRAYS, width=10, height=10, color=0)
     # Use float index 2.7, should truncate to 2
@@ -612,7 +624,9 @@ def test_array_float_index_truncation(backend: str) -> None:
 
 
 def test_array_multiple_arrays(backend: str) -> None:
-    """Test using multiple independent arrays."""
+    """
+    Test using multiple independent arrays.
+    """
     expr_func = get_expr_func(backend)
     clip = core.std.BlankClip(format=vs.GRAYS, width=10, height=10, color=0)
     expr = """
@@ -629,7 +643,9 @@ def test_array_multiple_arrays(backend: str) -> None:
 
 
 def test_array_dynamic_allocation_error(backend: str) -> None:
-    """Test that dynamic array allocation fails in Expr mode."""
+    """
+    Test that dynamic array allocation fails in Expr mode.
+    """
     expr_func = get_expr_func(backend)
     clip = core.std.BlankClip(format=vs.GRAYS, width=10, height=10, color=0)
     with pytest.raises(
@@ -639,7 +655,9 @@ def test_array_dynamic_allocation_error(backend: str) -> None:
 
 
 def test_array_uninitialized_error(backend: str) -> None:
-    """Test that using uninitialized array raises an error."""
+    """
+    Test that using uninitialized array raises an error.
+    """
     expr_func = get_expr_func(backend)
     clip = core.std.BlankClip(format=vs.GRAYS, width=10, height=10, color=0)
     with pytest.raises(vs.Error, match="Array is uninitialized"):
@@ -648,7 +666,9 @@ def test_array_uninitialized_error(backend: str) -> None:
 
 @pytest.mark.parametrize("expr", ["x:width", "y:height", "src0:width^0", "z:height^1"])
 def test_clip_dim_tokens_disabled_in_expr(backend: str, expr: str) -> None:
-    """Test that clip dimension tokens are disabled in Expr mode."""
+    """
+    Test that clip dimension tokens are disabled in Expr mode.
+    """
     expr_func = get_expr_func(backend)
     clip1 = core.std.BlankClip()
     clip2 = core.std.BlankClip()
@@ -669,7 +689,8 @@ def test_clip_dim_tokens_disabled_in_expr(backend: str, expr: str) -> None:
 def test_control_flow_simple_if_else(
     backend: str, input_value: float, expected: float
 ) -> None:
-    """Test simple if-else control flow.
+    """
+    Test simple if-else control flow.
 
     Infix equivalent:
         val = 0.0
@@ -695,7 +716,8 @@ def test_control_flow_simple_if_else(
 def test_control_flow_nested_if_else(
     backend: str, input_value: float, expected: float
 ) -> None:
-    """Test nested if-else control flow.
+    """
+    Test nested if-else control flow.
 
     Infix equivalent:
         val = 0.0
@@ -727,7 +749,8 @@ def test_control_flow_nested_if_else(
 def test_control_flow_deeply_nested_if_else(
     backend: str, input_value: float, expected: float
 ) -> None:
-    """Test deeply nested if-else (3 levels).
+    """
+    Test deeply nested if-else (3 levels).
 
     Infix equivalent:
         val = 0.0
@@ -785,7 +808,8 @@ def test_control_flow_deeply_nested_if_else(
 def test_control_flow_while_loop_fibonacci(
     backend: str, input_value: float, expected: float
 ) -> None:
-    """Test while loop that computes Fibonacci number.
+    """
+    Test while loop that computes Fibonacci number.
 
     Infix equivalent:
         n = $x
@@ -833,7 +857,8 @@ def test_control_flow_while_loop_fibonacci(
 
 
 def test_control_flow_goto_simple(backend: str) -> None:
-    """Test simple goto with forward jump.
+    """
+    Test simple goto with forward jump.
 
     This tests unconditional forward jumps.
     """
@@ -853,7 +878,8 @@ def test_control_flow_goto_simple(backend: str) -> None:
 
 
 def test_control_flow_goto_backward_loop(backend: str) -> None:
-    """Test goto with backward jump (manual loop).
+    """
+    Test goto with backward jump (manual loop).
 
     Count down from 5 to 0, incrementing result each iteration.
     """
@@ -885,7 +911,8 @@ def test_control_flow_goto_backward_loop(backend: str) -> None:
 def test_control_flow_irreducible_double_entry(
     backend: str, input_value: float, expected: float
 ) -> None:
-    """Test irreducible control flow with multiple entry points into a loop.
+    """
+    Test irreducible control flow with multiple entry points into a loop.
 
     This creates a CFG where a loop can be entered from two different paths,
     which is the hallmark of an irreducible CFG.
@@ -920,7 +947,8 @@ def test_control_flow_irreducible_double_entry(
 
 
 def test_control_flow_irreducible_cross_jumping(backend: str) -> None:
-    """Test irreducible control flow with cross-jumping between blocks.
+    """
+    Test irreducible control flow with cross-jumping between blocks.
 
     This creates an irreducible CFG where control flow jumps between
     two blocks that are not in a simple loop relationship.
@@ -949,7 +977,8 @@ def test_control_flow_irreducible_cross_jumping(backend: str) -> None:
 
 
 def test_control_flow_irreducible_three_way(backend: str) -> None:
-    """Test irreducible control flow with three-way branching and cross-jumps.
+    """
+    Test irreducible control flow with three-way branching and cross-jumps.
 
     Creates a more complex irreducible CFG with three blocks that can
     transition to each other in a non-hierarchical way.
@@ -984,7 +1013,8 @@ def test_control_flow_irreducible_three_way(backend: str) -> None:
 
 
 def test_control_flow_mixed_if_goto(backend: str) -> None:
-    """Test mixing if-else blocks with goto statements.
+    """
+    Test mixing if-else blocks with goto statements.
 
     This tests the interaction between structured control flow (if-else)
     and unstructured control flow (goto).
@@ -1012,7 +1042,8 @@ def test_control_flow_mixed_if_goto(backend: str) -> None:
 
 
 def test_control_flow_complex_state_machine(backend: str) -> None:
-    """Test complex state machine with 4 states and conditional transitions.
+    """
+    Test complex state machine with 4 states and conditional transitions.
 
     States: IDLE(0) -> RUNNING(1) -> PAUSED(2) -> STOPPED(3)
     Each state modifies result and transitions based on counter.
@@ -1063,3 +1094,14 @@ def test_control_flow_complex_state_machine(backend: str) -> None:
         """
     res = expr_func(c, expr, vs.GRAYS)
     assert res.get_frame(0)[0][0, 0] == pytest.approx(1223.0)
+
+def test_control_flow_fail_to_reduce(backend: str) -> None:
+    """
+    Test GLSL codegen the CFG is unable to transform.
+    """
+    expr_func = get_expr_func(backend)
+    c = core.std.BlankClip(format=vs.GRAYS, color=0.0)
+    expr = "0 __internal_func_test_0_iter! 100 __internal_func_test_0_max_iter! 0.0 __internal_func_test_0_cond_val! 1 __internal_test_0_L0_A# #__internal_test_0_L0_A __internal_func_test_0_iter@ __internal_func_test_0_max_iter@ >= 0 = __internal_else_0# 100.0 __internal_ret_test_0! 1 __internal_ret_label_test_0# #__internal_else_0 __internal_func_test_0_iter@ 1 + __internal_func_test_0_iter! __internal_func_test_0_iter@ sin __internal_func_test_0_cond_val! __internal_func_test_0_cond_val@ 0 > 0 = __internal_else_2# 1 __internal_test_0_L1_A# 1 __internal_endif_3# #__internal_else_2 1 __internal_test_0_L1_B# #__internal_endif_3 #__internal_test_0_L0_B __internal_func_test_0_iter@ __internal_func_test_0_max_iter@ >= 0 = __internal_else_4# 200.0 __internal_ret_test_0! 1 __internal_ret_label_test_0# #__internal_else_4 __internal_func_test_0_iter@ 1 + __internal_func_test_0_iter! __internal_func_test_0_iter@ cos __internal_func_test_0_cond_val! __internal_func_test_0_cond_val@ 0 > 0 = __internal_else_6# 1 __internal_test_0_L1_A# 1 __internal_endif_7# #__internal_else_6 1 __internal_test_0_L1_B# #__internal_endif_7 #__internal_test_0_L1_A __internal_func_test_0_iter@ tan __internal_func_test_0_cond_val! __internal_func_test_0_cond_val@ 0 > 0 = __internal_else_8# 1 __internal_test_0_L2_A# 1 __internal_endif_9# #__internal_else_8 1 __internal_test_0_L2_B# #__internal_endif_9 #__internal_test_0_L1_B __internal_func_test_0_iter@ 0.5 * sin __internal_func_test_0_cond_val! __internal_func_test_0_cond_val@ 0 > 0 = __internal_else_10# 1 __internal_test_0_L2_A# 1 __internal_endif_11# #__internal_else_10 1 __internal_test_0_L2_B# #__internal_endif_11 #__internal_test_0_L2_A __internal_func_test_0_iter@ 0.5 * cos __internal_func_test_0_cond_val! __internal_func_test_0_cond_val@ 0 > 0 = __internal_else_12# 1 __internal_test_0_L0_A# 1 __internal_endif_13# #__internal_else_12 1 __internal_test_0_L0_B# #__internal_endif_13 #__internal_test_0_L2_B __internal_func_test_0_iter@ 0.2 * sin __internal_func_test_0_cond_val! __internal_func_test_0_cond_val@ 0 > 0 = __internal_else_14# 1 __internal_test_0_L0_A# 1 __internal_endif_15# #__internal_else_14 1 __internal_test_0_L0_B# #__internal_endif_15 -1.0 __internal_ret_test_0! 1 __internal_ret_label_test_0# #__internal_ret_label_test_0 __internal_ret_test_0@ RESULT! RESULT@"
+    res = expr_func(c, expr, vs.GRAYS)
+    assert res.get_frame(0)[0][0, 0] == pytest.approx(100)
+    

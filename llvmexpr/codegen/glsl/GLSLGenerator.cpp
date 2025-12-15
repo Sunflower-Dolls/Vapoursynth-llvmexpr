@@ -529,52 +529,87 @@ bool GLSLGenerator::isLoopHeaderActive(int header,
 
 bool GLSLGenerator::canEdgeToBlock(int target_block, int stop_block,
                                    LoopContext& loop_ctx) const {
-    const auto& structurize = analysis.getStructurizeCFGResult();
-    int current_header =
-        loop_ctx.header_stack.empty() ? -1 : loop_ctx.header_stack.back();
-
-    if (target_block == stop_block) {
-        if (current_header == -1) {
-            return true;
-        }
-        int follow = -1;
-        auto it = structurize.loop_follow.find(current_header);
-        if (it != structurize.loop_follow.end()) {
-            follow = it->second;
-        }
-        if (stop_block == follow) {
-            return true;
-        }
-        if (structurize.inLoop(current_header, stop_block)) {
-            return true;
-        }
-        // Leaving to an outer follow via break-flag lowering.
-        return findEnclosingLoopForFollow(stop_block, loop_ctx).has_value();
+    CanKey key{.start_block = target_block,
+               .stop_block = stop_block,
+               .header_stack = loop_ctx.header_stack};
+    if (auto it = can_edge_cache.find(key); it != can_edge_cache.end()) {
+        return it->second;
     }
-
-    if (current_header != -1) {
-        int follow = -1;
-        auto it = structurize.loop_follow.find(current_header);
-        if (it != structurize.loop_follow.end()) {
-            follow = it->second;
-        }
-        if (target_block == current_header) {
-            return true; // continue
-        }
-        if (target_block == follow) {
-            return true; // break
-        }
-        if (!structurize.inLoop(current_header, target_block)) {
-            // Multi-level break to an outer loop follow.
-            return findEnclosingLoopForFollow(target_block, loop_ctx)
-                .has_value();
-        }
+    if (can_edge_in_progress.contains(key)) {
+        return false;
     }
-    return canStructureFrom(target_block, stop_block, loop_ctx);
+    can_edge_in_progress.insert(key);
+
+    auto finish = [&](bool ok) -> bool {
+        can_edge_in_progress.erase(key);
+        can_edge_cache.emplace(std::move(key), ok);
+        return ok;
+    };
+
+    try {
+        const auto& structurize = analysis.getStructurizeCFGResult();
+        int current_header =
+            loop_ctx.header_stack.empty() ? -1 : loop_ctx.header_stack.back();
+
+        if (target_block == stop_block) {
+            if (current_header == -1) {
+                return finish(true);
+            }
+            int follow = -1;
+            auto it = structurize.loop_follow.find(current_header);
+            if (it != structurize.loop_follow.end()) {
+                follow = it->second;
+            }
+            if (stop_block == follow) {
+                return finish(true);
+            }
+            if (structurize.inLoop(current_header, stop_block)) {
+                return finish(true);
+            }
+            // Leaving to an outer follow via break-flag lowering.
+            return finish(
+                findEnclosingLoopForFollow(stop_block, loop_ctx).has_value());
+        }
+
+        if (current_header != -1) {
+            int follow = -1;
+            auto it = structurize.loop_follow.find(current_header);
+            if (it != structurize.loop_follow.end()) {
+                follow = it->second;
+            }
+            if (target_block == current_header) {
+                return finish(true); // continue
+            }
+            if (target_block == follow) {
+                return finish(true); // break
+            }
+            if (!structurize.inLoop(current_header, target_block)) {
+                // Multi-level break to an outer loop follow.
+                return finish(findEnclosingLoopForFollow(target_block, loop_ctx)
+                                  .has_value());
+            }
+        }
+        return finish(canStructureFrom(target_block, stop_block, loop_ctx));
+    } catch (...) {
+        can_edge_in_progress.erase(key);
+        throw;
+    }
 }
 
 bool GLSLGenerator::canStructureFrom(int start_block, int stop_block,
                                      LoopContext& loop_ctx) const {
+    CanKey key{.start_block = start_block,
+               .stop_block = stop_block,
+               .header_stack = loop_ctx.header_stack};
+    if (auto it = can_structure_cache.find(key);
+        it != can_structure_cache.end()) {
+        return it->second;
+    }
+    if (can_structure_in_progress.contains(key)) {
+        return false;
+    }
+    can_structure_in_progress.insert(key);
+
     struct Visitor {
         const GLSLGenerator* gen;
 
@@ -612,7 +647,15 @@ bool GLSLGenerator::canStructureFrom(int start_block, int stop_block,
         [[nodiscard]] bool handleLoopBreak(int /*join*/) const { return true; }
     } visitor{this};
 
-    return traverseStructure(start_block, stop_block, loop_ctx, visitor);
+    try {
+        bool ok = traverseStructure(start_block, stop_block, loop_ctx, visitor);
+        can_structure_in_progress.erase(key);
+        can_structure_cache.emplace(std::move(key), ok);
+        return ok;
+    } catch (...) {
+        can_structure_in_progress.erase(key);
+        throw;
+    }
 }
 
 int GLSLGenerator::lcaPostdom(int a, int b,
