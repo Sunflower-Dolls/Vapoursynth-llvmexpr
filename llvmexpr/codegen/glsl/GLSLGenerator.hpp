@@ -86,7 +86,8 @@ class GLSLGenerator {
     void emitMainFunctionStateMachine();
     void emitMainFunctionStructured();
     void emitBlockCode(int block_idx);
-    void emitStoreAndReturn(const std::string& result_expr);
+    void emitSetResultAndExit(const std::string& result_expr);
+    void emitResultEpilogueStore();
 
     struct LoopContext {
         std::vector<int> header_stack;
@@ -102,6 +103,8 @@ class GLSLGenerator {
     findEnclosingLoopForFollow(int target_block,
                                const LoopContext& loop_ctx) const;
     void emitUnwindBreakIfNeeded(const LoopContext& loop_ctx);
+
+    bool structured_exit_enabled = false;
 
     template <typename Visitor>
     bool traverseStructure(int start_block, int stop_block,

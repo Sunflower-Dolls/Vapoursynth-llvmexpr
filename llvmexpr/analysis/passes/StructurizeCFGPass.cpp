@@ -366,6 +366,10 @@ bool tail_duplicate_trivial_joins(std::vector<CFGBlock>& cfg,
         if (cyclic[(size_t)c] != 0) {
             continue;
         }
+        // Do not duplicate terminal blocks.
+        if (cfg[(size_t)c].successors.empty()) {
+            continue;
+        }
         if (cfg[(size_t)c].successors.size() > 1) {
             continue;
         }

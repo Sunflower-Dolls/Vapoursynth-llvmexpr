@@ -153,11 +153,10 @@ GLSLGenerator::findEnclosingLoopForFollow(int target_block,
 }
 
 void GLSLGenerator::emitUnwindBreakIfNeeded(const LoopContext& loop_ctx) {
-    if (loop_ctx.header_stack.empty()) {
-        return;
-    }
-
     std::string cond;
+    if (structured_exit_enabled) {
+        cond = "_llvmexpr_exit";
+    }
     for (int header : loop_ctx.header_stack) {
         auto it = loop_break_flags.find(header);
         if (it == loop_break_flags.end()) {
@@ -508,8 +507,13 @@ void GLSLGenerator::emitMainFunctionStateMachine() {
     emitLine("}");
 }
 
-void GLSLGenerator::emitStoreAndReturn(const std::string& result_expr) {
-    emitLine(std::format("float _result = {};", result_expr));
+void GLSLGenerator::emitSetResultAndExit(const std::string& result_expr) {
+    emitLine(std::format("_result = {};", result_expr));
+    emitLine("_llvmexpr_exit = true;");
+    emitLine("break;");
+}
+
+void GLSLGenerator::emitResultEpilogueStore() {
     emitLine("if (floatBitsToUint(_result) != 0x7FC0E71Fu) {");
     indent();
     emitLine("dst.data[gid] = _result;");
@@ -738,7 +742,7 @@ void GLSLGenerator::emitStructuredFrom(int start_block, int stop_block,
         }
         [[nodiscard]] bool handleNoSuccessors(int /*block*/) const {
             std::string result_expr = gen->stack.empty() ? "0.0" : gen->pop();
-            gen->emitStoreAndReturn(result_expr);
+            gen->emitSetResultAndExit(result_expr);
             return true;
         }
         [[nodiscard]] bool handleLoopExitOrContinue(int /*block*/, int next,
@@ -838,7 +842,25 @@ void GLSLGenerator::emitMainFunctionStructured() {
 
     loop_ctx = {};
     bool emit_ok = true;
+    emitLine("{");
+    indent();
+
+    emitLine("float _result = 0.0;");
+    emitLine("bool _llvmexpr_exit = false;");
+    emitLine("do {");
+    indent();
+
+    structured_exit_enabled = true;
     emitStructuredFrom(0, -1, loop_ctx, emit_ok);
+    structured_exit_enabled = false;
+
+    dedent();
+    emitLine("} while (false);");
+    emitNewline();
+    emitResultEpilogueStore();
+
+    dedent();
+    emitLine("}");
 
     // Should be unreachable
     // Fallback: structuring unexpectedly failed at emit time"
