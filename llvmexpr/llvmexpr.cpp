@@ -1302,7 +1302,15 @@ void VS_CC // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 vkExprFree(void* instanceData, [[maybe_unused]] VSCore* core,
            const VSAPI* vsapi) {
     // NOLINTEND(readability-identifier-naming)
-    std::unique_ptr<VkExprData> d(static_cast<VkExprData*>(instanceData));
+    auto* raw = static_cast<VkExprData*>(instanceData);
+    if (raw->semaphore != nullptr) {
+        for (int i = 0; i < raw->num_streams; ++i) {
+            raw->semaphore->acquire();
+        }
+        raw->streams.clear();
+    }
+
+    std::unique_ptr<VkExprData> d(raw);
     for (auto* node : d->nodes) {
         vsapi->freeNode(node);
     }

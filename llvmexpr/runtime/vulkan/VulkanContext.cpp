@@ -20,6 +20,9 @@
 #include "VulkanContext.hpp"
 #include <algorithm>
 #include <cstring>
+#ifdef _WIN32
+#include <memory>
+#endif
 #ifndef NDEBUG
 #include <iostream>
 #endif
@@ -37,8 +40,19 @@ VulkanContext& VulkanContext::getInstance() {
         throw std::runtime_error("Failed to initialize volk");
     }
 
+#ifdef _WIN32
+    struct NoDestroy {
+        void operator()(VulkanContext* /*unused*/) const noexcept {}
+    };
+    static auto instance = []() {
+        auto owned = std::make_unique<VulkanContext>();
+        return std::unique_ptr<VulkanContext, NoDestroy>(owned.release());
+    }();
+    return *instance;
+#else
     static VulkanContext instance;
     return instance;
+#endif
 }
 
 VulkanContext::VulkanContext() : instance(nullptr) {
@@ -51,7 +65,12 @@ VulkanContext::VulkanContext() : instance(nullptr) {
     createDevice();
 }
 
-VulkanContext::~VulkanContext() = default;
+VulkanContext::~VulkanContext() {
+    try {
+        waitIdle();
+    } catch (...) {
+    }
+}
 
 void VulkanContext::createInstance() {
     vk::ApplicationInfo app_info("Vapoursynth-llvmexpr", 1, "No Engine", 1,
@@ -177,6 +196,14 @@ void VulkanContext::submit(const vk::SubmitInfo& submit_info,
                            const vk::Fence& fence) {
     std::lock_guard<std::mutex> lock(queue_mutex);
     compute_queue.submit(submit_info, fence);
+}
+
+void VulkanContext::waitIdle() {
+    if (!*device) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(queue_mutex);
+    device.waitIdle();
 }
 
 } // namespace llvmexpr

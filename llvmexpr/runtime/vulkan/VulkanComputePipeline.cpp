@@ -21,6 +21,7 @@
 #include "VulkanContext.hpp"
 #include "VulkanMemory.hpp"
 
+#include <memory>
 #include <mutex>
 #include <shaderc/shaderc.hpp>
 #include <stdexcept>
@@ -31,11 +32,27 @@ namespace llvmexpr {
 namespace {
 constexpr uint32_t WORKGROUP_SIZE = 256;
 
-// Key: GLSL source code, Value: SPIR-V binary
-std::unordered_map<std::string, std::vector<uint32_t>>
-    g_shader_cache; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-std::mutex
-    g_shader_cache_mutex; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+template <typename T> struct NoDestroyDeleter {
+    void operator()(T* /*unused*/) const noexcept {}
+};
+
+std::unordered_map<std::string, std::vector<uint32_t>>& shader_cache() {
+    using Cache = std::unordered_map<std::string, std::vector<uint32_t>>;
+    static auto cache = []() {
+        auto owned = std::make_unique<Cache>();
+        return std::unique_ptr<Cache, NoDestroyDeleter<Cache>>(owned.release());
+    }();
+    return *cache;
+}
+
+std::mutex& shader_cache_mutex() {
+    static auto mutex = []() {
+        auto owned = std::make_unique<std::mutex>();
+        return std::unique_ptr<std::mutex, NoDestroyDeleter<std::mutex>>(
+            owned.release());
+    }();
+    return *mutex;
+}
 
 } // namespace
 
@@ -54,10 +71,11 @@ VulkanComputePipeline::VulkanComputePipeline(VulkanContext& ctx,
 VulkanComputePipeline::~VulkanComputePipeline() = default;
 
 void VulkanComputePipeline::compileShader(const std::string& glsl_source) {
-    std::lock_guard<std::mutex> lock(g_shader_cache_mutex);
+    std::lock_guard<std::mutex> lock(shader_cache_mutex());
 
-    if (g_shader_cache.contains(glsl_source)) {
-        spirv_code = g_shader_cache[glsl_source];
+    auto& cache = shader_cache();
+    if (cache.contains(glsl_source)) {
+        spirv_code = cache[glsl_source];
     } else {
         shaderc::Compiler compiler;
         shaderc::CompileOptions options;
@@ -77,7 +95,7 @@ void VulkanComputePipeline::compileShader(const std::string& glsl_source) {
         }
 
         spirv_code = {result.cbegin(), result.cend()};
-        g_shader_cache[glsl_source] = spirv_code;
+        cache[glsl_source] = spirv_code;
     }
 
     vk::ShaderModuleCreateInfo module_info;

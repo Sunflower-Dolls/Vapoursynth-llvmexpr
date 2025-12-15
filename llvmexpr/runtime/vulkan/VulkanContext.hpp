@@ -55,6 +55,7 @@ class VulkanContext {
     }
 
     void submit(const vk::SubmitInfo& submit_info, const vk::Fence& fence);
+    void waitIdle();
 
   private:
     void createInstance();
