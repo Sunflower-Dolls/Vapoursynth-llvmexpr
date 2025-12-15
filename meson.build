@@ -152,7 +152,7 @@ if not vulkan_headers_dep.found()
   endif
 endif
 
-volk_dep = dependency('volk', fallback: ['volk', 'volk_dep'])
+volk_dep = dependency('volk', fallback: ['volk', 'volk_dep'], static: true)
 
 vma_dep = dependency(
   'vulkan-memory-allocator',
