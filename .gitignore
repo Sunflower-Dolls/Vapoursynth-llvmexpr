@@ -32,6 +32,7 @@ subprojects/vulkan-memory-allocator/
 *.vos
 Todo/
 *.glsl
+*.comp
 tmp2.py
 AGENTS.md
 tmp3.py
