@@ -60,7 +60,16 @@ void VulkanContext::createInstance() {
     std::vector<const char*> layers;
 // Enable validation layers in debug if needed
 #ifndef NDEBUG
-    layers.push_back("VK_LAYER_KHRONOS_validation");
+    std::vector<vk::LayerProperties> available_layers =
+        context.enumerateInstanceLayerProperties();
+    auto has_layer = [&](const char* name) {
+        return std::ranges::any_of(available_layers, [&](const auto& layer) {
+            return strcmp(layer.layerName, name) == 0;
+        });
+    };
+    if (has_layer("VK_LAYER_KHRONOS_validation")) {
+        layers.push_back("VK_LAYER_KHRONOS_validation");
+    }
 #endif
 
     std::vector<const char*> extensions;
