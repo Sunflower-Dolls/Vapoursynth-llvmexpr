@@ -66,12 +66,12 @@ OrcJit::OrcJit(bool no_nans_fp_math) {
         jtmb.addFeatures(features);
     }
 
-    llvm::TargetOptions Opts;
-    Opts.AllowFPOpFusion = llvm::FPOpFusion::Fast;
-    Opts.UnsafeFPMath = true;
-    Opts.NoInfsFPMath = true;
-    Opts.NoNaNsFPMath = no_nans_fp_math;
-    jtmb.setOptions(Opts);
+    llvm::TargetOptions opts;
+    opts.AllowFPOpFusion = llvm::FPOpFusion::Fast;
+    opts.UnsafeFPMath = true;
+    opts.NoInfsFPMath = true;
+    opts.NoNaNsFPMath = no_nans_fp_math;
+    jtmb.setOptions(opts);
 
     auto jit_builder = llvm::orc::LLJITBuilder();
     jit_builder.setJITTargetMachineBuilder(std::move(jtmb));
@@ -114,12 +114,12 @@ const llvm::Triple& OrcJit::getTargetTriple() const {
     return lljit->getTargetTriple();
 }
 
-void OrcJit::addModule(std::unique_ptr<llvm::Module> M,
-                       std::unique_ptr<llvm::LLVMContext> Ctx) {
+void OrcJit::addModule(std::unique_ptr<llvm::Module> m,
+                       std::unique_ptr<llvm::LLVMContext> ctx) {
     std::vector<llvm::Function*> functions_to_remove;
-    for (auto& F : *M) {
-        if (!F.isDeclaration()) {
-            std::string func_name = F.getName().str();
+    for (auto& f : *m) {
+        if (!f.isDeclaration()) {
+            std::string func_name = f.getName().str();
 
             if (!func_name.starts_with("process_plane_")) {
                 if (func_name.starts_with("fast_") ||
@@ -131,7 +131,7 @@ void OrcJit::addModule(std::unique_ptr<llvm::Module> M,
                     auto test_sym = lljit->lookup(func_name);
                     if (test_sym) {
                         // Symbol already exists, mark for removal
-                        functions_to_remove.push_back(&F);
+                        functions_to_remove.push_back(&f);
                         continue;
                     }
                     // If test lookup failed, the symbol doesn't exist, so we can add it
@@ -142,15 +142,15 @@ void OrcJit::addModule(std::unique_ptr<llvm::Module> M,
     }
 
     // Remove duplicate functions from the module
-    for (auto* F : functions_to_remove) {
-        F->eraseFromParent();
+    for (auto* f : functions_to_remove) {
+        f->eraseFromParent();
     }
 
-    auto TSM = llvm::orc::ThreadSafeModule(std::move(M), std::move(Ctx));
-    auto Err = lljit->addIRModule(std::move(TSM));
-    if (Err) {
+    auto tsm = llvm::orc::ThreadSafeModule(std::move(m), std::move(ctx));
+    auto err = lljit->addIRModule(std::move(tsm));
+    if (err) {
         llvm::errs() << "Failed to add IR module: "
-                     << llvm::toString(std::move(Err)) << "\n";
+                     << llvm::toString(std::move(err)) << "\n";
         throw std::runtime_error("Failed to add IR module to JIT");
     }
 }
