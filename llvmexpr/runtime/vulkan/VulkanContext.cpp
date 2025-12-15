@@ -18,6 +18,11 @@
  */
 
 #include "VulkanContext.hpp"
+#include <algorithm>
+#include <cstring>
+#ifndef NDEBUG
+#include <iostream>
+#endif
 #include <vector>
 #include <volk.h>
 
@@ -59,14 +64,28 @@ void VulkanContext::createInstance() {
 #endif
 
     std::vector<const char*> extensions;
-    // macOS requires portability enumeration
-    extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
-    extensions.push_back(
-        VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+    vk::InstanceCreateFlags flags;
 
-    vk::InstanceCreateInfo create_info(
-        vk::InstanceCreateFlagBits::eEnumeratePortabilityKHR, &app_info, layers,
-        extensions);
+    // Check available instance extensions
+    std::vector<vk::ExtensionProperties> instance_extensions =
+        context.enumerateInstanceExtensionProperties();
+
+    auto has_extension = [&](const char* name) {
+        return std::ranges::any_of(instance_extensions, [&](const auto& ext) {
+            return strcmp(ext.extensionName, name) == 0;
+        });
+    };
+
+    if (has_extension(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME)) {
+        extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+        flags |= vk::InstanceCreateFlagBits::eEnumeratePortabilityKHR;
+    }
+    if (has_extension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME)) {
+        extensions.push_back(
+            VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+    }
+
+    vk::InstanceCreateInfo create_info(flags, &app_info, layers, extensions);
 
     try {
         instance = vk::raii::Instance(context, create_info);
@@ -83,10 +102,14 @@ void VulkanContext::pickPhysicalDevice() {
     }
 
     // TODO: Finish device selection
-    // std::cout << "Available Physical Devices:" << '\n';
+#ifndef NDEBUG
+    std::cout << "Available Physical Devices:" << '\n';
+#endif
     for (const auto& dev : devices) {
-        // auto props = dev.getProperties();
-        // std::cout << "  - " << props.deviceName << '\n';
+#ifndef NDEBUG
+        auto props = dev.getProperties();
+        std::cout << "  - " << props.deviceName << '\n';
+#endif
 
         // Check for compute queue
         auto queue_families = dev.getQueueFamilyProperties();
@@ -100,7 +123,9 @@ void VulkanContext::pickPhysicalDevice() {
             i++;
         }
         if (*physical_device) {
-            // std::cout << "    Selected Device: " << props.deviceName << '\n';
+#ifndef NDEBUG
+            std::cout << "    Selected Device: " << props.deviceName << '\n';
+#endif
             break;
         }
     }
@@ -117,8 +142,15 @@ void VulkanContext::createDevice() {
                                                 &queue_priority);
 
     std::vector<const char*> device_extensions;
-    // macOS MoltenVK compatibility
-    device_extensions.push_back("VK_KHR_portability_subset");
+
+    std::vector<vk::ExtensionProperties> available_extensions =
+        physical_device.enumerateDeviceExtensionProperties();
+    for (const auto& ext : available_extensions) {
+        if (strcmp(ext.extensionName, "VK_KHR_portability_subset") == 0) {
+            device_extensions.push_back("VK_KHR_portability_subset");
+            break;
+        }
+    }
 
     vk::DeviceCreateInfo create_info({}, queue_create_info,
                                      {}, // layers deprecated

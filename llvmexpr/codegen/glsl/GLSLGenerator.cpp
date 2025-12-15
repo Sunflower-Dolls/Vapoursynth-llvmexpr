@@ -25,6 +25,7 @@
 #include <cstdlib>
 #include <format>
 #include <numbers>
+#include <ranges>
 #include <stdexcept>
 
 GLSLGenerator::GLSLGenerator(
@@ -140,9 +141,7 @@ std::optional<int>
 GLSLGenerator::findEnclosingLoopForFollow(int target_block,
                                           const LoopContext& loop_ctx) const {
     const auto& structurize = analysis.getStructurizeCFGResult();
-    for (auto it = loop_ctx.header_stack.rbegin();
-         it != loop_ctx.header_stack.rend(); ++it) {
-        int header = *it;
+    for (int header : loop_ctx.header_stack | std::views::reverse) {
         auto fit = structurize.loop_follow.find(header);
         if (fit != structurize.loop_follow.end() &&
             fit->second == target_block) {
