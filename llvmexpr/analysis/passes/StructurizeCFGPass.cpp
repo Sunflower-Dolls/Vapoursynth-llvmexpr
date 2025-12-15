@@ -22,56 +22,20 @@
 #include "BlockAnalysisPass.hpp"
 #include "StackSafetyPass.hpp"
 
+#include "../utils/DynamicBitset.hpp"
+
 #include <algorithm>
 #include <cstdint>
 #include <deque>
 #include <limits>
 #include <stack>
+#include <vector>
 
 namespace analysis {
 
 namespace {
 
-// NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
-struct Bitset {
-    std::vector<uint64_t> words;
-    int nbits = 0;
-
-    explicit Bitset(int n = 0) : words((n + 63) / 64, 0), nbits(n) {}
-
-    void setAll() {
-        std::ranges::fill(words, ~uint64_t(0));
-        int extra = int(words.size() * 64) - nbits;
-        if (extra > 0 && !words.empty()) {
-            words.back() &= (~uint64_t(0)) >> extra;
-        }
-    }
-
-    void resetAll() { std::ranges::fill(words, 0); }
-
-    void set(int i) { words[size_t(i) / 64] |= (uint64_t(1) << (i % 64)); }
-
-    void reset(int i) { words[size_t(i) / 64] &= ~(uint64_t(1) << (i % 64)); }
-
-    [[nodiscard]] bool test(int i) const {
-        return (((words[size_t(i) / 64] >> (i % 64)) & 1U) != 0);
-    }
-
-    bool intersectWith(const Bitset& other) {
-        bool changed = false;
-        for (size_t i = 0; i < words.size(); ++i) {
-            uint64_t nw = words[i] & other.words[i];
-            changed |= (nw != words[i]);
-            words[i] = nw;
-        }
-        return changed;
-    }
-
-    [[nodiscard]] bool equals(const Bitset& other) const {
-        return words == other.words;
-    }
-};
-// NOLINTEND(cppcoreguidelines-avoid-magic-numbers)
+using Bitset = analysis::dynamic_bitset::DynamicBitset;
 
 std::vector<int> compute_reachable(const std::vector<CFGBlock>& cfg) {
     std::vector<int> reachable(cfg.size(), 0);
