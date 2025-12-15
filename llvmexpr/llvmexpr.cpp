@@ -1554,7 +1554,7 @@ VapourSynthPluginInit2(VSPlugin* plugin, const VSPLUGINAPI* vspapi) {
     // NOLINTEND(readability-identifier-naming)
     vspapi->configPlugin(
         "com.yuygfgg.llvmexpr", "llvmexpr", "LLVM JIT RPN Expression Filter",
-        VS_MAKE_VERSION(4, 0), VAPOURSYNTH_API_VERSION, 0, plugin);
+        VS_MAKE_VERSION(4, 2), VAPOURSYNTH_API_VERSION, 0, plugin);
     vspapi->registerFunction(
         "Expr",
         "clips:vnode[];expr:data[];format:int:opt;boundary:int:opt;"

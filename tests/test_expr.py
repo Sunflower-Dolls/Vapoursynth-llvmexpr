@@ -1098,6 +1098,38 @@ def test_control_flow_complex_state_machine(backend: str) -> None:
 def test_control_flow_fail_to_reduce(backend: str) -> None:
     """
     Test GLSL codegen the CFG is unable to transform.
+
+    Infix equivalent:
+        function test() {
+            iter = 0
+            max_iter = 100
+            cond_val = 0.0
+            goto L0_A
+            L0_A:
+                if (iter >= max_iter) { return 100.0 }
+                iter = iter + 1
+                cond_val = sin(iter)
+                if (cond_val > 0) { goto L1_A } else { goto L1_B }
+            L0_B:
+                if (iter >= max_iter) { return 200.0 }
+                iter = iter + 1
+                cond_val = cos(iter)
+                if (cond_val > 0) { goto L1_A } else { goto L1_B }
+            L1_A:
+                cond_val = tan(iter)
+                if (cond_val > 0) { goto L2_A } else { goto L2_B }
+            L1_B:
+                cond_val = sin(iter * 0.5)
+                if (cond_val > 0) { goto L2_A } else { goto L2_B }
+            L2_A:
+                cond_val = cos(iter * 0.5)
+                if (cond_val > 0) { goto L0_A } else { goto L0_B }
+            L2_B:
+                cond_val = sin(iter * 0.2)
+                if (cond_val > 0) { goto L0_A } else { goto L0_B }
+            return -1.0
+        }
+        RESULT = test()
     """
     expr_func = get_expr_func(backend)
     c = core.std.BlankClip(format=vs.GRAYS, color=0.0)
