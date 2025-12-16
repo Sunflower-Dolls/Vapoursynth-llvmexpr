@@ -1,0 +1,166 @@
+name: Windows Release (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      os:
+        required: true
+        type: string
+      libc:
+        required: false
+        type: string
+      artifact_name:
+        required: true
+        type: string
+      library_name:
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ${{ inputs.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Install Lavapipe for Vulkan software rasterization
+      - name: Setup Lavapipe (Windows)
+        uses: jakoch/install-vulkan-sdk-action@v1
+        with:
+          install_vulkan_sdk: false
+          install_lavapipe: true
+          lavapipe_destination: "C:/lavapipe"
+
+      # Windows specific setup
+      - name: Setup MSYS2 (Windows)
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          msystem: MINGW64
+          install: >-
+            base-devel
+            git
+            ninja
+            mingw-w64-x86_64-meson
+            mingw-w64-x86_64-python
+            mingw-w64-x86_64-python-pytest
+            mingw-w64-x86_64-python-numpy
+            curl
+            unzip
+            zip
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-clang
+            mingw-w64-x86_64-lld
+            mingw-w64-x86_64-llvm
+            mingw-w64-x86_64-vapoursynth
+            mingw-w64-x86_64-zstd
+            mingw-w64-x86_64-shaderc
+            mingw-w64-x86_64-glslang
+            mingw-w64-x86_64-spirv-tools
+            mingw-w64-x86_64-vulkan-loader
+            mingw-w64-x86_64-vulkan-headers
+
+      - name: Force static zstd linkage (Windows)
+        shell: msys2 {0}
+        run: |
+          pacman -S --noconfirm libzstd-devel
+          ls -la /mingw64/lib/libzstd.a || echo "Warning: libzstd.a not found"
+          pkg-config --libs --static libzstd || echo "Warning: pkg-config libzstd failed"
+          cp $MSYSTEM_PREFIX/lib/libzstd.{a,dll.a}
+
+      - name: Show tool versions (Windows)
+        shell: msys2 {0}
+        run: |
+          clang --version || true
+          g++ --version || true
+          meson --version
+          ninja --version
+          llvm-config --version
+          pkg-config --version
+
+      - name: Check LLVM version (>= 21) (Windows)
+        shell: msys2 {0}
+        run: |
+          set -e
+          ver=$(llvm-config --version | cut -d. -f1)
+          if [ "$ver" -lt 21 ]; then
+            echo "LLVM >= 21 is required, found: $(llvm-config --version)" >&2
+            exit 1
+          fi
+
+      - name: Configure (Meson) with SSL fix (Windows)
+        shell: msys2 {0}
+        run: |
+          # Fix SSL certificates for Python/Meson
+          echo "Fixing SSL certificates..."
+          curl -sSL https://curl.se/ca/cacert.pem -o /tmp/cacert.pem
+          
+          # Import to Windows certificate store via PowerShell
+          powershell.exe -Command "Import-Certificate -FilePath /tmp/cacert.pem -CertStoreLocation Cert:\LocalMachine\Root -ErrorAction SilentlyContinue" || true
+          
+          # Also set SSL cert file for Python
+          export SSL_CERT_FILE=/tmp/cacert.pem
+          export REQUESTS_CA_BUNDLE=/tmp/cacert.pem
+          export CURL_CA_BUNDLE=/tmp/cacert.pem
+          
+          # Configure Meson
+          CC="clang -fuse-ld=lld" CXX="clang++ -fuse-ld=lld" meson setup builddir \
+            -Dstatic-llvm=true \
+            -Dstatic-shaderc=true \
+            --buildtype=release
+
+      - name: Build (Windows)
+        shell: msys2 {0}
+        run: |
+          ninja -C builddir
+
+      - name: Check dependencies (Windows)
+        shell: msys2 {0}
+        run: ldd builddir/${{ inputs.library_name }}
+
+      - name: Run tests (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          export PYTHONPATH=""
+          export VK_LOADER_DEBUG=all
+          export LLVMEXPR_PLUGIN_PATH="builddir/${{ inputs.library_name }}"
+          
+          # Force use of Lavapipe for Vulkan
+          export VK_ICD_FILENAMES="C:/lavapipe/share/vulkan/icd.d/lvp_icd.x86_64.json"
+          powershell.exe -Command "reg add \"HKLM\SOFTWARE\Khronos\Vulkan\Drivers\" /v \"C:\lavapipe\share\vulkan\icd.d\lvp_icd.x86_64.json\" /t REG_DWORD /d 0 /f"
+          
+          echo "Running pytest with Lavapipe..."
+          python -m pytest -vv
+
+      - name: Install to staging dir (Windows)
+        shell: msys2 {0}
+        run: |
+          DESTDIR="$PWD/stage" meson install -C builddir
+          find stage -maxdepth 5 -type f -print
+
+      - name: Collect artifact (Windows)
+        id: collect_windows
+        shell: msys2 {0}
+        run: |
+          set -e
+          libfile=$(find stage -type f -name '${{ inputs.library_name }}' | head -n 1)
+          if [ -z "$libfile" ]; then
+            echo "${{ inputs.library_name }} not found in install tree" >&2
+            exit 1
+          fi
+          outdir=artifact
+          mkdir -p "$outdir"
+          cp "$libfile" "$outdir/${{ inputs.library_name }}"
+          cp LICENSE "$outdir/" || true
+          cp README.md "$outdir/" || true
+          echo "artifact_dir=$outdir" >> $GITHUB_OUTPUT
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: ${{ steps.collect_windows.outputs.artifact_dir }}
+          if-no-files-found: error

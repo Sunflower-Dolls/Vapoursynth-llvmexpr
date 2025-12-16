@@ -1,0 +1,34 @@
+name: Release (reusable)
+
+on:
+  workflow_call:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release_assets
+          for dir in artifacts/*;
+          do
+            if [ -d "$dir" ]; then
+              artifact_name=$(basename "$dir")
+              (cd "$dir" && zip -9r "../../release_assets/${artifact_name}.zip" .)
+            fi
+          done
+
+      - name: List created assets
+        run: ls -l release_assets
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release_assets/*.zip
+
