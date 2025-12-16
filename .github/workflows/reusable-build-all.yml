@@ -51,7 +51,7 @@ jobs:
       - name: Setup dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install meson ninja pkg-config llvm@20 vapoursynth zstd zlib shaderc vulkan-loader
+          brew install meson ninja pkg-config llvm@20 vapoursynth zstd zlib shaderc vulkan-loader molten-vk
 
       # Install Lavapipe for Vulkan software rasterization (Windows)
       - name: Setup Lavapipe (Windows)
@@ -294,6 +294,18 @@ jobs:
           
           echo "Running pytest with Lavapipe..."
           python -m pytest -vv
+
+      - name: Run tests (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          export PYTHONPATH=""
+          export VK_LOADER_DEBUG=all
+          export LLVMEXPR_PLUGIN_PATH="builddir/${{ inputs.library_name }}"
+          
+          pip3 install pytest numpy
+
+          python3 -m pytest -vv
 
       - name: Install to staging dir (Windows)
         if: runner.os == 'Windows'
