@@ -372,8 +372,22 @@ void GLSLGenerator::emitBufferDeclarations() {
 }
 
 void GLSLGenerator::emitHelperFunctions() {
-    // Currently no helper functions needed
-    // May add in the future for complex operations
+    // The OpenGL® Shading Language, Version 4.60.8, Chapter 8.3
+    // genFType round(genFType x), genDType round(genDType x):
+    // Returns a value equal to the nearest integer to x.
+    // The fraction 0.5 will round in a direction chosen
+    // by the implementation, presumably the
+    // direction that is fastest. This includes the
+    // possibility that round(x) returns the same value
+    // as roundEven(x) for all values of x
+
+    // We implement halfway cases round away from zero to match CPU semantics.
+    emitLine("float llvmexpr_round(float x) {");
+    indent();
+    emitLine("return (x >= 0.0) ? floor(x + 0.5) : ceil(x - 0.5);");
+    dedent();
+    emitLine("}");
+    emitNewline();
 }
 
 void GLSLGenerator::emitVariableDeclarations() {
@@ -1063,8 +1077,9 @@ void GLSLGenerator::processToken(const Token& token) {
         std::string b = pop();
         std::string a = pop();
         std::string temp = newTemp();
-        emitLine(std::format(
-            "float {} = float(int(round({})) & int(round({})));", temp, a, b));
+        emitLine(std::format("float {} = float(int(llvmexpr_round({})) & "
+                             "int(llvmexpr_round({})));",
+                             temp, a, b));
         push(temp);
         break;
     }
@@ -1072,8 +1087,9 @@ void GLSLGenerator::processToken(const Token& token) {
         std::string b = pop();
         std::string a = pop();
         std::string temp = newTemp();
-        emitLine(std::format(
-            "float {} = float(int(round({})) | int(round({})));", temp, a, b));
+        emitLine(std::format("float {} = float(int(llvmexpr_round({})) | "
+                             "int(llvmexpr_round({})));",
+                             temp, a, b));
         push(temp);
         break;
     }
@@ -1081,15 +1097,17 @@ void GLSLGenerator::processToken(const Token& token) {
         std::string b = pop();
         std::string a = pop();
         std::string temp = newTemp();
-        emitLine(std::format(
-            "float {} = float(int(round({})) ^ int(round({})));", temp, a, b));
+        emitLine(std::format("float {} = float(int(llvmexpr_round({})) ^ "
+                             "int(llvmexpr_round({})));",
+                             temp, a, b));
         push(temp);
         break;
     }
     case TokenType::Bitnot: {
         std::string a = pop();
         std::string temp = newTemp();
-        emitLine(std::format("float {} = float(~int(round({})));", temp, a));
+        emitLine(std::format("float {} = float(~int(llvmexpr_round({})));",
+                             temp, a));
         push(temp);
         break;
     }
@@ -1121,7 +1139,7 @@ void GLSLGenerator::processToken(const Token& token) {
         push(unaryFn("trunc"));
         break;
     case TokenType::Round:
-        push(unaryFn("round"));
+        push(unaryFn("llvmexpr_round"));
         break;
     case TokenType::Sin:
         push(unaryFn("sin"));
