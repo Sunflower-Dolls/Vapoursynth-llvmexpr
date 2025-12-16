@@ -212,12 +212,7 @@ def test_min_max_clip(backend: str, val: float, min_v: float, max_v: float) -> N
             5.0,
             0.0,
             "x bitnot",
-            (
-                float(2**32 - 1 - 5)
-                if vs.core.core_version.release_major
-                >= 64  # pyright: ignore[reportOperatorIssue]
-                else float(~5 & 0xFFFFFFFF)
-            ),
+            (float(2**32 - 1 - 5)),
         ),
     ],
 )
@@ -1095,6 +1090,7 @@ def test_control_flow_complex_state_machine(backend: str) -> None:
     res = expr_func(c, expr, vs.GRAYS)
     assert res.get_frame(0)[0][0, 0] == pytest.approx(1223.0)
 
+
 def test_control_flow_fail_to_reduce(backend: str) -> None:
     """
     Test GLSL codegen the CFG is unable to transform.
@@ -1136,4 +1132,3 @@ def test_control_flow_fail_to_reduce(backend: str) -> None:
     expr = "0 __internal_func_test_0_iter! 100 __internal_func_test_0_max_iter! 0.0 __internal_func_test_0_cond_val! 1 __internal_test_0_L0_A# #__internal_test_0_L0_A __internal_func_test_0_iter@ __internal_func_test_0_max_iter@ >= 0 = __internal_else_0# 100.0 __internal_ret_test_0! 1 __internal_ret_label_test_0# #__internal_else_0 __internal_func_test_0_iter@ 1 + __internal_func_test_0_iter! __internal_func_test_0_iter@ sin __internal_func_test_0_cond_val! __internal_func_test_0_cond_val@ 0 > 0 = __internal_else_2# 1 __internal_test_0_L1_A# 1 __internal_endif_3# #__internal_else_2 1 __internal_test_0_L1_B# #__internal_endif_3 #__internal_test_0_L0_B __internal_func_test_0_iter@ __internal_func_test_0_max_iter@ >= 0 = __internal_else_4# 200.0 __internal_ret_test_0! 1 __internal_ret_label_test_0# #__internal_else_4 __internal_func_test_0_iter@ 1 + __internal_func_test_0_iter! __internal_func_test_0_iter@ cos __internal_func_test_0_cond_val! __internal_func_test_0_cond_val@ 0 > 0 = __internal_else_6# 1 __internal_test_0_L1_A# 1 __internal_endif_7# #__internal_else_6 1 __internal_test_0_L1_B# #__internal_endif_7 #__internal_test_0_L1_A __internal_func_test_0_iter@ tan __internal_func_test_0_cond_val! __internal_func_test_0_cond_val@ 0 > 0 = __internal_else_8# 1 __internal_test_0_L2_A# 1 __internal_endif_9# #__internal_else_8 1 __internal_test_0_L2_B# #__internal_endif_9 #__internal_test_0_L1_B __internal_func_test_0_iter@ 0.5 * sin __internal_func_test_0_cond_val! __internal_func_test_0_cond_val@ 0 > 0 = __internal_else_10# 1 __internal_test_0_L2_A# 1 __internal_endif_11# #__internal_else_10 1 __internal_test_0_L2_B# #__internal_endif_11 #__internal_test_0_L2_A __internal_func_test_0_iter@ 0.5 * cos __internal_func_test_0_cond_val! __internal_func_test_0_cond_val@ 0 > 0 = __internal_else_12# 1 __internal_test_0_L0_A# 1 __internal_endif_13# #__internal_else_12 1 __internal_test_0_L0_B# #__internal_endif_13 #__internal_test_0_L2_B __internal_func_test_0_iter@ 0.2 * sin __internal_func_test_0_cond_val! __internal_func_test_0_cond_val@ 0 > 0 = __internal_else_14# 1 __internal_test_0_L0_A# 1 __internal_endif_15# #__internal_else_14 1 __internal_test_0_L0_B# #__internal_endif_15 -1.0 __internal_ret_test_0! 1 __internal_ret_label_test_0# #__internal_ret_label_test_0 __internal_ret_test_0@ RESULT! RESULT@"
     res = expr_func(c, expr, vs.GRAYS)
     assert res.get_frame(0)[0][0, 0] == pytest.approx(100)
-    

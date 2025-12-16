@@ -21,16 +21,46 @@ import subprocess
 import tempfile
 import os
 from pathlib import Path
+import shutil
 
-BUILDDIR = Path(__file__).parent.parent / "builddir"
-INFIX2POSTFIX = BUILDDIR / "infix2postfix"
+def _resolve_infix2postfix() -> Path:
+    repo_root = Path(__file__).resolve().parents[1]
 
-if not INFIX2POSTFIX.exists():
-    BUILDDIR = Path(__file__).parent.parent / "build"
-    INFIX2POSTFIX = BUILDDIR / "infix2postfix"
+    env_path = os.environ.get("LLVMEXPR_INFIX2POSTFIX_PATH")
+    if env_path:
+        candidate = Path(env_path)
+        if not candidate.is_absolute():
+            candidate = (repo_root / candidate).resolve()
+        if candidate.is_file():
+            return candidate
+        raise RuntimeError(f"LLVMEXPR_INFIX2POSTFIX_PATH does not exist: {candidate}")
+
+    exe_suffix = ".exe" if os.name == "nt" else ""
+    builddir_env = os.environ.get("LLVMEXPR_BUILDDIR")
+    builddirs: list[Path] = []
+    if builddir_env:
+        builddirs.append(Path(builddir_env))
+    builddirs.extend([repo_root / "builddir", repo_root / "build"])
+
+    for builddir in builddirs:
+        builddir = builddir if builddir.is_absolute() else (repo_root / builddir).resolve()
+        for name in (f"infix2postfix{exe_suffix}", "infix2postfix"):
+            candidate = builddir / name
+            if candidate.is_file():
+                return candidate
+
+    from_path = shutil.which("infix2postfix")
+    if from_path:
+        return Path(from_path)
+
+    raise RuntimeError(
+        "Failed to locate infix2postfix for tests. "
+        "Build it into ./builddir (Meson default) or set LLVMEXPR_INFIX2POSTFIX_PATH."
+    )
 
 
 def run_infix2postfix(infix_code: str, mode: str = "expr") -> tuple[bool, str]:
+    infix2postfix = _resolve_infix2postfix()
     with tempfile.NamedTemporaryFile(mode="w", suffix=".infix", delete=False) as f_in:
         f_in.write(infix_code)
         input_file = f_in.name
@@ -40,7 +70,7 @@ def run_infix2postfix(infix_code: str, mode: str = "expr") -> tuple[bool, str]:
 
     try:
         result = subprocess.run(
-            [str(INFIX2POSTFIX), input_file, "-m", mode, "-o", output_file],
+            [str(infix2postfix), input_file, "-m", mode, "-o", output_file],
             capture_output=True,
             text=True,
             timeout=5,

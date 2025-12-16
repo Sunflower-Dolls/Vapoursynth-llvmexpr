@@ -29,6 +29,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Install Lavapipe for Vulkan software rasterization
+      - name: Setup Lavapipe (Windows)
+        uses: jakoch/install-vulkan-sdk-action@v1
+        with:
+          install_vulkan_sdk: false
+          install_lavapipe: true
+          lavapipe_destination: "C:/lavapipe"
+
       # Windows specific setup
       - name: Setup MSYS2 (Windows)
         uses: msys2/setup-msys2@v2
@@ -41,6 +49,8 @@ jobs:
             ninja
             mingw-w64-x86_64-meson
             mingw-w64-x86_64-python
+            mingw-w64-x86_64-python-pytest
+            mingw-w64-x86_64-python-numpy
             curl
             unzip
             zip
@@ -114,6 +124,21 @@ jobs:
       - name: Check dependencies (Windows)
         shell: msys2 {0}
         run: ldd builddir/${{ matrix.library_name }}
+
+      - name: Run tests (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          export PYTHONPATH=""
+          export VK_LOADER_DEBUG=all
+          export LLVMEXPR_PLUGIN_PATH="builddir/${{ matrix.library_name }}"
+          
+          # Force use of Lavapipe for Vulkan
+          export VK_ICD_FILENAMES="C:/lavapipe/share/vulkan/icd.d/lvp_icd.x86_64.json"
+          powershell.exe -Command "reg add \"HKLM\SOFTWARE\Khronos\Vulkan\Drivers\" /v \"C:\lavapipe\share\vulkan\icd.d\lvp_icd.x86_64.json\" /t REG_DWORD /d 0 /f"
+          
+          echo "Running pytest with Lavapipe..."
+          python -m pytest -vv
 
       - name: Install to staging dir (Windows)
         shell: msys2 {0}
@@ -202,6 +227,15 @@ jobs:
         run: |
           brew install meson ninja pkg-config llvm vapoursynth zstd zlib shaderc vulkan-loader
 
+      # Install Lavapipe for Vulkan software rasterization (Windows)
+      - name: Setup Lavapipe (Windows)
+        if: runner.os == 'Windows'
+        uses: jakoch/install-vulkan-sdk-action@v1
+        with:
+          install_vulkan_sdk: false
+          install_lavapipe: true
+          lavapipe_destination: "C:/lavapipe"
+
       # Windows specific setup
       - name: Setup MSYS2 (Windows)
         if: runner.os == 'Windows'
@@ -215,6 +249,8 @@ jobs:
             ninja
             mingw-w64-x86_64-meson
             mingw-w64-x86_64-python
+            mingw-w64-x86_64-python-pytest
+            mingw-w64-x86_64-python-numpy
             curl
             unzip
             zip
@@ -407,6 +443,21 @@ jobs:
       - name: Check dependencies (macOS)
         if: runner.os == 'macOS'
         run: otool -L builddir/${{ matrix.library_name }}
+
+      - name: Run tests (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          export PYTHONPATH=""
+          export VK_LOADER_DEBUG=all
+          export LLVMEXPR_PLUGIN_PATH="builddir/${{ matrix.library_name }}"
+          
+          # Force use of Lavapipe for Vulkan
+          export VK_ICD_FILENAMES="C:/lavapipe/share/vulkan/icd.d/lvp_icd.x86_64.json"
+          powershell.exe -Command "reg add \"HKLM\SOFTWARE\Khronos\Vulkan\Drivers\" /v \"C:\lavapipe\share\vulkan\icd.d\lvp_icd.x86_64.json\" /t REG_DWORD /d 0 /f"
+          
+          echo "Running pytest with Lavapipe..."
+          python -m pytest -vv
 
       - name: Install to staging dir (Windows)
         if: runner.os == 'Windows'
