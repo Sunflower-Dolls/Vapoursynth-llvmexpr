@@ -303,7 +303,7 @@ jobs:
           export VK_LOADER_DEBUG=all
           export LLVMEXPR_PLUGIN_PATH="builddir/${{ inputs.library_name }}"
           
-          pip3 install pytest numpy
+          pip3 install pytest numpy --break-system-packages
 
           python3 -m pytest -vv
 
