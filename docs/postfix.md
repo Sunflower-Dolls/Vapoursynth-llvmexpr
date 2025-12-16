@@ -157,7 +157,7 @@ These operators treat any value greater than 0 as `true`. They return `1.0` for 
 | **Rounding**                  |          |                                                                               |
 | `floor`                       | 1        | Rounds down to the nearest integer.                                           |
 | `ceil`                        | 1        | Rounds up to the nearest integer.                                             |
-| `round`                       | 1        | Rounds to the nearest integer.                                                |
+| `round`                       | 1        | Rounds to nearest integer; halfway cases round away from zero.                |
 | `trunc`                       | 1        | Truncates towards zero.                                                       |
 | **Other**                     |          |                                                                               |
 | `abs`                         | 1        | `x abs` is the absolute value of `x`.                                         |
@@ -183,7 +183,7 @@ These operators treat any value greater than 0 as `true`. They return `1.0` for 
 
 #### **3.6. Bitwise Operators**
 
-These operators round floating-point values to nearest integers before the operation.
+These operators round floating-point values to nearest integers before the operation (halfway cases away from zero, same as `round`).
 
 | Operator | Description |
 | :------- | :---------- |
@@ -272,7 +272,7 @@ Arrays must be allocated before use. The allocation method depends on whether th
 > **Bounds Checking:** Array indices are **not** bounds-checked at runtime. Accessing an out-of-bounds index results in **undefined behavior**.
 
 **Additional Safety Considerations:**
-- **Floating-point indices:** While the language accepts floating-point values for array indices and sizes (in dynamic allocation), they are truncated toward zero, not rounded. Use explicit rounding operations (`floor`, `ceil`, `round`) if you need specific rounding behavior before passing values to array operations.
+- **Floating-point indices:** While the language accepts floating-point values for array indices and sizes (in dynamic allocation), they are truncated toward zero, not rounded. Use explicit rounding operations (`floor`, `ceil`, `round`) if you need specific rounding behavior before passing values to array operations (note `round` is nearest with halfway cases away from zero).
 - **Negative sizes/indices:** Passing negative values to dynamic allocation or using negative array indices (which can result from truncating negative floats like `-1.5` → `-1`) will cause undefined behavior.
 
 ##### **4.3.4. Array Scope and Persistence**

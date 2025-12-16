@@ -765,7 +765,7 @@ Functions are called using standard syntax: `functionName(argument1, argument2, 
 | `sqrt`                            | 1                   | Square root.                                                                                            |
 | `abs`                             | 1                   | Absolute value.                                                                                         |
 | `sgn`                             | 1                   | Signum function: -1 if x < 0, 0 if x == 0, 1 if x > 0.                                                  |
-| `floor`, `ceil`, `round`, `trunc` | 1                   | Rounding family.                                                                                        |
+| `floor`, `ceil`, `round`, `trunc` | 1                   | Rounding family. `round(x)` rounds to nearest integer; halfway cases round away from zero.              |
 | `min`, `max`                      | 2                   | Minimum/maximum.                                                                                        |
 | `copysign`                        | 2                   | Magnitude of first operand, sign of second.                                                             |
 | `clamp`                           | 3                   | `clamp(x, lo, hi)`; clamps to `[lo, hi]`.                                                               |
@@ -1092,7 +1092,7 @@ The lifetime of an array depends on the execution mode:
 > The language does not perform runtime bounds checking on array access. Accessing an index outside the allocated size (e.g., `my_array[-1]` or `my_array[size]`) will result in **undefined behavior**, which may include crashes or memory corruption. It is the script author's responsibility to ensure all access is within bounds.
 
 > [!CAUTION]
-> **Floating-point indices:** While the language accepts floating-point values for array indices and sizes, they are truncated toward zero, not rounded. This may lead to unexpected behavior if you assume rounding. Use explicit rounding functions (`floor()`, `ceil()`, `round()`) if you need specific rounding behavior.
+> **Floating-point indices:** While the language accepts floating-point values for array indices and sizes, they are truncated toward zero, not rounded. This may lead to unexpected behavior if you assume rounding. Use explicit rounding functions (`floor()`, `ceil()`, `round()`) if you need specific rounding behavior (note `round(x)` is nearest with halfway cases away from zero).
 >
 > **Negative sizes/indices:** Passing negative values to `new()` or `resize()`, or using negative array indices (which can result from truncating small negative floats like `-0.5` → `0` or larger ones like `-1.5` → `-1`), will cause undefined behavior.
 
