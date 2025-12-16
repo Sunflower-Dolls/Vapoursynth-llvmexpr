@@ -215,4 +215,22 @@ void VulkanMemory::copyBuffer(VulkanBuffer& src, VulkanBuffer& dst,
     context.getDevice().resetFences(*transfer_fence);
 }
 
+void VulkanMemory::flushBuffer(const VulkanBuffer& buffer, VkDeviceSize size,
+                               VkDeviceSize offset) const {
+    if (allocator == VK_NULL_HANDLE || buffer.allocation == VK_NULL_HANDLE ||
+        buffer.getMappedData() == nullptr || size == 0) {
+        return;
+    }
+    (void)vmaFlushAllocation(allocator, buffer.allocation, offset, size);
+}
+
+void VulkanMemory::invalidateBuffer(const VulkanBuffer& buffer, VkDeviceSize size,
+                                    VkDeviceSize offset) const {
+    if (allocator == VK_NULL_HANDLE || buffer.allocation == VK_NULL_HANDLE ||
+        buffer.getMappedData() == nullptr || size == 0) {
+        return;
+    }
+    (void)vmaInvalidateAllocation(allocator, buffer.allocation, offset, size);
+}
+
 } // namespace llvmexpr

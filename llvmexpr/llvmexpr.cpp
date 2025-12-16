@@ -869,6 +869,9 @@ struct VkStream {
     std::unique_ptr<llvmexpr::VulkanMemory> memory;
     std::array<std::unique_ptr<llvmexpr::VulkanComputePipeline>, 3> pipelines;
     std::array<PlaneResources, 3> plane_resources;
+    vk::raii::CommandPool command_pool = nullptr;
+    vk::raii::CommandBuffer command_buffer = nullptr;
+    vk::raii::Fence fence = nullptr;
 
     VkStream() = default;
     // NOLINTNEXTLINE(modernize-use-equals-default)
@@ -1152,22 +1155,75 @@ const VSFrame*
                         }
                     }
                     // NOLINTEND
-                    stream.memory->copyBuffer(
-                        plane_res.input_staging_buffers[i],
-                        plane_res.input_buffers[i], buffer_size);
+                    stream.memory->flushBuffer(
+                        plane_res.input_staging_buffers[i], buffer_size);
                 }
 
                 // Upload props
                 if (plane_res.props_buffer.isValid()) {
                     std::memcpy(plane_res.props_staging_buffer.getMappedData(),
                                 props.data(), props_size);
-                    stream.memory->copyBuffer(plane_res.props_staging_buffer,
-                                              plane_res.props_buffer,
-                                              props_size);
+                    stream.memory->flushBuffer(plane_res.props_staging_buffer,
+                                               props_size);
                 }
 
-                stream.pipelines.at(plane)->dispatch(
-                    src_buffer_ptrs, plane_res.output_buffer,
+                stream.command_buffer.reset();
+                vk::CommandBufferBeginInfo begin_info(
+                    vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+                stream.command_buffer.begin(begin_info);
+
+                // Upload input buffers
+                for (int i = 0; i < d->num_inputs; ++i) {
+                    vk::BufferCopy region(0, 0, buffer_size);
+                    stream.command_buffer.copyBuffer(
+                        vk::Buffer(plane_res.input_staging_buffers[i].buffer),
+                        vk::Buffer(plane_res.input_buffers[i].buffer), region);
+                }
+
+                // Upload props
+                if (plane_res.props_buffer.isValid()) {
+                    vk::BufferCopy region(0, 0, props_size);
+                    stream.command_buffer.copyBuffer(
+                        vk::Buffer(plane_res.props_staging_buffer.buffer),
+                        vk::Buffer(plane_res.props_buffer.buffer), region);
+                }
+
+                // Transfer -> compute barriers for inputs/props
+                std::vector<vk::BufferMemoryBarrier> to_compute_barriers;
+                to_compute_barriers.reserve(static_cast<size_t>(d->num_inputs) +
+                                            1);
+                for (int i = 0; i < d->num_inputs; ++i) {
+                    vk::BufferMemoryBarrier b;
+                    b.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+                    b.dstAccessMask = vk::AccessFlagBits::eShaderRead;
+                    b.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                    b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                    b.buffer = vk::Buffer(plane_res.input_buffers[i].buffer);
+                    b.offset = 0;
+                    b.size = VK_WHOLE_SIZE;
+                    to_compute_barriers.push_back(b);
+                }
+                if (plane_res.props_buffer.isValid()) {
+                    vk::BufferMemoryBarrier b;
+                    b.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+                    b.dstAccessMask = vk::AccessFlagBits::eShaderRead;
+                    b.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                    b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                    b.buffer = vk::Buffer(plane_res.props_buffer.buffer);
+                    b.offset = 0;
+                    b.size = VK_WHOLE_SIZE;
+                    to_compute_barriers.push_back(b);
+                }
+                if (!to_compute_barriers.empty()) {
+                    stream.command_buffer.pipelineBarrier(
+                        vk::PipelineStageFlagBits::eTransfer,
+                        vk::PipelineStageFlagBits::eComputeShader, {}, {},
+                        to_compute_barriers, {});
+                }
+
+                stream.pipelines.at(plane)->recordDispatch(
+                    stream.command_buffer, src_buffer_ptrs,
+                    plane_res.output_buffer,
                     plane_res.props_buffer.isValid() ? &plane_res.props_buffer
                                                      : nullptr,
                     static_cast<uint32_t>(width), static_cast<uint32_t>(height),
@@ -1180,9 +1236,44 @@ const VSFrame*
                 const VSVideoFormat& out_fmt = d->vi.format;
                 int out_bpp = out_fmt.bytesPerSample;
 
-                stream.memory->copyBuffer(plane_res.output_buffer,
-                                          plane_res.output_staging_buffer,
-                                          buffer_size);
+                // Compute -> transfer barrier for output, then download
+                vk::BufferMemoryBarrier to_transfer;
+                to_transfer.srcAccessMask = vk::AccessFlagBits::eShaderWrite;
+                to_transfer.dstAccessMask = vk::AccessFlagBits::eTransferRead;
+                to_transfer.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                to_transfer.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                to_transfer.buffer = vk::Buffer(plane_res.output_buffer.buffer);
+                to_transfer.offset = 0;
+                to_transfer.size = VK_WHOLE_SIZE;
+                std::array<vk::BufferMemoryBarrier, 1> to_transfer_barriers = {
+                    to_transfer};
+                stream.command_buffer.pipelineBarrier(
+                    vk::PipelineStageFlagBits::eComputeShader,
+                    vk::PipelineStageFlagBits::eTransfer, {}, {},
+                    to_transfer_barriers, {});
+
+                vk::BufferCopy download_region(0, 0, buffer_size);
+                stream.command_buffer.copyBuffer(
+                    vk::Buffer(plane_res.output_buffer.buffer),
+                    vk::Buffer(plane_res.output_staging_buffer.buffer),
+                    download_region);
+
+                stream.command_buffer.end();
+
+                vk::SubmitInfo submit_info;
+                submit_info.setCommandBuffers(*stream.command_buffer);
+                auto& ctx = llvmexpr::VulkanContext::getInstance();
+                ctx.submit(submit_info, *stream.fence);
+
+                auto result = ctx.getDevice().waitForFences(
+                    *stream.fence, VK_TRUE, UINT64_MAX);
+                if (result != vk::Result::eSuccess) {
+                    throw std::runtime_error("Failed to wait for VkExpr fence");
+                }
+                ctx.getDevice().resetFences(*stream.fence);
+
+                stream.memory->invalidateBuffer(plane_res.output_staging_buffer,
+                                                buffer_size);
                 const auto* mapped_out = static_cast<const float*>(
                     plane_res.output_staging_buffer.getMappedData());
 
@@ -1458,6 +1549,22 @@ vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
             d->streams[k]->memory =
                 std::make_unique<llvmexpr::VulkanMemory>(ctx);
             d->free_stream_indices.push(k);
+
+            vk::CommandPoolCreateInfo pool_info(
+                vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
+                ctx.getQueueFamilyIndex());
+            d->streams[k]->command_pool =
+                vk::raii::CommandPool(ctx.getDevice(), pool_info);
+
+            vk::CommandBufferAllocateInfo cmd_info(
+                *d->streams[k]->command_pool, vk::CommandBufferLevel::ePrimary,
+                1);
+            auto cmd_buffers =
+                vk::raii::CommandBuffers(ctx.getDevice(), cmd_info);
+            d->streams[k]->command_buffer = std::move(cmd_buffers[0]);
+
+            vk::FenceCreateInfo fence_info;
+            d->streams[k]->fence = vk::raii::Fence(ctx.getDevice(), fence_info);
 
             auto num_props_floats = static_cast<uint32_t>(
                 1 + d->required_props.size()); // N + props

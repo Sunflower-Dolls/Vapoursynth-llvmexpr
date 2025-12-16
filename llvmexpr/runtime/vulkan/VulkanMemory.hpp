@@ -109,6 +109,11 @@ class VulkanMemory {
     // blocks until transfer completes
     [[nodiscard]] VmaAllocator getAllocator() const { return allocator; }
 
+    void flushBuffer(const VulkanBuffer& buffer, VkDeviceSize size,
+                     VkDeviceSize offset = 0) const;
+    void invalidateBuffer(const VulkanBuffer& buffer, VkDeviceSize size,
+                          VkDeviceSize offset = 0) const;
+
   private:
     VulkanContext& context;
     VmaAllocator allocator = VK_NULL_HANDLE;

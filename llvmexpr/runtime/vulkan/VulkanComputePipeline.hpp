@@ -63,6 +63,11 @@ class VulkanComputePipeline {
                   VulkanBuffer& output_buffer, VulkanBuffer* props_buffer,
                   uint32_t width, uint32_t height, int32_t frame_number);
 
+    void recordDispatch(vk::raii::CommandBuffer& command_buffer,
+                        const std::vector<VulkanBuffer*>& input_buffers,
+                        VulkanBuffer& output_buffer, VulkanBuffer* props_buffer,
+                        uint32_t width, uint32_t height, int32_t frame_number);
+
   private:
     void compileShader(const std::string& glsl_source);
     void createDescriptorSetLayout(uint32_t num_input_buffers,

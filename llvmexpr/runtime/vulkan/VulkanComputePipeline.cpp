@@ -328,4 +328,28 @@ void VulkanComputePipeline::dispatch(
     context.getDevice().resetFences(*fence);
 }
 
+void VulkanComputePipeline::recordDispatch(
+    vk::raii::CommandBuffer& command_buffer,
+    const std::vector<VulkanBuffer*>& input_buffers,
+    VulkanBuffer& output_buffer, VulkanBuffer* props_buffer, uint32_t width,
+    uint32_t height, int32_t frame_number) {
+    updateDescriptorSets(input_buffers, output_buffer, props_buffer);
+
+    command_buffer.bindPipeline(vk::PipelineBindPoint::eCompute, *pipeline);
+    command_buffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
+                                      *pipeline_layout, 0, *descriptor_set, {});
+
+    PushConstants pc = {.width = width,
+                        .height = height,
+                        .num_inputs = num_inputs,
+                        .frame_number = frame_number};
+    command_buffer.pushConstants<PushConstants>(
+        *pipeline_layout, vk::ShaderStageFlagBits::eCompute, 0, pc);
+
+    uint32_t total_pixels = width * height;
+    uint32_t num_workgroups =
+        (total_pixels + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
+    command_buffer.dispatch(num_workgroups, 1, 1);
+}
+
 } // namespace llvmexpr
