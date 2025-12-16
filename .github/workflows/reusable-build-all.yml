@@ -58,9 +58,10 @@ jobs:
         if: runner.os == 'Windows'
         uses: jakoch/install-vulkan-sdk-action@v1
         with:
-          install_vulkan_sdk: false
           install_lavapipe: true
           lavapipe_destination: "C:/lavapipe"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # Windows specific setup
       - name: Setup MSYS2 (Windows)
