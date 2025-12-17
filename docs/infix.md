@@ -236,7 +236,11 @@ The expression evaluator supports:
 |            | `!`                  | Logical NOT              | Unary   | Right         |
 |            | `~`                  | Bitwise NOT              | Unary   | Right         |
 
-- **Short-Circuiting**: The logical operators `&&`, `||`, and the ternary operator `? :` use short-circuit evaluation. This means only the necessary operands are evaluated. This behavior is essential for implementing terminating recursive macros.
+- **Evaluation Order**:
+  - The ternary operator `? :` is **short-circuiting**: only the selected branch is evaluated.
+  - The logical operators `&&` and `||` are **not** short-circuiting in the preprocessor's constant expression evaluator: both operands are evaluated.
+
+  Because the preprocessor is pure/functional, eager evaluation does not change the final numeric result, but it can still affect whether evaluation succeeds. For terminating recursive macros, rely on `? :` branch elimination rather than `&&` / `||`.
 
 ### 2.7. Compile-Time Intrinsics
 
@@ -584,6 +588,9 @@ Operators are left-associative, except for the unary and ternary operators. The 
 
 > [!NOTE]
 > All conditional contexts in the infix syntax use consistent `!= 0` semantics, which is different from that of the underlying RPN language.
+
+> [!WARNING]
+> `&&`, `||`, and `? :` are **not** short-circuiting: both operands (and both ternary branches) are evaluated. Use `if` / `else` statements when you need conditional execution.
 
 ## 7. Data Access
 
