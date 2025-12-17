@@ -654,5 +654,7 @@ if __name__ == "__main__":
     parser.add_argument("--no-cpuinfo", action="store_true")
     parser.add_argument("--quiet", action="store_true")
 
+    _backfill_preset_format_constants()
+
     exit_code = run_benchmark(parser.parse_args())
     raise SystemExit(exit_code)

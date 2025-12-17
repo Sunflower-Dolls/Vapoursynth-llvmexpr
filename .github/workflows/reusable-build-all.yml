@@ -281,8 +281,6 @@ jobs:
         if: runner.os == 'macOS'
         run: otool -L builddir/${{ inputs.library_name }}
 
-
-
       - name: Run benchmarks (Windows)
         if: runner.os == 'Windows'
         shell: msys2 {0}
