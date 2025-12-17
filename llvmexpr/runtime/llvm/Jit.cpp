@@ -19,6 +19,7 @@
 
 #include "Jit.hpp"
 
+#include <cmath>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -36,6 +37,29 @@ extern "C" {
 float* llvmexpr_ensure_buffer(const char*, int64_t);
 int64_t llvmexpr_get_buffer_size(const char*);
 }
+
+#ifdef _WIN32
+namespace {
+extern "C" void llvmexpr_sincosf(float x, float* s, float* c) {
+    if (s != nullptr) {
+        *s = std::sin(x);
+    }
+    if (c != nullptr) {
+        *c = std::cos(x);
+    }
+}
+
+extern "C" void llvmexpr_sincos(double x, double* s, double* c) {
+    if (s != nullptr) {
+        *s = std::sin(x);
+    }
+    if (c != nullptr) {
+        *c = std::cos(x);
+    }
+}
+
+} // namespace
+#endif
 
 OrcJit::OrcJit(bool no_nans_fp_math) {
     static struct LLVMInitializer {
@@ -98,6 +122,18 @@ OrcJit::OrcJit(bool no_nans_fp_math) {
             llvm::orc::ExecutorAddr(
                 llvm::pointerToJITTargetAddress(&llvmexpr_get_buffer_size)),
             llvm::JITSymbolFlags::Callable | llvm::JITSymbolFlags::Exported);
+
+#ifdef _WIN32
+    symbols[lljit->mangleAndIntern("sincosf")] = llvm::orc::ExecutorSymbolDef(
+        llvm::orc::ExecutorAddr(
+            llvm::pointerToJITTargetAddress(&llvmexpr_sincosf)),
+        llvm::JITSymbolFlags::Callable | llvm::JITSymbolFlags::Exported);
+
+    symbols[lljit->mangleAndIntern("sincos")] = llvm::orc::ExecutorSymbolDef(
+        llvm::orc::ExecutorAddr(
+            llvm::pointerToJITTargetAddress(&llvmexpr_sincos)),
+        llvm::JITSymbolFlags::Callable | llvm::JITSymbolFlags::Exported);
+#endif
 
     if (auto err = main_jd.define(llvm::orc::absoluteSymbols(symbols))) {
         llvm::errs() << "Failed to define host call symbols: "
