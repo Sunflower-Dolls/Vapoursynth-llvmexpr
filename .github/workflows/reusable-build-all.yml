@@ -312,7 +312,6 @@ jobs:
             --fail-on-no-results \
             --require-backend llvmexpr \
             --json benchmark-results.json \
-            --no-progress
 
       - name: Run tests (Windows)
         if: runner.os == 'Windows'
@@ -355,7 +354,6 @@ jobs:
             --require-backend llvmexpr \
             --require-backend VkExpr \
             --json benchmark-results.json \
-            --no-progress
 
       - name: Upload benchmark results
         if: runner.os == 'Windows' || runner.os == 'macOS'
