@@ -179,26 +179,26 @@ python benchmark/benchmark.py
 
 | Test Case                    | llvmexpr    | Vkexpr      | akarin         |
 | ---------------------------- | ----------- | ----------- | -------------- |
-| simple arithmetic            | 2709.97 FPS | 1579.24 FPS | 3034.23 FPS    |
-| logical condition            | 2924.98 FPS | 1638.45 FPS | 2992.52 FPS    |
-| data range clamp             | 2810.59 FPS | 1631.03 FPS | 2954.08 FPS    |
-| complex math chain           | 1244.32 FPS | 1641.83 FPS | 1187.82 FPS    |
-| trigonometry coords          | 1957.59 FPS | 1735.47 FPS | FAILED (Error) |
-| power function               | 2943.97 FPS | 1638.87 FPS | 2961.36 FPS    |
-| stack dup                    | 2946.42 FPS | 1635.39 FPS | 2976.05 FPS    |
-| named variables              | 2906.29 FPS | 1636.36 FPS | 2983.00 FPS    |
-| static relative access       | 2650.49 FPS | 1654.98 FPS | 2835.97 FPS    |
-| dynamic absolute access      | 2737.71 FPS | 1640.34 FPS | 2760.62 FPS    |
-| bitwise and                  | 2982.76 FPS | 1637.53 FPS | 2913.48 FPS    |
-| gain                         | 1337.62 FPS | 1627.09 FPS | 1651.66 FPS    |
-| power with loop              | 2971.21 FPS | 1635.15 FPS | FAILED (Error) |
-| 3D rendering                 | 359.66 FPS  | 1300.06 FPS | 187.07 FPS     |
-| 3D rendering 2 (icosahedron) | 526.46 FPS  | 1444.96 FPS | 315.62 FPS     |
-| rotate clip                  | 205.34 FPS  | 1420.82 FPS | 334.82 FPS     |
-| 8x8 dct                      | 173.91 FPS  | 1151.15 FPS | 177.54 FPS     |
-| 8x8 idct                     | 184.99 FPS  | 1205.86 FPS | 159.09 FPS     |
+| simple arithmetic            | 2709.97 FPS | 1688.37 FPS | 3034.23 FPS    |
+| logical condition            | 2924.98 FPS | 1746.74 FPS | 2992.52 FPS    |
+| data range clamp             | 2810.59 FPS | 1754.51 FPS | 2954.08 FPS    |
+| complex math chain           | 1244.32 FPS | 1745.35 FPS | 1187.82 FPS    |
+| trigonometry coords          | 1957.59 FPS | 1757.37 FPS | FAILED (Error) |
+| power function               | 2943.97 FPS | 1719.75 FPS | 2961.36 FPS    |
+| stack dup                    | 2946.42 FPS | 1711.48 FPS | 2976.05 FPS    |
+| named variables              | 2906.29 FPS | 1767.21 FPS | 2983.00 FPS    |
+| static relative access       | 2650.49 FPS | 1712.48 FPS | 2835.97 FPS    |
+| dynamic absolute access      | 2737.71 FPS | 1761.36 FPS | 2760.62 FPS    |
+| bitwise and                  | 2982.76 FPS | 1705.09 FPS | 2913.48 FPS    |
+| gain                         | 1337.62 FPS | 1713.87 FPS | 1651.66 FPS    |
+| power with loop              | 2971.21 FPS | 1747.09 FPS | FAILED (Error) |
+| 3D rendering                 | 359.66 FPS  | 1329.74 FPS | 187.07 FPS     |
+| 3D rendering 2 (icosahedron) | 526.46 FPS  | 1549.25 FPS | 315.62 FPS     |
+| rotate clip                  | 205.34 FPS  | 1543.45 FPS | 334.82 FPS     |
+| 8x8 dct                      | 173.91 FPS  | 1313.57 FPS | 177.54 FPS     |
+| 8x8 idct                     | 184.99 FPS  | 1333.53 FPS | 159.09 FPS     |
 
 Geometric mean FPS (common successful tests only):
   llvmexpr: 1223.78 FPS
-  Vkexpr: 1537.72 FPS
+  Vkexpr: 1636.41 FPS
   akarin: 1196.40 FPS
