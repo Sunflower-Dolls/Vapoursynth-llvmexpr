@@ -21,7 +21,12 @@ import time
 import abc
 import sys
 import math
-from typing import Dict, List, Optional, Union, Tuple
+import os
+import json
+import argparse
+import platform
+import fnmatch
+from typing import Dict, List, Optional, Union, Tuple, Any, Iterable
 
 import vapoursynth as vs
 
@@ -31,7 +36,77 @@ except ImportError:
     cpuinfo = None
 
 core = vs.core
-core.num_threads = 12
+
+
+def _parse_csv_list(values: Optional[Union[str, List[str]]]) -> List[str]:
+    if values is None:
+        return []
+    if isinstance(values, list):
+        items: List[str] = []
+        for item in values:
+            items.extend(_parse_csv_list(item))
+        return items
+    return [v.strip() for v in values.split(",") if v.strip()]
+
+
+def _unique_keep_order(items: Iterable[str]) -> List[str]:
+    seen = set()
+    out: List[str] = []
+    for item in items:
+        if item in seen:
+            continue
+        seen.add(item)
+        out.append(item)
+    return out
+
+_PRESET_FORMAT_NAMES = [
+    "GRAYS",
+    "GRAY8",
+    "GRAY16",
+    "RGB24",
+    "RGBH",
+    "RGBS",
+    "YUV420P8",
+    "YUV420P16",
+    "YUV422P16",
+    "YUV444P10",
+]
+
+
+def _backfill_preset_format_constants() -> None:
+    preset_enum = getattr(vs, "PresetFormat", None) or getattr(vs, "PresetVideoFormat", None)
+    if preset_enum is None:
+        return
+
+    members: dict[str, object] = {}
+    preset_members = getattr(preset_enum, "__members__", None)
+    if isinstance(preset_members, dict):
+        for member_name, member in preset_members.items():
+            members[str(member_name).upper()] = member
+    else:
+        for member_name in dir(preset_enum):
+            if member_name.startswith("_"):
+                continue
+            members[member_name.upper()] = getattr(preset_enum, member_name)
+
+    for name in _PRESET_FORMAT_NAMES:
+        if hasattr(vs, name):
+            continue
+        member = members.get(name)
+        if member is not None:
+            setattr(vs, name, member)
+
+def _try_load_plugins(plugin_paths: List[str], *, quiet: bool) -> None:
+    for path in plugin_paths:
+        if not path:
+            continue
+        try:
+            core.std.LoadPlugin(path=path)
+            if not quiet:
+                print(f"Loaded plugin: {path}")
+        except Exception as e:
+            if not quiet:
+                print(f"Warning: failed to load plugin {path!r}: {type(e).__name__}: {e}")
 
 
 class ExprBackend(abc.ABC):
@@ -153,12 +228,14 @@ def get_test_config(test_name: str) -> Tuple[str, int]:
         return test_data, DEFAULT_FRAME_COUNT
 
 
-def print_results_table(results: Dict[str, Dict[str, str]], backend_names: List[str]):
+def print_results_table(
+    results: Dict[str, Dict[str, str]], backend_names: List[str], test_names: List[str]
+):
     """Formats and prints the benchmark results in Markdown table."""
     header = ["Test Case"] + backend_names
 
     rows = []
-    for test_name in ENABLED_TESTS:
+    for test_name in test_names:
         if test_name in results and results[test_name]:
             backend_results = results[test_name]
             row = [str(test_name)] + [
@@ -180,13 +257,13 @@ def print_results_table(results: Dict[str, Dict[str, str]], backend_names: List[
 
 
 def compute_geometric_mean_performance(
-    results: Dict[str, Dict[str, str]], backend_names: List[str]
+    results: Dict[str, Dict[str, str]], backend_names: List[str], test_names: List[str]
 ) -> Tuple[Optional[Dict[str, float]], Optional[Dict[str, float]]]:
     """Calculates geometric mean FPS per backend and relative ratios."""
 
     per_backend_fps: Dict[str, List[float]] = {backend: [] for backend in backend_names}
 
-    for test_name in ENABLED_TESTS:
+    for test_name in test_names:
         backend_results = results.get(test_name, {})
         fps_values: Dict[str, float] = {}
 
@@ -233,13 +310,101 @@ def compute_geometric_mean_performance(
     return geometric_means, ratios
 
 
-def run_benchmark():
+def _resolve_selected_tests(
+    *,
+    tests: Optional[Union[str, List[str]]],
+    exclude_tests: Optional[Union[str, List[str]]],
+    quiet: bool,
+) -> List[str]:
+    requested = _parse_csv_list(tests)
+    excluded = set(_parse_csv_list(exclude_tests))
+
+    all_tests = list(TEST_CASES.keys())
+    if not requested or any(v.lower() in {"all", "*"} for v in requested):
+        selected = all_tests
+    else:
+        selected: List[str] = []
+        for item in requested:
+            if item in TEST_CASES:
+                selected.append(item)
+                continue
+            matches = [t for t in all_tests if fnmatch.fnmatchcase(t, item)]
+            selected.extend(matches)
+
+    selected = [t for t in _unique_keep_order(selected) if t not in excluded]
+    if not quiet and not selected:
+        print("Warning: no tests selected.")
+    return selected
+
+
+def _resolve_selected_backends(backends: Optional[Union[str, List[str]]]) -> List[str]:
+    requested = _parse_csv_list(backends)
+    if not requested or any(v.lower() in {"all", "*"} for v in requested):
+        return _unique_keep_order([b.get_name() for b in BACKENDS_TO_TEST])
+    return _unique_keep_order(requested)
+
+
+def _benchmark_one(
+    *,
+    backend: ExprBackend,
+    test_name: str,
+    expr_string: str,
+    frame_count: int,
+    width: int,
+    height: int,
+    format_id: int,
+    warmup_frames: int,
+    show_progress: bool,
+    progress_prefix: str,
+) -> Dict[str, Any]:
+    try:
+        source_clip = core.std.BlankClip(
+            width=width, height=height, format=format_id, length=frame_count
+        )
+        filtered_clip = backend.filter(source_clip, expr_string)
+
+        if filtered_clip is None:
+            return {"status": "skipped"}
+
+        if warmup_frames > 0:
+            for _ in filtered_clip[:warmup_frames].frames():
+                pass
+
+        start_time = time.perf_counter()
+        actual_frame_count = 0
+        for _ in filtered_clip.frames():
+            actual_frame_count += 1
+        end_time = time.perf_counter()
+
+        duration_s = end_time - start_time
+        fps = (actual_frame_count / duration_s) if duration_s > 0 else 0.0
+        if show_progress:
+            sys.stdout.write("\r" + " " * len(progress_prefix) + "\r")
+            sys.stdout.flush()
+        return {
+            "status": "ok",
+            "frames": actual_frame_count,
+            "duration_s": duration_s,
+            "fps": fps,
+        }
+    except Exception as e:
+        if show_progress:
+            sys.stdout.write("\r" + " " * len(progress_prefix) + "\r")
+            sys.stdout.flush()
+        return {
+            "status": "failed",
+            "error_type": type(e).__name__,
+            "error": str(e),
+        }
+
+
+def run_benchmark(args: argparse.Namespace) -> int:
     """
     Sets up the test environment and runs the configured benchmarks.
     """
     print("--- VapourSynth Expr Benchmark ---")
 
-    if cpuinfo:
+    if cpuinfo and not args.no_cpuinfo:
         info = cpuinfo.get_cpu_info()
         cpu_brand = info.get("brand_raw", "Unknown CPU")
         cpu_cores = info.get("count", "?")
@@ -254,20 +419,72 @@ def run_benchmark():
         except NotImplementedError:
             print("**CPU:** Could not determine model or core count.")
 
+    if args.threads is not None:
+        if str(args.threads).lower() == "auto":
+            import multiprocessing
+
+            core.num_threads = multiprocessing.cpu_count()
+        else:
+            core.num_threads = int(args.threads)
+
+    print(f"**Python:** {platform.python_version()}")
+    print(f"**Platform:** {platform.platform()}")
     print(f"**VapourSynth Threads:** {core.num_threads}\n")
 
     print("Running benchmarks...\n")
 
-    results: Dict[str, Dict[str, str]] = {test_name: {} for test_name in ENABLED_TESTS}
+    plugin_paths = _unique_keep_order(
+        _parse_csv_list(args.load_plugin)
+        + _parse_csv_list(args.llvmexpr_plugin)
+        + _parse_csv_list(args.akarin_plugin)
+    )
+    _try_load_plugins(plugin_paths, quiet=args.quiet)
 
-    active_backends = [b for b in BACKENDS_TO_TEST if b.get_name() in ENABLED_BACKENDS]
+    enabled_backends = _resolve_selected_backends(args.backends)
+    active_backends = [b for b in BACKENDS_TO_TEST if b.get_name() in enabled_backends]
     backend_names = [b.get_name() for b in active_backends]
+
+    if args.expr or args.expr_file:
+        if args.tests and not any(v.lower() in {"all", "*"} for v in _parse_csv_list(args.tests)):
+            raise SystemExit("--expr/--expr-file cannot be combined with --tests")
+        if args.expr and args.expr_file:
+            raise SystemExit("Only one of --expr and --expr-file may be provided")
+        expr_string = args.expr
+        if args.expr_file:
+            with open(args.expr_file, "r", encoding="utf-8") as f:
+                expr_string = f.read().strip()
+        if not expr_string:
+            raise SystemExit("Custom expression is empty")
+        test_names = [args.test_name]
+        test_exprs: Dict[str, Tuple[str, int]] = {
+            args.test_name: (expr_string, int(args.frames or DEFAULT_FRAME_COUNT))
+        }
+    else:
+        test_names = _resolve_selected_tests(
+            tests=args.tests, exclude_tests=args.exclude_tests, quiet=args.quiet
+        )
+        test_exprs = {
+            name: get_test_config(name) for name in test_names if name in TEST_CASES
+        }
+
+    if args.list_tests:
+        for name in list(TEST_CASES.keys()):
+            print(name)
+        return 0
+
+    if args.list_backends:
+        for name in [b.get_name() for b in BACKENDS_TO_TEST]:
+            print(name)
+        return 0
+
+    results: Dict[str, Dict[str, str]] = {test_name: {} for test_name in test_names}
+    json_results: Dict[str, Dict[str, Dict[str, Any]]] = {test_name: {} for test_name in test_names}
 
     tests_to_run = [
         (backend, test_name)
         for backend in active_backends
-        for test_name in ENABLED_TESTS
-        if test_name in TEST_CASES
+        for test_name in test_names
+        if test_name in test_exprs
     ]
     total_tests = len(tests_to_run)
     completed_tests = 0
@@ -275,48 +492,49 @@ def run_benchmark():
     for backend, test_name in tests_to_run:
         completed_tests += 1
         backend_name = backend.get_name()
-        expr_string, frame_count = get_test_config(test_name)
+        expr_string, configured_frame_count = test_exprs[test_name]
+        frame_count = int(args.frames) if args.frames is not None else configured_frame_count
 
-        progress_msg = f"[{completed_tests}/{total_tests}] Running: {backend_name} on '{test_name}' ({frame_count} frames)"
-        sys.stdout.write(f"\r{progress_msg.ljust(100)}")
+        progress_msg = (
+            f"[{completed_tests}/{total_tests}] {backend_name} | {test_name} | {frame_count} frames"
+        )
+        if not args.no_progress:
+            sys.stdout.write(f"\r{progress_msg.ljust(120)}")
+            sys.stdout.flush()
+
+        res = _benchmark_one(
+            backend=backend,
+            test_name=test_name,
+            expr_string=expr_string,
+            frame_count=frame_count,
+            width=int(args.width),
+            height=int(args.height),
+            format_id=getattr(vs, args.format),
+            warmup_frames=int(args.warmup),
+            show_progress=not args.no_progress,
+            progress_prefix=progress_msg,
+        )
+
+        status = res["status"]
+        if status == "ok":
+            results[test_name][backend_name] = f"{res['fps']:.2f} FPS"
+        elif status == "skipped":
+            results[test_name][backend_name] = "SKIPPED"
+        else:
+            results[test_name][backend_name] = f"FAILED ({res.get('error_type', 'Error')})"
+
+        json_results[test_name][backend_name] = res
+
+    if not args.no_progress:
+        sys.stdout.write("\r" + " " * 120 + "\r")
         sys.stdout.flush()
-
-        try:
-            # Create source clip with the specified frame count for this test
-            source_clip = core.std.BlankClip(
-                width=1920, height=1080, format=vs.GRAYS, length=frame_count
-            )
-
-            filtered_clip = backend.filter(source_clip, expr_string)
-
-            if filtered_clip is None:
-                results[test_name][backend_name] = "SKIPPED"
-                continue
-
-            # Warm up with first 5 frames
-            for _ in filtered_clip[:5].frames():
-                pass
-
-            start_time = time.perf_counter()
-            actual_frame_count = 0
-            for _ in filtered_clip.frames():
-                actual_frame_count += 1
-            end_time = time.perf_counter()
-
-            duration = end_time - start_time
-            fps = actual_frame_count / duration
-            results[test_name][backend_name] = f"{fps:.2f} FPS"
-
-        except Exception as e:
-            results[test_name][backend_name] = f"FAILED ({type(e).__name__})"
-
-    sys.stdout.write("\r" + " " * 100 + "\r")
-    sys.stdout.flush()
     print("All benchmarks completed.\n")
 
-    print_results_table(results, backend_names)
+    print_results_table(results, backend_names, test_names)
 
-    geometric_means, ratios = compute_geometric_mean_performance(results, backend_names)
+    geometric_means, ratios = compute_geometric_mean_performance(
+        results, backend_names, test_names
+    )
 
     if geometric_means:
         print("\nGeometric mean FPS (common successful tests only):")
@@ -335,6 +553,106 @@ def run_benchmark():
     else:
         print("\nNo common successful tests for geometric mean calculation.")
 
+    report: Dict[str, Any] = {
+        "meta": {
+            "python": platform.python_version(),
+            "platform": platform.platform(),
+            "vapoursynth_threads": core.num_threads,
+            "width": int(args.width),
+            "height": int(args.height),
+            "format": args.format,
+            "warmup_frames": int(args.warmup),
+            "frames_override": int(args.frames) if args.frames is not None else None,
+            "selected_tests": test_names,
+            "selected_backends": backend_names,
+        },
+        "results": json_results,
+        "geometric_mean_fps": geometric_means,
+        "performance_ratios": ratios,
+    }
+
+    if args.json:
+        with open(args.json, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2, sort_keys=True)
+        if not args.quiet:
+            print(f"\nWrote JSON report: {args.json}")
+
+    if args.markdown:
+        with open(args.markdown, "w", encoding="utf-8") as f:
+            original_stdout = sys.stdout
+            try:
+                sys.stdout = f
+                print_results_table(results, backend_names, test_names)
+            finally:
+                sys.stdout = original_stdout
+        if not args.quiet:
+            print(f"Wrote Markdown table: {args.markdown}")
+
+    any_ok = any(
+        backend_result.get("status") == "ok"
+        for test_result in json_results.values()
+        for backend_result in test_result.values()
+    )
+    any_failed = any(
+        backend_result.get("status") == "failed"
+        for test_result in json_results.values()
+        for backend_result in test_result.values()
+    )
+
+    if args.fail_on_no_results and not any_ok:
+        print("Error: no successful benchmark results.")
+        return 2
+    if args.fail_on_failed and any_failed:
+        print("Error: at least one benchmark failed.")
+        return 3
+
+    required_backends = _parse_csv_list(args.require_backend)
+    for required in required_backends:
+        had_required_ok = any(
+            test_result.get(required, {}).get("status") == "ok"
+            for test_result in json_results.values()
+        )
+        if not had_required_ok:
+            print(f"Error: required backend produced no OK results: {required}")
+            return 4
+
+    return 0
+
 
 if __name__ == "__main__":
-    run_benchmark()
+    parser = argparse.ArgumentParser(description="Benchmark llvmexpr.Expr/VkExpr backends")
+    parser.add_argument("--width", type=int, default=1920)
+    parser.add_argument("--height", type=int, default=1080)
+    parser.add_argument("--format", type=str, default="GRAYS")
+    parser.add_argument("--frames", type=int, default=None, help="Override frame count for all tests")
+    parser.add_argument("--warmup", type=int, default=5)
+    parser.add_argument("--threads", type=str, default="12", help="VapourSynth threads (int or 'auto')")
+
+    parser.add_argument("--tests", type=str, default="all", help="Comma-separated test names or glob patterns")
+    parser.add_argument("--exclude-tests", type=str, default=None, help="Comma-separated test names/patterns to skip")
+    parser.add_argument("--list-tests", action="store_true")
+
+    parser.add_argument("--backends", type=str, default="llvmexpr,VkExpr,akarin", help="Comma-separated backend names")
+    parser.add_argument("--list-backends", action="store_true")
+
+    parser.add_argument("--expr", type=str, default=None, help="Run a custom expression (postfix)")
+    parser.add_argument("--expr-file", type=str, default=None, help="Run a custom expression loaded from file")
+    parser.add_argument("--test-name", type=str, default="custom", help="Name for the custom expression test")
+
+    parser.add_argument("--llvmexpr-plugin", type=str, default=os.environ.get("LLVMEXPR_PLUGIN_PATH"))
+    parser.add_argument("--akarin-plugin", type=str, default=os.environ.get("AKARIN_PLUGIN_PATH"))
+    parser.add_argument("--load-plugin", action="append", default=[], help="Extra plugin paths to load (repeatable)")
+
+    parser.add_argument("--json", type=str, default=None, help="Write JSON report to path")
+    parser.add_argument("--markdown", type=str, default=None, help="Write Markdown table to path")
+
+    parser.add_argument("--require-backend", action="append", default=[], help="Fail if backend has no OK results")
+    parser.add_argument("--fail-on-failed", action="store_true")
+    parser.add_argument("--fail-on-no-results", action="store_true")
+
+    parser.add_argument("--no-progress", action="store_true")
+    parser.add_argument("--no-cpuinfo", action="store_true")
+    parser.add_argument("--quiet", action="store_true")
+
+    exit_code = run_benchmark(parser.parse_args())
+    raise SystemExit(exit_code)

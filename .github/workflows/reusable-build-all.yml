@@ -281,6 +281,39 @@ jobs:
         if: runner.os == 'macOS'
         run: otool -L builddir/${{ inputs.library_name }}
 
+
+
+      - name: Run benchmarks (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          export PYTHONPATH=""
+          export VK_LOADER_DEBUG=all
+          
+          # Build release
+          CC="clang -fuse-ld=lld" CXX="clang++ -fuse-ld=lld" meson setup builddir_release \
+            -Dstatic-llvm=true \
+            -Dstatic-shaderc=true \
+            -Denable-sanitizers=false \
+            --buildtype=release
+          ninja -C builddir_release
+
+          export LLVMEXPR_PLUGIN_PATH="builddir_release/${{ inputs.library_name }}"
+          
+          # Force use of Lavapipe for Vulkan
+          export VK_ICD_FILENAMES="C:/lavapipe/share/vulkan/icd.d/lvp_icd.x86_64.json"
+          powershell.exe -Command "reg add \"HKLM\SOFTWARE\Khronos\Vulkan\Drivers\" /v \"C:\lavapipe\share\vulkan\icd.d\lvp_icd.x86_64.json\" /t REG_DWORD /d 0 /f"
+          
+          python benchmarks/benchmark.py \
+            --llvmexpr-plugin "$PWD/builddir_release/${{ inputs.library_name }}" \
+            --backends "llvmexpr,VkExpr" \
+            --frames 800 \
+            --warmup 5 \
+            --fail-on-no-results \
+            --require-backend llvmexpr \
+            --json benchmark-results.json \
+            --no-progress
+
       - name: Run tests (Windows)
         if: runner.os == 'Windows'
         shell: msys2 {0}
@@ -295,6 +328,42 @@ jobs:
           
           echo "Running pytest with Lavapipe..."
           python -m pytest -vv
+
+      - name: Run benchmarks (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          export PYTHONPATH=""
+          export VK_LOADER_DEBUG=all
+
+          # Build release
+          CC=clang CXX="clang++ -stdlib=libc++" meson setup builddir_release \
+            -Dstatic-llvm=true \
+            -Dstatic-shaderc=true \
+            -Denable-sanitizers=false \
+            --buildtype=release
+          ninja -C builddir_release
+
+          export LLVMEXPR_PLUGIN_PATH="builddir_release/${{ inputs.library_name }}"
+
+          python3 benchmarks/benchmark.py \
+            --llvmexpr-plugin "$PWD/builddir_release/${{ inputs.library_name }}" \
+            --backends "llvmexpr,VkExpr" \
+            --frames 5000 \
+            --warmup 20 \
+            --fail-on-no-results \
+            --require-backend llvmexpr \
+            --require-backend VkExpr \
+            --json benchmark-results.json \
+            --no-progress
+
+      - name: Upload benchmark results
+        if: runner.os == 'Windows' || runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-${{ inputs.artifact_name }}
+          path: benchmark-results.json
+          if-no-files-found: warn
 
       - name: Run tests (macOS)
         if: runner.os == 'macOS'
