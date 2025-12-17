@@ -31,7 +31,7 @@ namespace infix2postfix::stdlib {
 struct Algorithms {
     static constexpr std::string_view NAME = "algorithms";
 
-    //NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)
+    // NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)
     static constexpr char CODE_DATA[] = {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wc23-extensions"

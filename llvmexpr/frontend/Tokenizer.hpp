@@ -244,8 +244,14 @@ struct TokenDefinition {
     BehaviorResolver behavior;
     TokenParser parser;
 
-    bool available_in_expr = true;
-    bool available_in_single_expr = true;
+    enum class Availability : std::uint8_t {
+        Expr = 1U << 0,
+        SingleExpr = 1U << 1,
+    };
+
+    Availability availability = static_cast<Availability>(
+        static_cast<std::uint8_t>(Availability::Expr) |
+        static_cast<std::uint8_t>(Availability::SingleExpr));
 };
 
 std::vector<Token> tokenize(const std::string& expr, int num_inputs,
