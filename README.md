@@ -58,7 +58,7 @@ This function is a Vulkan-based GPU accelerated backend for `Expr`. It accepts t
 
 **Function Signature:**
 ```
-llvmexpr.VkExpr(clip[] clips, string[] expr[, int format, int boundary=0, string dump_glsl="", int infix=0, int num_streams=8])
+llvmexpr.VkExpr(clip[] clips, string[] expr[, int format, int boundary=0, int num_streams=8, int device_id=-1, string dump_glsl="", int infix=0])
 ```
 
 **Parameters:**
@@ -71,6 +71,7 @@ llvmexpr.VkExpr(clip[] clips, string[] expr[, int format, int boundary=0, string
   - `0`: Postfix notation (RPN)
   - `1`: Infix notation (C-style) - automatically converted to postfix. In this mode, a specialized `__GPU__` macro is defined.
 - `num_streams`: Number of concurrent Vulkan streams (default: 8). Increase this for better parallelism if you have a powerful GPU, or decrease it if you run into insufficient vram.
+- `device_id`: Selects which Vulkan physical device to run on (default: -1 = auto).
 
 ### `llvmexpr.SingleExpr` (Per-Frame)
 

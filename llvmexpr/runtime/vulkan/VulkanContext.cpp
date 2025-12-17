@@ -20,9 +20,12 @@
 #include "VulkanContext.hpp"
 #include <algorithm>
 #include <cstring>
-#ifdef _WIN32
+#include <format>
 #include <memory>
-#endif
+#include <mutex>
+#include <optional>
+#include <string>
+#include <unordered_map>
 #ifndef NDEBUG
 #include <iostream>
 #endif
@@ -34,28 +37,68 @@ VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
 namespace llvmexpr {
 
-VulkanContext& VulkanContext::getInstance() {
+namespace {
+
+std::optional<uint32_t>
+find_compute_queue_family_index(const vk::raii::PhysicalDevice& dev) {
+    const auto queue_families = dev.getQueueFamilyProperties();
+    for (size_t i = 0; i < queue_families.size(); ++i) {
+        if (queue_families[i].queueFlags & vk::QueueFlagBits::eCompute) {
+            return static_cast<uint32_t>(i);
+        }
+    }
+    return std::nullopt;
+}
+
+std::string format_physical_devices(const vk::raii::PhysicalDevices& devices) {
+    std::string result = "Available Physical Devices:\n";
+    for (size_t idx = 0; idx < devices.size(); ++idx) {
+        const auto props = devices[idx].getProperties();
+        result +=
+            std::format("  [{}] {}\n", idx, std::string(props.deviceName));
+    }
+    return result;
+}
+
+} // namespace
+
+VulkanContext& VulkanContext::getInstance() { return getInstance(-1); }
+
+VulkanContext& VulkanContext::getInstance(int device_id) {
     static bool initialized = []() { return volkInitialize() == VK_SUCCESS; }();
     if (!initialized) {
         throw std::runtime_error("Failed to initialize volk");
     }
 
-#ifdef _WIN32
     struct NoDestroy {
-        void operator()(VulkanContext* /*unused*/) const noexcept {}
+        void operator()(VulkanContext* /*ptr*/) const {}
     };
-    static auto instance = []() {
-        auto owned = std::make_unique<VulkanContext>();
-        return std::unique_ptr<VulkanContext, NoDestroy>(owned.release());
-    }();
-    return *instance;
-#else
-    static VulkanContext instance;
-    return instance;
-#endif
+    using ContextPtr = std::unique_ptr<VulkanContext, NoDestroy>;
+
+    static std::mutex context_mutex;
+    static std::unordered_map<int, ContextPtr> contexts;
+
+    int key = device_id;
+    if (key < 0) {
+        key = -1;
+    }
+
+    std::lock_guard<std::mutex> lock(context_mutex);
+    auto it = contexts.find(key);
+    if (it != contexts.end()) {
+        return *it->second;
+    }
+
+    auto created = std::make_unique<VulkanContext>(key);
+    VulkanContext& ref = *created;
+
+    // Leaky Singleton
+    contexts.emplace(key, ContextPtr(created.release()));
+    return ref;
 }
 
-VulkanContext::VulkanContext() : instance(nullptr) {
+VulkanContext::VulkanContext(int device_id)
+    : device_id(device_id), instance(nullptr) {
 
     createInstance();
     // Re-load volk with the instance
@@ -129,39 +172,49 @@ void VulkanContext::pickPhysicalDevice() {
         throw std::runtime_error("Failed to find GPUs with Vulkan support!");
     }
 
-    // TODO: Finish device selection
 #ifndef NDEBUG
-    std::cout << "Available Physical Devices:" << '\n';
+    std::cerr << format_physical_devices(devices);
 #endif
+
+    auto select_device = [&](const vk::raii::PhysicalDevice& dev) -> bool {
+        const auto compute_queue = find_compute_queue_family_index(dev);
+        if (!compute_queue.has_value()) {
+            return false;
+        }
+        physical_device = dev;
+        queue_family_index = *compute_queue;
+#ifndef NDEBUG
+        const auto props = dev.getProperties();
+        std::cout << "Selected Device: " << props.deviceName << '\n';
+#endif
+        return true;
+    };
+
+    if (device_id >= 0) {
+        if (static_cast<size_t>(device_id) >= devices.size()) {
+            throw std::runtime_error(
+                std::format("Invalid device_id: {}\n{}", device_id,
+                            format_physical_devices(devices)));
+        }
+
+        const auto& dev = devices[static_cast<size_t>(device_id)];
+        if (!select_device(dev)) {
+            throw std::runtime_error(
+                std::format("Selected device_id {} has no compute queue\n{}",
+                            device_id, format_physical_devices(devices)));
+        }
+        return;
+    }
+
     for (const auto& dev : devices) {
-#ifndef NDEBUG
-        auto props = dev.getProperties();
-        std::cout << "  - " << props.deviceName << '\n';
-#endif
-
-        // Check for compute queue
-        auto queue_families = dev.getQueueFamilyProperties();
-        int i = 0;
-        for (const auto& queue_family : queue_families) {
-            if (queue_family.queueFlags & vk::QueueFlagBits::eCompute) {
-                physical_device = dev;
-                queue_family_index = i;
-                break;
-            }
-            i++;
-        }
-        if (*physical_device) {
-#ifndef NDEBUG
-            std::cout << "    Selected Device: " << props.deviceName << '\n';
-#endif
-            break;
+        if (select_device(dev)) {
+            return;
         }
     }
 
-    if (!*physical_device) {
-        throw std::runtime_error(
-            "Failed to find a suitable GPU with Compute capabilities!");
-    }
+    throw std::runtime_error(std::format(
+        "Failed to find a suitable GPU with Compute capabilities!\n{}",
+        format_physical_devices(devices)));
 }
 
 void VulkanContext::createDevice() {

@@ -913,6 +913,9 @@ struct VkExprData : BaseExprData {
     std::array<std::vector<Token>, 3> tokens;
     std::array<std::unique_ptr<analysis::AnalysisManager>, 3> analysis_managers;
 
+    int device_id = -1;
+    llvmexpr::VulkanContext* ctx = nullptr;
+
     // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
     int num_streams = 8;
     std::vector<std::unique_ptr<VkStream>> streams;
@@ -1262,15 +1265,14 @@ const VSFrame*
 
                 vk::SubmitInfo submit_info;
                 submit_info.setCommandBuffers(*stream.command_buffer);
-                auto& ctx = llvmexpr::VulkanContext::getInstance();
-                ctx.submit(submit_info, *stream.fence);
+                d->ctx->submit(submit_info, *stream.fence);
 
-                auto result = ctx.getDevice().waitForFences(
+                auto result = d->ctx->getDevice().waitForFences(
                     *stream.fence, VK_TRUE, UINT64_MAX);
                 if (result != vk::Result::eSuccess) {
                     throw std::runtime_error("Failed to wait for VkExpr fence");
                 }
-                ctx.getDevice().resetFences(*stream.fence);
+                d->ctx->getDevice().resetFences(*stream.fence);
 
                 stream.memory->invalidateBuffer(plane_res.output_staging_buffer,
                                                 buffer_size);
@@ -1538,11 +1540,21 @@ vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
             d->num_streams = 8;
         }
 
+        d->device_id =
+            static_cast<int>(vsapi->mapGetInt(in, "device_id", 0, &err));
+        if (err != 0) {
+            d->device_id = -1;
+        }
+        if (d->device_id < -1) {
+            throw std::runtime_error("device_id must be >= -1");
+        }
+
         d->semaphore =
             std::make_unique<std::counting_semaphore<>>(d->num_streams);
         d->streams.resize(d->num_streams);
 
-        auto& ctx = llvmexpr::VulkanContext::getInstance();
+        d->ctx = &llvmexpr::VulkanContext::getInstance(d->device_id);
+        auto& ctx = *d->ctx;
 
         for (int k = 0; k < d->num_streams; ++k) {
             d->streams[k] = std::make_unique<VkStream>();
@@ -1675,7 +1687,7 @@ VapourSynthPluginInit2(VSPlugin* plugin, const VSPLUGINAPI* vspapi) {
 
     vspapi->registerFunction("VkExpr",
                              "clips:vnode[];expr:data[];format:int:opt;"
-                             "boundary:int:opt;num_streams:int:opt;dump_glsl:"
-                             "data:opt;infix:int:opt;",
+                             "boundary:int:opt;num_streams:int:opt;device_id:"
+                             "int:opt;dump_glsl:data:opt;infix:int:opt;",
                              "clip:vnode;", vkExprCreate, nullptr, plugin);
 }

@@ -36,8 +36,9 @@ namespace llvmexpr {
 class VulkanContext {
   public:
     static VulkanContext& getInstance();
+    static VulkanContext& getInstance(int device_id);
 
-    VulkanContext();
+    explicit VulkanContext(int device_id = -1);
     ~VulkanContext();
 
     VulkanContext(const VulkanContext&) = delete;
@@ -62,6 +63,7 @@ class VulkanContext {
     void pickPhysicalDevice();
     void createDevice();
 
+    int device_id = -1;
     vk::raii::Context context;
     vk::raii::Instance instance;
     vk::raii::PhysicalDevice physical_device = nullptr;
