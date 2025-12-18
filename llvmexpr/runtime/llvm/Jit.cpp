@@ -19,6 +19,9 @@
 
 #include "Jit.hpp"
 
+#ifdef _WIN32
+#include <cmath>
+#endif
 #include <stdexcept>
 #include <string>
 #include <vector>
