@@ -44,6 +44,13 @@ jobs:
       - name: Generate docs
         run: doxygen Doxyfile
 
+      - name: Add CNAME
+        run: |
+          if [ -f docs/CNAME ]; then
+            domain="$(tr -d '\r\n' < docs/CNAME)"
+            printf '%s\n' "$domain" > build/docs/html/CNAME
+          fi
+
       - name: Copy docs sources
         run: |
           cp -a README.md build/docs/html/README.md
