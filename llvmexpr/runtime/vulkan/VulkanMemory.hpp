@@ -33,7 +33,7 @@
 
 #include <cstddef>
 
-namespace llvmexpr {
+namespace vkexpr {
 
 class VulkanContext;
 
@@ -120,6 +120,6 @@ class VulkanMemory {
     vk::raii::Fence transfer_fence = nullptr;
 };
 
-} // namespace llvmexpr
+} // namespace vkexpr
 
 #endif // LLVMEXPR_RUNTIME_VULKAN_VULKANMEMORY_HPP

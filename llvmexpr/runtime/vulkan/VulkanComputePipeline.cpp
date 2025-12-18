@@ -27,7 +27,7 @@
 #include <stdexcept>
 #include <unordered_map>
 
-namespace llvmexpr {
+namespace vkexpr {
 
 namespace {
 constexpr uint32_t WORKGROUP_SIZE = 256;
@@ -291,4 +291,4 @@ void VulkanComputePipeline::recordDispatch(
     command_buffer.dispatch(num_workgroups, 1, 1);
 }
 
-} // namespace llvmexpr
+} // namespace vkexpr

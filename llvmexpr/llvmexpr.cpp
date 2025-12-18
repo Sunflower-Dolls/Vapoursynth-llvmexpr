@@ -855,19 +855,19 @@ singleExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
 
 struct VkStream {
     struct PlaneResources {
-        std::vector<llvmexpr::VulkanBuffer> input_buffers;
-        std::vector<llvmexpr::VulkanBuffer> input_staging_buffers;
-        llvmexpr::VulkanBuffer output_buffer;
-        llvmexpr::VulkanBuffer output_staging_buffer;
-        llvmexpr::VulkanBuffer props_buffer;
-        llvmexpr::VulkanBuffer props_staging_buffer;
+        std::vector<vkexpr::VulkanBuffer> input_buffers;
+        std::vector<vkexpr::VulkanBuffer> input_staging_buffers;
+        vkexpr::VulkanBuffer output_buffer;
+        vkexpr::VulkanBuffer output_staging_buffer;
+        vkexpr::VulkanBuffer props_buffer;
+        vkexpr::VulkanBuffer props_staging_buffer;
         VkDeviceSize buffer_size = 0;
         VkDeviceSize props_size = 0;
         bool initialized = false;
     };
 
-    std::unique_ptr<llvmexpr::VulkanMemory> memory;
-    std::array<std::unique_ptr<llvmexpr::VulkanComputePipeline>, 3> pipelines;
+    std::unique_ptr<vkexpr::VulkanMemory> memory;
+    std::array<std::unique_ptr<vkexpr::VulkanComputePipeline>, 3> pipelines;
     std::array<PlaneResources, 3> plane_resources;
     vk::raii::CommandPool command_pool = nullptr;
     vk::raii::CommandBuffer command_buffer = nullptr;
@@ -914,7 +914,7 @@ struct VkExprData : BaseExprData {
     std::array<std::unique_ptr<analysis::AnalysisManager>, 3> analysis_managers;
 
     int device_id = -1;
-    llvmexpr::VulkanContext* ctx = nullptr;
+    vkexpr::VulkanContext* ctx = nullptr;
 
     // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
     int num_streams = 8;
@@ -1054,7 +1054,7 @@ const VSFrame*
                     }
                 }
 
-                std::vector<llvmexpr::VulkanBuffer*> src_buffer_ptrs(
+                std::vector<vkexpr::VulkanBuffer*> src_buffer_ptrs(
                     d->num_inputs);
 
                 for (int i = 0; i < d->num_inputs; ++i) {
@@ -1553,13 +1553,12 @@ vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
             std::make_unique<std::counting_semaphore<>>(d->num_streams);
         d->streams.resize(d->num_streams);
 
-        d->ctx = &llvmexpr::VulkanContext::getInstance(d->device_id);
+        d->ctx = &vkexpr::VulkanContext::getInstance(d->device_id);
         auto& ctx = *d->ctx;
 
         for (int k = 0; k < d->num_streams; ++k) {
             d->streams[k] = std::make_unique<VkStream>();
-            d->streams[k]->memory =
-                std::make_unique<llvmexpr::VulkanMemory>(ctx);
+            d->streams[k]->memory = std::make_unique<vkexpr::VulkanMemory>(ctx);
             d->free_stream_indices.push(k);
 
             vk::CommandPoolCreateInfo pool_info(
@@ -1614,7 +1613,7 @@ vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
                 }
 
                 d->streams[k]->pipelines.at(i) =
-                    std::make_unique<llvmexpr::VulkanComputePipeline>(
+                    std::make_unique<vkexpr::VulkanComputePipeline>(
                         ctx, shader, static_cast<uint32_t>(d->num_inputs),
                         num_props_floats);
             }

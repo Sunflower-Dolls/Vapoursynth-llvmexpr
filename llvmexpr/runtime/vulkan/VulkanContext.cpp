@@ -35,7 +35,7 @@
 // NOLINTNEXTLINE
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
-namespace llvmexpr {
+namespace vkexpr {
 
 namespace {
 
@@ -259,4 +259,4 @@ void VulkanContext::waitIdle() {
     device.waitIdle();
 }
 
-} // namespace llvmexpr
+} // namespace vkexpr

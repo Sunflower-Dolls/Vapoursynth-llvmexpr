@@ -34,7 +34,7 @@
 
 #include <vk_mem_alloc.h>
 
-namespace llvmexpr {
+namespace vkexpr {
 
 VulkanMemory::VulkanMemory(VulkanContext& ctx) : context(ctx) {
     VmaVulkanFunctions vulkan_functions = {};
@@ -234,4 +234,4 @@ void VulkanMemory::invalidateBuffer(const VulkanBuffer& buffer,
     (void)vmaInvalidateAllocation(allocator, buffer.allocation, offset, size);
 }
 
-} // namespace llvmexpr
+} // namespace vkexpr

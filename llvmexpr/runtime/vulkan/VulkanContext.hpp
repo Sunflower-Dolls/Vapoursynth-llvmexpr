@@ -31,7 +31,7 @@
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan_raii.hpp>
 
-namespace llvmexpr {
+namespace vkexpr {
 
 class VulkanContext {
   public:
@@ -74,6 +74,6 @@ class VulkanContext {
     std::mutex queue_mutex;
 };
 
-} // namespace llvmexpr
+} // namespace vkexpr
 
 #endif // LLVMEXPR_RUNTIME_VULKAN_VULKANCONTEXT_HPP

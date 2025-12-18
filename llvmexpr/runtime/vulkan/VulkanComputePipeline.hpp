@@ -34,7 +34,7 @@
 #include <string>
 #include <vector>
 
-namespace llvmexpr {
+namespace vkexpr {
 
 class VulkanContext;
 class VulkanMemory;
@@ -91,6 +91,6 @@ class VulkanComputePipeline {
     vk::raii::DescriptorSet descriptor_set = nullptr;
 };
 
-} // namespace llvmexpr
+} // namespace vkexpr
 
 #endif // LLVMEXPR_RUNTIME_VULKAN_VULKANCOMPUTEPIPELINE_HPP
