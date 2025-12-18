@@ -59,10 +59,6 @@ class VulkanComputePipeline {
     VulkanComputePipeline(VulkanComputePipeline&&) = delete;
     VulkanComputePipeline& operator=(VulkanComputePipeline&&) = delete;
 
-    void dispatch(const std::vector<VulkanBuffer*>& input_buffers,
-                  VulkanBuffer& output_buffer, VulkanBuffer* props_buffer,
-                  uint32_t width, uint32_t height, int32_t frame_number);
-
     void recordDispatch(vk::raii::CommandBuffer& command_buffer,
                         const std::vector<VulkanBuffer*>& input_buffers,
                         VulkanBuffer& output_buffer, VulkanBuffer* props_buffer,
@@ -73,7 +69,6 @@ class VulkanComputePipeline {
     void createDescriptorSetLayout(uint32_t num_input_buffers,
                                    bool with_props_buffer);
     void createPipeline();
-    void createCommandResources();
     void updateDescriptorSets(const std::vector<VulkanBuffer*>& input_buffers,
                               VulkanBuffer& output_buffer,
                               VulkanBuffer* props_buffer);
@@ -94,10 +89,6 @@ class VulkanComputePipeline {
 
     vk::raii::DescriptorPool descriptor_pool = nullptr;
     vk::raii::DescriptorSet descriptor_set = nullptr;
-
-    vk::raii::CommandPool command_pool = nullptr;
-    vk::raii::CommandBuffer command_buffer = nullptr;
-    vk::raii::Fence fence = nullptr;
 };
 
 } // namespace llvmexpr

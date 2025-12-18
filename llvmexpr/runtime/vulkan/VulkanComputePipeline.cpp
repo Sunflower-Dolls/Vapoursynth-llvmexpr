@@ -65,7 +65,6 @@ VulkanComputePipeline::VulkanComputePipeline(VulkanContext& ctx,
     compileShader(glsl_source);
     createDescriptorSetLayout(num_input_buffers, has_props_buffer);
     createPipeline();
-    createCommandResources();
 }
 
 VulkanComputePipeline::~VulkanComputePipeline() = default;
@@ -187,21 +186,6 @@ void VulkanComputePipeline::createPipeline() {
     pipeline = vk::raii::Pipeline(context.getDevice(), nullptr, pipeline_info);
 }
 
-void VulkanComputePipeline::createCommandResources() {
-    vk::CommandPoolCreateInfo pool_info(
-        vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
-        context.getQueueFamilyIndex());
-    command_pool = vk::raii::CommandPool(context.getDevice(), pool_info);
-
-    vk::CommandBufferAllocateInfo cmd_info(*command_pool,
-                                           vk::CommandBufferLevel::ePrimary, 1);
-    auto cmd_buffers = vk::raii::CommandBuffers(context.getDevice(), cmd_info);
-    command_buffer = std::move(cmd_buffers[0]);
-
-    vk::FenceCreateInfo fence_info;
-    fence = vk::raii::Fence(context.getDevice(), fence_info);
-}
-
 void VulkanComputePipeline::updateDescriptorSets(
     const std::vector<VulkanBuffer*>& input_buffers,
     VulkanBuffer& output_buffer, VulkanBuffer* props_buffer) {
@@ -281,51 +265,6 @@ void VulkanComputePipeline::updateDescriptorSets(
     }
 
     context.getDevice().updateDescriptorSets(writes, {});
-}
-
-void VulkanComputePipeline::dispatch(
-    const std::vector<VulkanBuffer*>& input_buffers,
-    VulkanBuffer& output_buffer, VulkanBuffer* props_buffer, uint32_t width,
-    uint32_t height, int32_t frame_number) {
-
-    updateDescriptorSets(input_buffers, output_buffer, props_buffer);
-
-    // Record command buffer
-    vk::CommandBufferBeginInfo begin_info(
-        vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
-    command_buffer.begin(begin_info);
-
-    command_buffer.bindPipeline(vk::PipelineBindPoint::eCompute, *pipeline);
-    command_buffer.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
-                                      *pipeline_layout, 0, *descriptor_set, {});
-
-    // Set push constants
-    PushConstants pc = {.width = width,
-                        .height = height,
-                        .num_inputs = num_inputs,
-                        .frame_number = frame_number};
-    command_buffer.pushConstants<PushConstants>(
-        *pipeline_layout, vk::ShaderStageFlagBits::eCompute, 0, pc);
-
-    // Dispatch
-    uint32_t total_pixels = width * height;
-    uint32_t num_workgroups =
-        (total_pixels + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
-    command_buffer.dispatch(num_workgroups, 1, 1);
-
-    command_buffer.end();
-
-    // Submit and wait
-    vk::SubmitInfo submit_info;
-    submit_info.setCommandBuffers(*command_buffer);
-    context.submit(submit_info, *fence);
-
-    auto result =
-        context.getDevice().waitForFences(*fence, VK_TRUE, UINT64_MAX);
-    if (result != vk::Result::eSuccess) {
-        throw std::runtime_error("Failed to wait for compute fence");
-    }
-    context.getDevice().resetFences(*fence);
 }
 
 void VulkanComputePipeline::recordDispatch(
