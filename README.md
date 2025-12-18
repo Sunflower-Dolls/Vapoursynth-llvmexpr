@@ -115,6 +115,7 @@ See [examples](examples) for examples of infix code.
 
 *   **[Infix Syntax](docs/infix.md)**: Describes the C-style syntax for use with the `infix=1` parameter or the `infix2postfix` CLI tool.
 *   **[Postfix Syntax](docs/postfix.md)**: The core RPN syntax and operator reference for the `llvmexpr` plugin.
+*   **[Migrating From Akarin](docs/migrating_from_akarin.md)**: A guide for migrating from Akarin to LLVMExpr.
 
 ## Dependencies
 

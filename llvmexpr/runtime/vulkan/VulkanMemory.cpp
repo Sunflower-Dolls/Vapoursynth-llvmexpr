@@ -92,7 +92,7 @@ VulkanBuffer VulkanMemory::createGPUBuffer(VkDeviceSize size,
         throw std::runtime_error("Failed to create GPU buffer");
     }
 
-    return VulkanBuffer(buffer, allocation, allocation_info, size);
+    return {buffer, allocation, allocation_info, size};
 }
 
 VulkanBuffer VulkanMemory::createStagingBuffer(VkDeviceSize size,
@@ -122,7 +122,7 @@ VulkanBuffer VulkanMemory::createStagingBuffer(VkDeviceSize size,
         throw std::runtime_error("Failed to create staging buffer");
     }
 
-    return VulkanBuffer(buffer, allocation, allocation_info, size);
+    return {buffer, allocation, allocation_info, size};
 }
 
 void VulkanMemory::destroyBuffer(VulkanBuffer& buffer) {
@@ -224,7 +224,8 @@ void VulkanMemory::flushBuffer(const VulkanBuffer& buffer, VkDeviceSize size,
     (void)vmaFlushAllocation(allocator, buffer.allocation, offset, size);
 }
 
-void VulkanMemory::invalidateBuffer(const VulkanBuffer& buffer, VkDeviceSize size,
+void VulkanMemory::invalidateBuffer(const VulkanBuffer& buffer,
+                                    VkDeviceSize size,
                                     VkDeviceSize offset) const {
     if (allocator == VK_NULL_HANDLE || buffer.allocation == VK_NULL_HANDLE ||
         buffer.getMappedData() == nullptr || size == 0) {

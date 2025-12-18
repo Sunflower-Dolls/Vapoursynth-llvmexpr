@@ -100,13 +100,11 @@ class VulkanMemory {
     void uploadToBuffer(VulkanBuffer& gpu_buffer, const void* data,
                         VkDeviceSize size, VkDeviceSize offset = 0);
 
-    // blocks until transfer completes
     void downloadFromBuffer(VulkanBuffer& gpu_buffer, void* data,
                             VkDeviceSize size, VkDeviceSize offset = 0);
 
     void copyBuffer(VulkanBuffer& src, VulkanBuffer& dst, VkDeviceSize size);
 
-    // blocks until transfer completes
     [[nodiscard]] VmaAllocator getAllocator() const { return allocator; }
 
     void flushBuffer(const VulkanBuffer& buffer, VkDeviceSize size,
