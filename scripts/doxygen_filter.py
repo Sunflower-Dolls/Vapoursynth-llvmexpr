@@ -24,7 +24,13 @@ def filter_text(content):
             return g_block_code
 
         if g_inline_code:
-            return g_inline_code.replace(r'\|', '&#124;')
+            inner = g_inline_code[1:-1]
+            if r'\|' in inner:
+                fixed_inner = inner.replace(r'\|', '&#124;')
+                fixed_inner = fixed_inner.replace('<', '&lt;').replace('>', '&gt;')
+                return f"<code>{fixed_inner}</code>"
+            else:
+                return g_inline_code
 
         if g_block_math:
             inner = g_block_math[2:-2]
