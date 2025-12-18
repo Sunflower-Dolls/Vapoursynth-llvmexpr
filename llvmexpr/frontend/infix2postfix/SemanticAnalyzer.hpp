@@ -71,7 +71,7 @@ class SemanticAnalyzer {
     }
 
     [[nodiscard]] const std::map<std::string, std::pair<std::string, Range>>&
-    get_written_properties() const {
+    getWrittenProperties() const {
         return written_properties;
     }
 
@@ -139,7 +139,7 @@ class SemanticAnalyzer {
     void collectUsedGlobalsInStmt(Stmt* stmt,
                                   std::set<std::string>& used_globals);
 
-    bool path_always_returns(Stmt* stmt);
+    bool pathAlwaysReturns(Stmt* stmt);
 
     void validateClipReference(const std::string& clip_name,
                                const Range& range);

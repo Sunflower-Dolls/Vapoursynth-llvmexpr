@@ -1206,7 +1206,7 @@ void SemanticAnalyzer::analyze(FunctionDef& stmt) {
         bool body_always_returns = false;
         body_always_returns =
             std::ranges::any_of(stmt.body->statements, [this](const auto& s) {
-                return path_always_returns(s.get());
+                return pathAlwaysReturns(s.get());
             });
         if (!body_always_returns) {
             reportError(
@@ -1296,7 +1296,7 @@ void SemanticAnalyzer::collectLabels(Stmt* stmt, std::set<std::string>& labels,
     }
 }
 
-bool SemanticAnalyzer::path_always_returns(Stmt* stmt) {
+bool SemanticAnalyzer::pathAlwaysReturns(Stmt* stmt) {
     if (stmt == nullptr) {
         return false;
     }
@@ -1305,13 +1305,13 @@ bool SemanticAnalyzer::path_always_returns(Stmt* stmt) {
         return true;
     }
     if (auto* if_s = get_if<IfStmt>(stmt)) {
-        return path_always_returns(if_s->then_branch.get()) &&
+        return pathAlwaysReturns(if_s->then_branch.get()) &&
                (if_s->else_branch &&
-                path_always_returns(if_s->else_branch.get()));
+                pathAlwaysReturns(if_s->else_branch.get()));
     }
     if (auto* block = get_if<BlockStmt>(stmt)) {
         return std::ranges::any_of(block->statements, [this](const auto& s) {
-            return path_always_returns(s.get());
+            return pathAlwaysReturns(s.get());
         });
     }
     return false;
