@@ -15,11 +15,6 @@ STRIP_FROM_INC_PATH    = .
 INPUT                  = README.md \
                          docs \
                          llvmexpr \
-                         frontend \
-                         analysis \
-                         codegen \
-                         runtime \
-                         utils \
                          examples
 
 FILE_PATTERNS          = *.h *.hpp *.c *.cpp *.md *.expr
