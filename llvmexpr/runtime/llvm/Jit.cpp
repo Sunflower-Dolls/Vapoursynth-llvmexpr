@@ -19,14 +19,31 @@
 
 #include "Jit.hpp"
 
+#ifdef _WIN32
 #include <cmath>
+#endif
 #include <stdexcept>
 #include <string>
 #include <vector>
+#ifdef _WIN32
+#include <cmath>
+#endif
 
+#ifdef _WIN32
+#include "llvm/Analysis/TargetLibraryInfo.h"
+#endif
+#include "llvm/ExecutionEngine/Orc/CompileUtils.h"
 #include "llvm/ExecutionEngine/Orc/JITTargetMachineBuilder.h"
 #include "llvm/ExecutionEngine/Orc/ThreadSafeModule.h"
+#ifdef _WIN32
+#include "llvm/IR/IRBuilder.h"
+#endif
+#include "llvm/IR/Instructions.h"
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Support/Error.h"
+#ifdef _WIN32
+#include "llvm/Support/SmallVectorMemoryBuffer.h"
+#endif
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetOptions.h"
@@ -40,23 +57,49 @@ int64_t llvmexpr_get_buffer_size(const char*);
 
 #ifdef _WIN32
 namespace {
-extern "C" void llvmexpr_sincosf(float x, float* s, float* c) {
-    if (s != nullptr) {
-        *s = std::sin(x);
-    }
-    if (c != nullptr) {
-        *c = std::cos(x);
-    }
-}
+class WindowsLibCallFixupCompiler final
+    : public llvm::orc::IRCompileLayer::IRCompiler {
+  public:
+    explicit WindowsLibCallFixupCompiler(
+        llvm::orc::JITTargetMachineBuilder jtmb)
+        : IRCompiler(
+              llvm::orc::irManglingOptionsFromTargetOptions(jtmb.getOptions())),
+          jtmb(std::move(jtmb)) {}
 
-extern "C" void llvmexpr_sincos(double x, double* s, double* c) {
-    if (s != nullptr) {
-        *s = std::sin(x);
+    llvm::Expected<std::unique_ptr<llvm::MemoryBuffer>>
+    operator()(llvm::Module& m) override {
+        auto tm = jtmb.createTargetMachine();
+        if (!tm) {
+            return tm.takeError();
+        }
+
+        m.setTargetTriple((*tm)->getTargetTriple());
+        m.setDataLayout((*tm)->createDataLayout());
+
+        llvm::SmallVector<char, 0> obj_buffer_sv;
+        llvm::raw_svector_ostream obj_stream(obj_buffer_sv);
+
+        llvm::legacy::PassManager pm;
+        llvm::TargetLibraryInfoImpl tlii(llvm::Triple(m.getTargetTriple()));
+        tlii.setUnavailable(llvm::LibFunc_sincosf);
+        tlii.setUnavailable(llvm::LibFunc_sincos);
+        pm.add(new llvm::TargetLibraryInfoWrapperPass(tlii));
+
+        if ((*tm)->addPassesToEmitFile(pm, obj_stream, nullptr,
+                                       llvm::CodeGenFileType::ObjectFile)) {
+            return llvm::createStringError(
+                llvm::inconvertibleErrorCode(),
+                "TargetMachine can't emit an object file");
+        }
+
+        pm.run(m);
+        return std::make_unique<llvm::SmallVectorMemoryBuffer>(
+            std::move(obj_buffer_sv), "<jit object>");
     }
-    if (c != nullptr) {
-        *c = std::cos(x);
-    }
-}
+
+  private:
+    llvm::orc::JITTargetMachineBuilder jtmb;
+};
 
 } // namespace
 #endif
@@ -99,6 +142,15 @@ OrcJit::OrcJit(bool no_nans_fp_math) {
 
     auto jit_builder = llvm::orc::LLJITBuilder();
     jit_builder.setJITTargetMachineBuilder(std::move(jtmb));
+#ifdef _WIN32
+    jit_builder.setCompileFunctionCreator(
+        [](llvm::orc::JITTargetMachineBuilder jtmb_in)
+            -> llvm::Expected<
+                std::unique_ptr<llvm::orc::IRCompileLayer::IRCompiler>> {
+            return std::make_unique<WindowsLibCallFixupCompiler>(
+                std::move(jtmb_in));
+        });
+#endif
     auto temp_jit = jit_builder.create();
     if (!temp_jit) {
         llvm::errs() << "Failed to create LLJIT instance: "
@@ -122,18 +174,6 @@ OrcJit::OrcJit(bool no_nans_fp_math) {
             llvm::orc::ExecutorAddr(
                 llvm::pointerToJITTargetAddress(&llvmexpr_get_buffer_size)),
             llvm::JITSymbolFlags::Callable | llvm::JITSymbolFlags::Exported);
-
-#ifdef _WIN32
-    symbols[lljit->mangleAndIntern("sincosf")] = llvm::orc::ExecutorSymbolDef(
-        llvm::orc::ExecutorAddr(
-            llvm::pointerToJITTargetAddress(&llvmexpr_sincosf)),
-        llvm::JITSymbolFlags::Callable | llvm::JITSymbolFlags::Exported);
-
-    symbols[lljit->mangleAndIntern("sincos")] = llvm::orc::ExecutorSymbolDef(
-        llvm::orc::ExecutorAddr(
-            llvm::pointerToJITTargetAddress(&llvmexpr_sincos)),
-        llvm::JITSymbolFlags::Callable | llvm::JITSymbolFlags::Exported);
-#endif
 
     if (auto err = main_jd.define(llvm::orc::absoluteSymbols(symbols))) {
         llvm::errs() << "Failed to define host call symbols: "
