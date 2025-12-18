@@ -28,7 +28,8 @@ def filter_text(content):
             if r'\|' in inner:
                 fixed_inner = inner.replace(r'\|', '&#124;')
                 fixed_inner = fixed_inner.replace('<', '&lt;').replace('>', '&gt;')
-                return f"<code>{fixed_inner}</code>"
+
+                return f"\\htmlonly<code>{fixed_inner}</code>\\endhtmlonly"
             else:
                 return g_inline_code
 
