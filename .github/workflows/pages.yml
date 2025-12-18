@@ -49,8 +49,9 @@ jobs:
           url="https://github.com/doxygen/doxygen/releases/download/${tag}/doxygen-${ver}.linux.bin.tar.gz"
           curl -fsSL "$url" -o doxygen.tar.gz
           tar -xzf doxygen.tar.gz
-          echo "$PWD/doxygen-${ver}/bin" >> "$GITHUB_PATH"
-          doxygen -v
+          install_dir="$PWD/doxygen-${ver}"
+          echo "$install_dir/bin" >> "$GITHUB_PATH"
+          "$install_dir/bin/doxygen" -v
 
       - name: Create output directory
         run: mkdir -p build/docs
