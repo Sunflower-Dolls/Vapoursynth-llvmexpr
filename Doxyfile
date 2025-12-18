@@ -36,6 +36,8 @@ WARN_IF_UNDOCUMENTED   = NO
 WARN_NO_PARAMDOC       = NO
 WARN_AS_ERROR          = NO
 
+USE_MATHJAX            = YES
+
 EXTRACT_ALL            = YES
 EXTRACT_PRIVATE        = NO
 EXTRACT_STATIC         = NO
