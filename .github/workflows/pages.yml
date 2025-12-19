@@ -28,6 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DOXYGEN_VERSION: "1.15.0"
+      DOXYGEN_AWESOME_VERSION: "2.4.1"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -52,6 +53,14 @@ jobs:
           install_dir="$PWD/doxygen-${ver}"
           echo "$install_dir/bin" >> "$GITHUB_PATH"
           "$install_dir/bin/doxygen" -v
+
+      - name: Download Doxygen Awesome CSS (pinned)
+        shell: bash
+        run: |
+          set -euo pipefail
+          ver="${DOXYGEN_AWESOME_VERSION}"
+          base="https://raw.githubusercontent.com/jothepro/doxygen-awesome-css/v${ver}"
+          curl -fsSL "${base}/doxygen-awesome.css" -o docs/doxygen-awesome.css
 
       - name: Create output directory
         run: mkdir -p build/docs

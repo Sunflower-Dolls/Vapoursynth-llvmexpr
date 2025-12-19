@@ -127,15 +127,15 @@ See [examples](examples) for examples of infix code.
 
 ## Building and installing
 
-1.  **Configure the build directory:**
-    ```sh
-    meson setup builddir
-    ```
+**1. Configure the build directory:**
+```sh
+meson setup builddir
+ ```
 
-2.  **Compile and install the plugin:**
-    ```sh
-    ninja -C builddir install
-    ```
+**2. Compile and install the plugin:**
+```sh
+ninja -C builddir install
+```
 
 This will build and install the VapourSynth plugin. The `infix2postfix` CLI tool will be built in the `builddir` directory but not installed.
 
@@ -145,7 +145,7 @@ To run the tests, you need to have VapourSynth installed.
 
 This project uses pytest for testing.
 
-```sh
+```bash
 pytest .
 ```
 
@@ -153,7 +153,7 @@ pytest .
 
 A command-line tool for converting infix expressions to postfix format is available after building:
 
-```sh
+```bash
 builddir/infix2postfix input.expr -m expr -o output.expr [--dump-ast]
 ```
 

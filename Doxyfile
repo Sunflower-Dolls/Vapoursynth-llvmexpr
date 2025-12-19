@@ -4,6 +4,7 @@ OUTPUT_DIRECTORY       = build/docs
 GENERATE_HTML          = YES
 HTML_OUTPUT            = html
 GENERATE_LATEX         = NO
+GENERATE_TREEVIEW      = YES
 
 MARKDOWN_SUPPORT       = YES
 USE_MDFILE_AS_MAINPAGE = README.md
@@ -53,4 +54,6 @@ REFERENCED_BY_RELATION = YES
 HAVE_DOT               = YES
 DOT_NUM_THREADS        = 0
 
-HTML_EXTRA_FILES       = docs/CNAME
+HTML_EXTRA_STYLESHEET  = docs/doxygen-awesome.css
+HTML_EXTRA_FILES       = docs/CNAME \
+                         docs/doxygen-awesome.css
