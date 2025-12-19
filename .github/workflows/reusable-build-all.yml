@@ -19,10 +19,68 @@ on:
 jobs:
   build:
     runs-on: ${{ inputs.os }}
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      PIP_CACHE_DIR: ${{ github.workspace }}/.pip-cache
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Cache Meson wrap downloads
+        uses: actions/cache@v4
+        with:
+          path: subprojects/packagecache
+          key: meson-wrap-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            meson-wrap-${{ runner.os }}-
+
+      - name: Cache ccache (Unix)
+        if: runner.os != 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-
+
+      - name: Cache pip downloads (Unix)
+        if: runner.os != 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PIP_CACHE_DIR }}
+          key: pip-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            pip-${{ runner.os }}-
+
+      - name: Cache Homebrew downloads (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/Homebrew
+          key: macos-caches-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            macos-caches-${{ runner.os }}-
+
+      - name: Cache Lavapipe (Windows)
+        if: runner.os == 'Windows'
+        id: cache_lavapipe
+        uses: actions/cache@v4
+        with:
+          path: C:/lavapipe
+          key: lavapipe-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            lavapipe-${{ runner.os }}-
+
+      - name: Cache ccache (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ccache-windows-${{ github.sha }}
+          restore-keys: |
+            ccache-windows-
 
       # Linux specific setup
       - name: Setup dependencies (Linux)
@@ -31,6 +89,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             build-essential \
+            ccache \
             pkg-config \
             python3 \
             python3-pip \
@@ -51,11 +110,11 @@ jobs:
       - name: Setup dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install meson ninja pkg-config llvm@20 vapoursynth zstd zlib shaderc vulkan-loader molten-vk
+          brew install ccache meson ninja pkg-config llvm@20 vapoursynth zstd zlib shaderc vulkan-loader molten-vk
 
       # Install Lavapipe for Vulkan software rasterization (Windows)
       - name: Setup Lavapipe (Windows)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && steps.cache_lavapipe.outputs.cache-hit != 'true'
         uses: jakoch/install-vulkan-sdk-action@v1
         with:
           install_lavapipe: true
@@ -69,9 +128,11 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           update: true
+          cache: true
           msystem: MINGW64
           install: >-
             base-devel
+            ccache
             git
             ninja
             mingw-w64-x86_64-meson
@@ -104,11 +165,26 @@ jobs:
           cp $MSYSTEM_PREFIX/lib/libzstd.{a,dll.a}
 
       # Common steps for Linux
+      - name: Cache VapourSynth headers (Linux)
+        if: runner.os == 'Linux'
+        id: cache_vs_headers
+        uses: actions/cache@v4
+        with:
+          path: vapoursynth/include
+          key: vs-headers-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            vs-headers-${{ runner.os }}-
+
+      - name: Download VS headers (Linux)
+        if: runner.os == 'Linux' && steps.cache_vs_headers.outputs.cache-hit != 'true'
+        shell: bash
+        run: git clone https://github.com/vapoursynth/vapoursynth --depth=1
+
       - name: Download VS headers and patch header location (Linux)
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          git clone https://github.com/vapoursynth/vapoursynth --depth=1
+          mkdir -p vapoursynth/include
           cp vapoursynth/include/*.h llvmexpr
 
           find llvmexpr -type f \( -name "*.cpp" -o -name "*.hpp" \) | while read -r file; do
@@ -229,6 +305,9 @@ jobs:
         if: runner.os == 'Windows'
         shell: msys2 {0}
         run: |
+          export CCACHE_DIR="$(cygpath -u "$GITHUB_WORKSPACE")/.ccache"
+          mkdir -p "$CCACHE_DIR"
+
           # Fix SSL certificates for Python/Meson
           echo "Fixing SSL certificates..."
           curl -sSL https://curl.se/ca/cacert.pem -o /tmp/cacert.pem
@@ -242,7 +321,7 @@ jobs:
           export CURL_CA_BUNDLE=/tmp/cacert.pem
           
           # Configure Meson
-          CC="clang -fuse-ld=lld" CXX="clang++ -fuse-ld=lld" meson setup builddir \
+          CC="ccache clang -fuse-ld=lld" CXX="ccache clang++ -fuse-ld=lld" meson setup builddir \
             -Dstatic-llvm=true \
             -Dstatic-shaderc=true \
             -Denable-sanitizers=true \
@@ -251,7 +330,8 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          CC=clang CXX="clang++ -stdlib=libc++" meson setup builddir \
+          mkdir -p "$CCACHE_DIR" "$PIP_CACHE_DIR"
+          CC="ccache clang" CXX="ccache clang++ -stdlib=libc++" meson setup builddir \
             -Dstatic-llvm=true \
             -Dstatic-shaderc=true \
             -Denable-sanitizers=true \
@@ -267,6 +347,18 @@ jobs:
         shell: bash
         run: |
           ninja -C builddir
+
+      - name: Show ccache stats (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: ccache -s || true
+
+      - name: Show ccache stats (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          export CCACHE_DIR="$(cygpath -u "$GITHUB_WORKSPACE")/.ccache"
+          ccache -s || true
 
       - name: Check dependencies (Windows)
         if: runner.os == 'Windows'
@@ -287,9 +379,10 @@ jobs:
         run: |
           export PYTHONPATH=""
           export VK_LOADER_DEBUG=all
-          
+          export CCACHE_DIR="$(cygpath -u "$GITHUB_WORKSPACE")/.ccache"
+
           # Build release
-          CC="clang -fuse-ld=lld" CXX="clang++ -fuse-ld=lld" meson setup builddir_release \
+          CC="ccache clang -fuse-ld=lld" CXX="ccache clang++ -fuse-ld=lld" meson setup builddir_release \
             -Dstatic-llvm=true \
             -Dstatic-shaderc=true \
             -Denable-sanitizers=false \
@@ -317,6 +410,7 @@ jobs:
         run: |
           export PYTHONPATH=""
           export VK_LOADER_DEBUG=all
+          export CCACHE_DIR="$(cygpath -u "$GITHUB_WORKSPACE")/.ccache"
           export LLVMEXPR_PLUGIN_PATH="builddir/${{ inputs.library_name }}"
           
           # Force use of Lavapipe for Vulkan
@@ -334,7 +428,8 @@ jobs:
           export VK_LOADER_DEBUG=all
 
           # Build release
-          CC=clang CXX="clang++ -stdlib=libc++" meson setup builddir_release \
+          mkdir -p "$CCACHE_DIR" "$PIP_CACHE_DIR"
+          CC="ccache clang" CXX="ccache clang++ -stdlib=libc++" meson setup builddir_release \
             -Dstatic-llvm=true \
             -Dstatic-shaderc=true \
             -Denable-sanitizers=false \
