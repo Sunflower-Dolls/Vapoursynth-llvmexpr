@@ -97,15 +97,22 @@ constexpr Availability operator&(Availability lhs, Availability rhs) {
 }
 
 constexpr Availability AVAILABILITY_ALL =
-    Availability::Expr | Availability::SingleExpr;
+    Availability::Expr | Availability::SingleExpr | Availability::VkExpr;
 
 constexpr bool supports_mode(Availability availability, ExprMode mode) {
     if (mode == ExprMode::Expr) {
         return static_cast<std::uint8_t>(availability & Availability::Expr) !=
                0;
     }
-    return static_cast<std::uint8_t>(availability & Availability::SingleExpr) !=
-           0;
+    if (mode == ExprMode::SingleExpr) {
+        return static_cast<std::uint8_t>(availability &
+                                         Availability::SingleExpr) != 0;
+    }
+    if (mode == ExprMode::VkExpr) {
+        return static_cast<std::uint8_t>(availability & Availability::VkExpr) !=
+               0;
+    }
+    return false;
 }
 
 template <FixedString Str, TokenType Type>
@@ -552,6 +559,43 @@ inline std::optional<Token> parse_prop_store(std::string_view input) {
     return std::nullopt;
 }
 
+inline std::optional<Token> parse_buffer_access(std::string_view input) {
+    if (auto m = ctre::match<
+            R"(^buf(\d+)(?:(?:(\[\]))|(?:\[\s*(-?\d+)\s*,\s*(-?\d+)\s*\]))?(?::([cmb]))?$)">(
+            input)) {
+        TokenPayloadBufferAccess data;
+        data.buffer_idx = svtoi(m.template get<1>().to_view());
+
+        TokenType type = TokenType::BufferCur;
+
+        if (m.template get<2>()) {
+            type = TokenType::BufferAbs;
+        } else if (m.template get<3>()) {
+            type = TokenType::BufferRel;
+            data.rel_x = svtoi(m.template get<3>().to_view());
+            data.rel_y = svtoi(m.template get<4>().to_view());
+        }
+
+        // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
+        if (m.template get<5>()) {
+            // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
+            char mode_char = m.template get<5>().to_view()[0];
+            if (mode_char == 'm') {
+                data.has_mode = true;
+                data.use_mirror = true;
+            } else if (mode_char == 'c') {
+                data.has_mode = true;
+                data.use_mirror = false;
+            } else if (mode_char == 'b') {
+                data.has_mode = false;
+            }
+        }
+
+        return Token{.type = type, .text = std::string(input), .payload = data};
+    }
+    return std::nullopt;
+}
+
 inline std::optional<Token> parse_number(std::string_view input) {
     if (auto m = ctre::match<
             R"(^(?:(0x[0-9a-fA-F]+(?:\.[0-9a-fA-F]+(?:p[+\-]?\d+)?)?)|(0[0-7]+)|([+\-]?\d+(?:\.\d+)?(?:[eE][+\-]?\d+)?))$)">(
@@ -649,9 +693,9 @@ constexpr auto get_token_definitions() {
         make_literal_definition<FixedString{"?"}, TokenType::Ternary>(
             BEHAVIOR_TERNARY),
         make_literal_definition<FixedString{"X"}, TokenType::ConstantX>(
-            BEHAVIOR_ZERO_PUSH, Availability::Expr),
+            BEHAVIOR_ZERO_PUSH, Availability::Expr | Availability::VkExpr),
         make_literal_definition<FixedString{"Y"}, TokenType::ConstantY>(
-            BEHAVIOR_ZERO_PUSH, Availability::Expr),
+            BEHAVIOR_ZERO_PUSH, Availability::Expr | Availability::VkExpr),
         make_literal_definition<FixedString{"N"}, TokenType::ConstantN>(
             BEHAVIOR_ZERO_PUSH),
         make_literal_definition<FixedString{">="}, TokenType::Ge>(
@@ -695,7 +739,8 @@ constexpr auto get_token_definitions() {
         make_literal_definition<FixedString{"neg"}, TokenType::Neg>(
             BEHAVIOR_UNARY),
         make_literal_definition<FixedString{"@[]"}, TokenType::StoreAbs>(
-            TokenBehavior{.arity = 3, .stack_effect = -3}, Availability::Expr),
+            TokenBehavior{.arity = 3, .stack_effect = -3},
+            Availability::Expr | Availability::VkExpr),
         make_literal_definition<FixedString{"clip"}, TokenType::Clip>(
             TokenBehavior{.arity = 3, .stack_effect = -2}),
         make_literal_definition<FixedString{"sqrt"}, TokenType::Sqrt>(
@@ -742,8 +787,24 @@ constexpr auto get_token_definitions() {
             BEHAVIOR_UNARY),
         make_literal_definition<FixedString{"height"},
                                 TokenType::ConstantHeight>(BEHAVIOR_ZERO_PUSH),
+        TokenDefinition{.type = TokenType::BufferCur,
+                        .name = "bufN",
+                        .behavior = BEHAVIOR_ZERO_PUSH,
+                        .parser = parse_buffer_access,
+                        .availability = Availability::VkExpr},
+        TokenDefinition{.type = TokenType::BufferRel,
+                        .name = "bufN",
+                        .behavior = BEHAVIOR_ZERO_PUSH,
+                        .parser = parse_buffer_access,
+                        .availability = Availability::VkExpr},
+        TokenDefinition{.type = TokenType::BufferAbs,
+                        .name = "bufN",
+                        .behavior =
+                            TokenBehavior{.arity = 2, .stack_effect = -1},
+                        .parser = parse_buffer_access,
+                        .availability = Availability::VkExpr},
         make_literal_definition<FixedString{"^exit^"}, TokenType::ExitNoWrite>(
-            BEHAVIOR_ZERO_PUSH, Availability::Expr),
+            BEHAVIOR_ZERO_PUSH, Availability::Expr | Availability::VkExpr),
         make_literal_definition<FixedString{"copysign"}, TokenType::Copysign>(
             BEHAVIOR_BINARY),
         TokenDefinition{.type = TokenType::ConstantPlaneWidth,
@@ -866,7 +927,8 @@ constexpr auto get_token_definitions() {
                         .name = "clip_rel",
                         .behavior = BEHAVIOR_ZERO_PUSH,
                         .parser = parse_clip_rel,
-                        .availability = Availability::Expr},
+                        .availability =
+                            Availability::Expr | Availability::VkExpr},
         TokenDefinition{.type = TokenType::ClipAbs,
                         .name = "clip_abs",
                         .behavior =
@@ -877,7 +939,8 @@ constexpr auto get_token_definitions() {
                         .name = "clip_cur",
                         .behavior = BEHAVIOR_ZERO_PUSH,
                         .parser = parse_clip_cur,
-                        .availability = Availability::Expr},
+                        .availability =
+                            Availability::Expr | Availability::VkExpr},
         TokenDefinition{.type = TokenType::PropAccess,
                         .name = "prop_access",
                         .behavior = BEHAVIOR_ZERO_PUSH,
@@ -916,7 +979,7 @@ constexpr auto get_token_definitions() {
 } // anonymous namespace
 
 std::vector<Token> tokenize(const std::string& expr, int num_inputs,
-                            ExprMode mode) {
+                            ExprMode mode, int num_intermediate_inputs) {
     std::vector<Token> tokens;
     int idx = 0;
 
@@ -979,6 +1042,17 @@ std::vector<Token> tokenize(const std::string& expr, int num_inputs,
                         .clip_idx >= num_inputs) {
                 throw std::runtime_error(
                     std::format("Invalid clip index in token: {} (idx {})",
+                                std::string(str_token_view), idx));
+            }
+        } else if (parsed_token->type == TokenType::BufferRel ||
+                   parsed_token->type == TokenType::BufferAbs ||
+                   parsed_token->type == TokenType::BufferCur) {
+            if (std::get<TokenPayloadBufferAccess>(parsed_token->payload)
+                        .buffer_idx < 0 ||
+                std::get<TokenPayloadBufferAccess>(parsed_token->payload)
+                        .buffer_idx >= num_intermediate_inputs) {
+                throw std::runtime_error(
+                    std::format("Invalid buffer index in token: {} (idx {})",
                                 std::string(str_token_view), idx));
             }
         }

@@ -30,12 +30,14 @@
 
 GLSLGenerator::GLSLGenerator(
     const std::vector<Token>& tokens, int num_inputs,
-    [[maybe_unused]] int width, [[maybe_unused]] int height,
-    bool mirror_boundary,
+    int num_intermediate_inputs, [[maybe_unused]] int width,
+    [[maybe_unused]] int height, bool mirror_boundary,
     const std::map<std::pair<int, std::string>, int>& prop_map,
     const analysis::ExpressionAnalysisResults& analysis_results)
-    : tokens(tokens), num_inputs(num_inputs), mirror_boundary(mirror_boundary),
-      prop_map(prop_map), analysis(analysis_results) {
+    : tokens(tokens), num_inputs(num_inputs),
+      num_intermediate_inputs(num_intermediate_inputs),
+      mirror_boundary(mirror_boundary), prop_map(prop_map),
+      analysis(analysis_results) {
 
     const auto& var_result = analysis.getVariableUsageResult();
     for (const auto& var_name : var_result.all_vars) {
@@ -350,10 +352,22 @@ void GLSLGenerator::emitBufferDeclarations() {
         emitNewline();
     }
 
+    // Intermediate buffers
+    for (int i = 0; i < num_intermediate_inputs; ++i) {
+        emitLine(std::format("layout(std430, set = 0, binding = {}) readonly "
+                             "buffer IntermediateBuffer{} {{",
+                             num_inputs + i, i));
+        indent();
+        emitLine("float data[];");
+        dedent();
+        emitLine(std::format("}} buf{};", i));
+        emitNewline();
+    }
+
     // Output buffer
     emitLine(std::format("layout(std430, set = 0, binding = {}) writeonly "
                          "buffer OutputBuffer {{",
-                         num_inputs));
+                         num_inputs + num_intermediate_inputs));
     indent();
     emitLine("float data[];");
     dedent();
@@ -363,7 +377,7 @@ void GLSLGenerator::emitBufferDeclarations() {
     // Props buffer
     emitLine(std::format(
         "layout(std430, set = 0, binding = {}) readonly buffer PropsBuffer {{",
-        num_inputs + 1));
+        num_inputs + num_intermediate_inputs + 1));
     indent();
     emitLine("float props[];");
     dedent();
@@ -1459,6 +1473,61 @@ void GLSLGenerator::processToken(const Token& token) {
         emitLine(std::format("int {} = int(roundEven({}));", y_int, coord_y));
 
         push(emitPixelLoad(payload.clip_idx, x_int, y_int, use_mirror));
+        push(emitPixelLoad(payload.clip_idx, x_int, y_int, use_mirror));
+        break;
+    }
+
+    case TokenType::BufferCur: {
+        const auto& payload = std::get<TokenPayloadBufferAccess>(token.payload);
+        std::string temp = newTemp();
+        emitLine(std::format("float {} = buf{}.data[gid];", temp,
+                             payload.buffer_idx));
+        push(temp);
+        break;
+    }
+    case TokenType::BufferRel: {
+        const auto& payload = std::get<TokenPayloadBufferAccess>(token.payload);
+        bool use_mirror =
+            payload.has_mode ? payload.use_mirror : mirror_boundary;
+
+        std::string x_expr = std::format("X + {}", payload.rel_x);
+        std::string y_expr = std::format("Y + {}", payload.rel_y);
+
+        std::string final_x =
+            emitFinalCoord(x_expr, "int(pc.width)", use_mirror);
+        std::string final_y =
+            emitFinalCoord(y_expr, "int(pc.height)", use_mirror);
+        std::string idx = emitPixelIndex(final_x, final_y);
+
+        std::string temp = newTemp();
+        emitLine(std::format("float {} = buf{}.data[{}];", temp,
+                             payload.buffer_idx, idx));
+        push(temp);
+        break;
+    }
+    case TokenType::BufferAbs: {
+        const auto& payload = std::get<TokenPayloadBufferAccess>(token.payload);
+        std::string coord_y = pop();
+        std::string coord_x = pop();
+        bool use_mirror =
+            payload.has_mode ? payload.use_mirror : mirror_boundary;
+
+        std::string x_int = newTemp();
+        std::string y_int = newTemp();
+
+        emitLine(std::format("int {} = int(roundEven({}));", x_int, coord_x));
+        emitLine(std::format("int {} = int(roundEven({}));", y_int, coord_y));
+
+        std::string final_x =
+            emitFinalCoord(x_int, "int(pc.width)", use_mirror);
+        std::string final_y =
+            emitFinalCoord(y_int, "int(pc.height)", use_mirror);
+        std::string idx = emitPixelIndex(final_x, final_y);
+
+        std::string temp = newTemp();
+        emitLine(std::format("float {} = buf{}.data[{}];", temp,
+                             payload.buffer_idx, idx));
+        push(temp);
         break;
     }
 

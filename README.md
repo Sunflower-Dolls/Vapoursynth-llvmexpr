@@ -73,6 +73,22 @@ llvmexpr.VkExpr(clip[] clips, string[] expr[, int format, int boundary=0, int nu
 - `num_streams`: Number of concurrent Vulkan streams (default: 8). Increase this for better parallelism if you have a powerful GPU, or decrease it if you run into insufficient vram.
 - `device_id`: Selects which Vulkan physical device to run on (default: -1 = auto).
 
+### Multi-Pass Pipeline (VkExpr only)
+
+`VkExpr` supports executing multiple expressions sequentially for the same plane, with efficient zero-copy data transfer between them.
+
+- **Separator**: Use `##` to separate different stages in the expression string.
+- **Intermediate Access**: Use `bufN` to access the result of the N-th stage (0-indexed). `buf0` is the result of the first expression, `buf1` is the second, and so on. Relative and absolute access for buffers are also supported.
+
+**Example:**
+```python
+# Stage 1: x + 0.5 (result stored in buf0)
+# Stage 2: x + buf0 (calculates x + (x[1,1] + 0.5))
+core.llvmexpr.VkExpr(clip, expr="x 0.5 + ## x buf0[1,1] +")
+```
+
+Intermediate buffers are stored as `float32` on the GPU, with no clamping / quantization.
+
 ### `llvmexpr.SingleExpr` (Per-Frame)
 
 This function executes an expression only once per frame. It is not suitable for typical image filtering but is powerful for tasks that involve reading from arbitrary coordinates, calculating frame-wide metrics, and writing results to other pixels or to frame properties.

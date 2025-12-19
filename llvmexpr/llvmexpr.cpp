@@ -861,13 +861,15 @@ struct VkStream {
         vkexpr::VulkanBuffer output_staging_buffer;
         vkexpr::VulkanBuffer props_buffer;
         vkexpr::VulkanBuffer props_staging_buffer;
+        std::vector<vkexpr::VulkanBuffer> intermediate_buffers;
         VkDeviceSize buffer_size = 0;
         VkDeviceSize props_size = 0;
         bool initialized = false;
     };
 
     std::unique_ptr<vkexpr::VulkanMemory> memory;
-    std::array<std::unique_ptr<vkexpr::VulkanComputePipeline>, 3> pipelines;
+    std::array<std::vector<std::unique_ptr<vkexpr::VulkanComputePipeline>>, 3>
+        pipelines;
     std::array<PlaneResources, 3> plane_resources;
     vk::raii::CommandPool command_pool = nullptr;
     vk::raii::CommandBuffer command_buffer = nullptr;
@@ -897,6 +899,10 @@ struct VkStream {
             res.input_staging_buffers.clear();
             memory->destroyBuffer(res.output_buffer);
             memory->destroyBuffer(res.output_staging_buffer);
+            for (auto& buf : res.intermediate_buffers) {
+                memory->destroyBuffer(buf);
+            }
+            res.intermediate_buffers.clear();
             res.initialized = false;
             res.buffer_size = 0;
         }
@@ -910,8 +916,9 @@ struct VkStream {
 
 struct VkExprData : BaseExprData {
     std::array<PlaneOp, 3> plane_op = {};
-    std::array<std::vector<Token>, 3> tokens;
-    std::array<std::unique_ptr<analysis::AnalysisManager>, 3> analysis_managers;
+    std::array<std::vector<std::vector<Token>>, 3> tokens_stages;
+    std::array<std::vector<std::unique_ptr<analysis::AnalysisManager>>, 3>
+        analysis_managers;
 
     int device_id = -1;
     vkexpr::VulkanContext* ctx = nullptr;
@@ -1003,14 +1010,22 @@ const VSFrame*
                 auto& plane_res = stream.plane_resources.at(plane);
 
                 // Initialize or resize buffers if needed
-                if (!plane_res.initialized ||
-                    plane_res.buffer_size != buffer_size) {
+                size_t num_stages = stream.pipelines.at(plane).size();
+                size_t num_intermediates =
+                    (num_stages > 1) ? (num_stages - 1) : 0;
 
+                if (!plane_res.initialized ||
+                    plane_res.buffer_size != buffer_size ||
+                    plane_res.intermediate_buffers.size() !=
+                        num_intermediates) {
                     if (plane_res.initialized) {
                         stream.freePlaneResources(plane_res);
+                        for (auto& buf : plane_res.intermediate_buffers) {
+                            stream.memory->destroyBuffer(buf);
+                        }
+                        plane_res.intermediate_buffers.clear();
                     }
 
-                    // Inputs
                     plane_res.input_buffers.reserve(d->num_inputs);
                     plane_res.input_staging_buffers.reserve(d->num_inputs);
                     for (int i = 0; i < d->num_inputs; ++i) {
@@ -1021,11 +1036,17 @@ const VSFrame*
                                                                true));
                     }
 
-                    // Output
                     plane_res.output_buffer =
                         stream.memory->createGPUBuffer(buffer_size);
                     plane_res.output_staging_buffer =
                         stream.memory->createStagingBuffer(buffer_size, false);
+
+                    // Intermediate buffers
+                    plane_res.intermediate_buffers.resize(num_intermediates);
+                    for (size_t i = 0; i < num_intermediates; ++i) {
+                        plane_res.intermediate_buffers[i] =
+                            stream.memory->createGPUBuffer(buffer_size);
+                    }
 
                     plane_res.buffer_size = buffer_size;
                     plane_res.initialized = true;
@@ -1224,13 +1245,55 @@ const VSFrame*
                         to_compute_barriers, {});
                 }
 
-                stream.pipelines.at(plane)->recordDispatch(
-                    stream.command_buffer, src_buffer_ptrs,
-                    plane_res.output_buffer,
-                    plane_res.props_buffer.isValid() ? &plane_res.props_buffer
-                                                     : nullptr,
-                    static_cast<uint32_t>(width), static_cast<uint32_t>(height),
-                    n);
+                for (size_t s = 0; s < num_stages; ++s) {
+                    // [src0..srcM, buf0..buf(s-1)]
+                    std::vector<vkexpr::VulkanBuffer*> dispatch_inputs;
+                    dispatch_inputs.reserve(d->num_inputs + s);
+
+                    for (int i = 0; i < d->num_inputs; ++i) {
+                        dispatch_inputs.push_back(&plane_res.input_buffers[i]);
+                    }
+                    for (size_t k = 0; k < s; ++k) {
+                        dispatch_inputs.push_back(
+                            &plane_res.intermediate_buffers[k]);
+                    }
+
+                    // Output
+                    vkexpr::VulkanBuffer* dispatch_output = nullptr;
+                    if (s == num_stages - 1) {
+                        dispatch_output = &plane_res.output_buffer;
+                    } else {
+                        dispatch_output = &plane_res.intermediate_buffers[s];
+                    }
+
+                    // Dispatch
+                    stream.pipelines.at(plane).at(s)->recordDispatch(
+                        stream.command_buffer, dispatch_inputs,
+                        *dispatch_output,
+                        plane_res.props_buffer.isValid()
+                            ? &plane_res.props_buffer
+                            : nullptr,
+                        static_cast<uint32_t>(width),
+                        static_cast<uint32_t>(height), n);
+
+                    // Barrier if not last stage
+                    if (s < num_stages - 1) {
+                        vk::BufferMemoryBarrier b;
+                        b.srcAccessMask = vk::AccessFlagBits::eShaderWrite;
+                        b.dstAccessMask = vk::AccessFlagBits::eShaderRead;
+                        b.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                        b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                        b.buffer = vk::Buffer(dispatch_output->buffer);
+                        b.offset = 0;
+                        b.size = VK_WHOLE_SIZE;
+                        std::vector<vk::BufferMemoryBarrier> bar = {b};
+
+                        stream.command_buffer.pipelineBarrier(
+                            vk::PipelineStageFlagBits::eComputeShader,
+                            vk::PipelineStageFlagBits::eComputeShader, {}, {},
+                            bar, {});
+                    }
+                }
 
                 uint8_t* dst_ptr = vsapi->getWritePtr(dst_frame, plane);
                 ptrdiff_t dst_stride = vsapi->getStride(dst_frame, plane);
@@ -1453,10 +1516,23 @@ vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
 
         bool use_infix = vsapi->mapGetInt(in, "infix", 0, &err) != 0;
 
-        std::array<std::string, 3> processed_exprs;
+        std::array<std::vector<std::string>, 3> processed_stages;
         for (int i = 0; i < nexpr && i < 3; ++i) {
-            const std::string& input_expr = expr_strs.at(i);
-            if (use_infix && !input_expr.empty()) {
+            std::string raw_expr = expr_strs.at(i);
+            std::vector<std::string> stages;
+            constexpr std::string_view POSTFIX_STAGE_SEPARATOR = "##";
+            constexpr std::string_view INFIX_STAGE_SEPARATOR = "---";
+            const std::string_view stage_separator =
+                use_infix ? INFIX_STAGE_SEPARATOR : POSTFIX_STAGE_SEPARATOR;
+            size_t pos = 0;
+            while ((pos = raw_expr.find(stage_separator)) !=
+                   std::string::npos) {
+                stages.push_back(raw_expr.substr(0, pos));
+                raw_expr.erase(0, pos + stage_separator.size());
+            }
+            stages.push_back(raw_expr);
+
+            if (use_infix) {
                 std::map<std::string, std::string> macros;
                 macros["__GPU__"] = "";
                 macros["__EXPR__"] = "";
@@ -1491,45 +1567,58 @@ vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
                             (input_vi->format.sampleType == stFloat) ? 1 : 0);
                 }
 
-                processed_exprs.at(i) =
-                    convertInfixToPostfix(input_expr, d->num_inputs,
-                                          infix2postfix::Mode::Expr, &macros);
-            } else {
-                processed_exprs.at(i) = input_expr;
+                for (auto& stage : stages) {
+                    if (!stage.empty()) {
+                        stage = convertInfixToPostfix(stage, d->num_inputs,
+                                                      infix2postfix::Mode::Expr,
+                                                      &macros);
+                    }
+                }
             }
+            processed_stages.at(i) = stages;
         }
         for (int i = nexpr; i < d->vi.format.numPlanes; ++i) {
-            processed_exprs.at(i) = processed_exprs.at(nexpr - 1);
+            processed_stages.at(i) = processed_stages.at(nexpr - 1);
         }
 
         for (int i = 0; i < d->vi.format.numPlanes; ++i) {
-            if (processed_exprs.at(i).empty()) {
+            if (processed_stages.at(i).empty() ||
+                (processed_stages.at(i).size() == 1 &&
+                 processed_stages.at(i)[0].empty())) {
                 d->plane_op.at(i) = PlaneOp::PoCopy;
             } else {
                 d->plane_op.at(i) = PlaneOp::PoProcess;
-                d->tokens.at(i) = tokenize(processed_exprs.at(i), d->num_inputs,
-                                           ExprMode::Expr);
 
-                for (const auto& token : d->tokens.at(i)) {
-                    if (token.type == TokenType::PropAccess ||
-                        token.type == TokenType::PropExists) {
-                        const auto& payload =
-                            std::get<TokenPayloadPropAccess>(token.payload);
-                        auto key =
-                            std::make_pair(payload.clip_idx, payload.prop_name);
-                        if (!d->prop_map.contains(key)) {
-                            d->prop_map[key] = static_cast<int>(
-                                1 + d->required_props.size()); // 0 is for N
-                            d->required_props.push_back(key);
+                auto& plane_stages = processed_stages.at(i);
+                d->tokens_stages.at(i).resize(plane_stages.size());
+                d->analysis_managers.at(i).resize(plane_stages.size());
+
+                for (size_t s = 0; s < plane_stages.size(); ++s) {
+                    d->tokens_stages.at(i).at(s) =
+                        tokenize(plane_stages.at(s), d->num_inputs,
+                                 ExprMode::VkExpr, static_cast<int>(s));
+
+                    for (const auto& token : d->tokens_stages.at(i).at(s)) {
+                        if (token.type == TokenType::PropAccess ||
+                            token.type == TokenType::PropExists) {
+                            const auto& payload =
+                                std::get<TokenPayloadPropAccess>(token.payload);
+                            auto key = std::make_pair(payload.clip_idx,
+                                                      payload.prop_name);
+                            if (!d->prop_map.contains(key)) {
+                                d->prop_map[key] = static_cast<int>(
+                                    1 + d->required_props.size()); // 0 is for N
+                                d->required_props.push_back(key);
+                            }
                         }
                     }
-                }
 
-                auto analyser = std::make_unique<analysis::AnalysisManager>(
-                    d->tokens.at(i), d->mirror_boundary);
-                analysis::ExpressionAnalyzer expr_analyzer(*analyser);
-                expr_analyzer.analyze();
-                d->analysis_managers.at(i) = std::move(analyser);
+                    auto analyser = std::make_unique<analysis::AnalysisManager>(
+                        d->tokens_stages.at(i).at(s), d->mirror_boundary);
+                    analysis::ExpressionAnalyzer expr_analyzer(*analyser);
+                    expr_analyzer.analyze();
+                    d->analysis_managers.at(i).at(s) = std::move(analyser);
+                }
             }
         }
 
@@ -1585,37 +1674,52 @@ vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
                     continue;
                 }
 
-                analysis::ExpressionAnalysisResults analysis_results(
-                    *d->analysis_managers.at(i));
-                GLSLGenerator generator(
-                    d->tokens.at(i), d->num_inputs,
-                    d->vi.width / (i == 0 ? 1 : d->vi.format.subSamplingW),
-                    d->vi.height / (i == 0 ? 1 : d->vi.format.subSamplingH),
-                    d->mirror_boundary, d->prop_map, analysis_results);
-                std::string shader = generator.generate();
-                // printf("Generated GLSL:\n%s\n", shader.c_str());
+                auto num_stages = d->tokens_stages.at(i).size();
+                d->streams[k]->pipelines.at(i).resize(num_stages);
 
-                if (k == 0 && !d->dump_glsl_path.empty()) {
-                    std::string plane_specific_path = d->dump_glsl_path;
-                    size_t dot_pos = plane_specific_path.rfind('.');
-                    std::string plane_suffix = ".plane" + std::to_string(i);
-                    if (dot_pos != std::string::npos) {
-                        plane_specific_path.insert(dot_pos, plane_suffix);
-                    } else {
-                        plane_specific_path += plane_suffix;
+                for (size_t s = 0; s < num_stages; ++s) {
+                    analysis::ExpressionAnalysisResults analysis_results(
+                        *d->analysis_managers.at(i).at(s));
+                    GLSLGenerator generator(
+                        d->tokens_stages.at(i).at(s), d->num_inputs,
+                        static_cast<int>(s),
+                        d->vi.width / (i == 0 ? 1 : d->vi.format.subSamplingW),
+                        d->vi.height / (i == 0 ? 1 : d->vi.format.subSamplingH),
+                        d->mirror_boundary, d->prop_map, analysis_results);
+                    std::string shader = generator.generate();
+                    // printf("Generated GLSL:\n%s\n", shader.c_str());
+
+                    if (k == 0 && !d->dump_glsl_path.empty()) {
+                        std::string plane_specific_path = d->dump_glsl_path;
+                        size_t dot_pos = plane_specific_path.rfind('.');
+                        std::string suffix =
+                            std::format(".plane{}.stage{}", i, s);
+
+                        // If only one stage, maybe keep original naming to avoid breaking scripts?
+                        // But consistency is better. Let's use stage suffix always if multi-stage?
+                        // Or always use it.
+                        // Original was ".planeX".
+                        // New ".planeX.stageY".
+
+                        if (dot_pos != std::string::npos) {
+                            plane_specific_path.insert(dot_pos, suffix);
+                        } else {
+                            plane_specific_path += suffix;
+                        }
+
+                        std::ofstream glsl_file(plane_specific_path);
+                        if (glsl_file.is_open()) {
+                            glsl_file << shader;
+                            glsl_file.close();
+                        }
                     }
 
-                    std::ofstream glsl_file(plane_specific_path);
-                    if (glsl_file.is_open()) {
-                        glsl_file << shader;
-                        glsl_file.close();
-                    }
+                    d->streams[k]->pipelines.at(i).at(s) =
+                        std::make_unique<vkexpr::VulkanComputePipeline>(
+                            ctx, shader,
+                            static_cast<uint32_t>(d->num_inputs + s),
+                            num_props_floats);
                 }
-
-                d->streams[k]->pipelines.at(i) =
-                    std::make_unique<vkexpr::VulkanComputePipeline>(
-                        ctx, shader, static_cast<uint32_t>(d->num_inputs),
-                        num_props_floats);
             }
         }
 

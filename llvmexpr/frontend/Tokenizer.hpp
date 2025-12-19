@@ -62,6 +62,9 @@ enum class TokenType : std::uint8_t {
     ClipAbsPlane,  // src^plane[]
     StoreAbsPlane, // @[]^plane
     PropStore,     // prop$
+    BufferRel,     // bufN[x,y]
+    BufferAbs,     // bufN[]
+    BufferCur,     // bufN
 
     // Binary Operators
     Add,
@@ -205,13 +208,23 @@ struct TokenPayloadArrayOp {
     int static_size = 0; // ARRAY_ALLOC_STATIC
 };
 
+struct TokenPayloadBufferAccess {
+    int buffer_idx;
+    int rel_x = 0;
+    int rel_y = 0;
+    bool use_mirror = false;
+    bool has_mode = false;
+};
+
 struct Token {
-    using PayloadVariant = std::variant<
-        std::monostate, TokenPayloadNumber, TokenPayloadVar, TokenPayloadLabel,
-        TokenPayloadStackOp, TokenPayloadClipAccess, TokenPayloadPropAccess,
-        TokenPayloadClipAccessPlane, TokenPayloadStoreAbsPlane,
-        TokenPayloadPropStore, TokenPayloadPlaneDim, TokenPayloadClipDim,
-        TokenPayloadClipPlaneDim, TokenPayloadArrayOp>;
+    using PayloadVariant =
+        std::variant<std::monostate, TokenPayloadNumber, TokenPayloadVar,
+                     TokenPayloadLabel, TokenPayloadStackOp,
+                     TokenPayloadClipAccess, TokenPayloadPropAccess,
+                     TokenPayloadClipAccessPlane, TokenPayloadStoreAbsPlane,
+                     TokenPayloadPropStore, TokenPayloadPlaneDim,
+                     TokenPayloadClipDim, TokenPayloadClipPlaneDim,
+                     TokenPayloadArrayOp, TokenPayloadBufferAccess>;
 
     TokenType type;
     std::string text;
@@ -229,6 +242,7 @@ using BehaviorResolver = std::variant<TokenBehavior, DynamicBehaviorFn>;
 enum class ExprMode : std::uint8_t {
     Expr,
     SingleExpr,
+    VkExpr,
 };
 
 // Utility functions
@@ -250,15 +264,18 @@ struct TokenDefinition {
     enum class Availability : std::uint8_t {
         Expr = 1U << 0,
         SingleExpr = 1U << 1,
+        VkExpr = 1U << 2,
     };
 
     Availability availability = static_cast<Availability>(
         static_cast<std::uint8_t>(Availability::Expr) |
-        static_cast<std::uint8_t>(Availability::SingleExpr));
+        static_cast<std::uint8_t>(Availability::SingleExpr) |
+        static_cast<std::uint8_t>(Availability::VkExpr));
 };
 
 std::vector<Token> tokenize(const std::string& expr, int num_inputs,
-                            ExprMode mode = ExprMode::Expr);
+                            ExprMode mode = ExprMode::Expr,
+                            int num_intermediate_inputs = 0);
 TokenBehavior get_token_behavior(const Token& token);
 
 #endif // LLVMEXPR_FRONTEND_TOKENIZER_HPP

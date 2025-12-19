@@ -34,8 +34,9 @@
 
 class GLSLGenerator {
   public:
-    GLSLGenerator(const std::vector<Token>& tokens, int num_inputs, int width,
-                  int height, bool mirror_boundary,
+    GLSLGenerator(const std::vector<Token>& tokens, int num_inputs,
+                  int num_intermediate_inputs, int width, int height,
+                  bool mirror_boundary,
                   const std::map<std::pair<int, std::string>, int>& prop_map,
                   const analysis::ExpressionAnalysisResults& analysis_results);
 
@@ -44,6 +45,7 @@ class GLSLGenerator {
   private:
     const std::vector<Token>& tokens;
     int num_inputs;
+    int num_intermediate_inputs;
     bool mirror_boundary;
     const std::map<std::pair<int, std::string>, int>& prop_map;
     const analysis::ExpressionAnalysisResults& analysis;
