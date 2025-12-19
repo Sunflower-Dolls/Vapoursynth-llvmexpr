@@ -263,6 +263,55 @@ def test_large_sort(backend: str, n: int, numbers: list[float]) -> None:
         assert val == pytest.approx(sorted(numbers)[n - 1 - i])
 
 
+@pytest.mark.parametrize(
+    "numbers, expr, expected",
+    [
+        ([2, 1, 0, 3], "argmin4", 2),
+        ([2, 1, 0, 3], "argmax4", 3),
+        ([0, 0, 0, 0], "argmin4", 0),
+        ([3, 3, 3, 3], "argmax4", 0),
+        ([1, 2, 3, 1], "argmin4", 0),
+        ([5, 1, 5, 2], "argmax4", 0),
+        ([5, -1, 10, 10, 2], "argmax5", 2),
+    ],
+)
+def test_argmin_argmax(
+    backend: str, numbers: list[float], expr: str, expected: float
+) -> None:
+    expr_func = get_expr_func(backend)
+    c0 = core.std.BlankClip(format=vs.GRAYS, color=0.0)
+    full_expr = " ".join(map(str, numbers)) + f" {expr}"
+    res = expr_func(c0, full_expr, vs.GRAYS)
+    val = res.get_frame(0)[0][0, 0]
+    assert val == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(
+    "numbers, n",
+    [
+        ([2, 1, 0, 3], 4),
+        ([1, 1, 1, 1], 4),
+        ([5, 2, 5, 1], 4),
+        ([10, 20, 30, 10, 20], 5),
+    ],
+)
+def test_argsort(backend: str, numbers: list[float], n: int) -> None:
+    expr_func = get_expr_func(backend)
+    c0 = core.std.BlankClip(format=vs.GRAYS, color=0.0)
+
+    indexed_numbers = list(enumerate(numbers))
+    indexed_numbers.sort(key=lambda x: x[1])
+    expected_indices = [float(idx) for idx, val in indexed_numbers]
+
+    full_expr = " ".join(map(str, numbers)) + f" argsort{n}"
+
+    for i in range(n):
+        test_expr = full_expr + f" drop{i} a! drop{n - 1 - i} a@"
+        res = expr_func(c0, test_expr, vs.GRAYS)
+        val = res.get_frame(0)[0][0, 0]
+        assert val == pytest.approx(expected_indices[i])
+
+
 def test_named_variables_and_loop_power(backend: str) -> None:
     expr_func = get_expr_func(backend)
     c = core.std.BlankClip(format=vs.GRAYS, color=2.0)

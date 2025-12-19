@@ -198,14 +198,22 @@ These operators round floating-point values to nearest integers before the opera
 
 #### **4.1. Stack Manipulation**
 
-| Operator         | Description                                                           | Example                                          |
-| :--------------- | :-------------------------------------------------------------------- | :----------------------------------------------- |
-| `dup`            | (1 operand) Duplicates the top item.                                  | `x dup *` is equivalent to `x 2 pow`.            |
-| `swap`           | (2 operands) Swaps the top two items.                                 | `x y swap -` is equivalent to `y x -`.           |
-| `dupN`           | Duplicates the item N positions from the top. `dup0` is `dup`.        |                                                  |
-| `swapN`          | Swaps the top item with the item N positions down. `swap1` is `swap`. |                                                  |
-| `drop` / `dropN` | Drops the top N items. `drop` is an alias for `drop1`.                | `1 2 3 drop2` results in a stack of `[1]`.       |
-| `sortN`          | Sorts the top N items, with the smallest value ending up on top.      | `3 1 2 sort3` results in a stack of `[3, 2, 1]`. |
+| Operator         | Description                                                           | Example                                                                               |
+| :--------------- | :-------------------------------------------------------------------- | :------------------------------------------------------------------------------------ |
+| `dup`            | (1 operand) Duplicates the top item.                                  | `x dup *` is equivalent to `x 2 pow`.                                                 |
+| `swap`           | (2 operands) Swaps the top two items.                                 | `x y swap -` is equivalent to `y x -`.                                                |
+| `dupN`           | Duplicates the item N positions from the top. `dup0` is `dup`.        |                                                                                       |
+| `swapN`          | Swaps the top item with the item N positions down. `swap1` is `swap`. |                                                                                       |
+| `drop` / `dropN` | Drops the top N items. `drop` is an alias for `drop1`.                | `1 2 3 drop2` results in a stack of `[1]`.                                            |
+| `sortN`          | Sorts the top N items, with the smallest value ending up on top.      | `3 1 2 sort3` results in a stack of `[3, 2, 1]`.                                      |
+| `argminN`        | Finds the minimum of the top N items and returns its relative index.  | `2 1 0 3 argmin4` results in `2` (0 is at index 2).                                   |
+| `argmaxN`        | Finds the maximum of the top N items and returns its relative index.  | `2 1 0 3 argmax4` results in `3` (3 is at index 3).                                   |
+| `argsortN`       | Replaces the top N items with their sorted relative indices.          | `2 1 0 3 argsort4` results in `2 1 0 3` (indices of sorted vals 0, 1, 2, 3 on stack). |
+
+> [!NOTE]
+> **Indices:** For `argminN`, `argmaxN`, and `argsortN`, the index `0` refers to the bottom-most of the `N` elements (the one that was pushed first), and `N-1` refers to the top-most element.
+>
+> **Stability:** On ties, `argminN` and `argmaxN` return the smallest index. `argsortN` is stable and pushes indices such that the index of the smallest value is on top of the stack.
 
 #### **4.2. Named Variables**
 

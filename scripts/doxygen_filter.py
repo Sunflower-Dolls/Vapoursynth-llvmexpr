@@ -1,16 +1,17 @@
 import sys
 import re
 
+
 def filter_text(content):
-    content = content.replace(r'\implies', r'\Longrightarrow')
+    content = content.replace(r"\implies", r"\Longrightarrow")
 
     pattern = re.compile(
-        r'(```[\s\S]*?```)'
-        r'|(`[^`\n]*?`)'
-        r'|(\$\$[\s\S]*?\$\$)'
-        r'|((?<!\$)\$(?!\$)[^\n$]+?(?<!\$)\$(?!\$))'
-        r'|(\\\|)',
-        re.MULTILINE
+        r"(```[\s\S]*?```)"
+        r"|(`[^`\n]*?`)"
+        r"|(\$\$[\s\S]*?\$\$)"
+        r"|((?<!\$)\$(?!\$)[^\n$]+?(?<!\$)\$(?!\$))"
+        r"|(\\\|)",
+        re.MULTILINE,
     )
 
     def replacer(match):
@@ -25,9 +26,9 @@ def filter_text(content):
 
         if g_inline_code:
             inner = g_inline_code[1:-1]
-            if r'\|' in inner:
-                fixed_inner = inner.replace(r'\|', '&#124;')
-                fixed_inner = fixed_inner.replace('<', '&lt;').replace('>', '&gt;')
+            if r"\|" in inner:
+                fixed_inner = inner.replace(r"\|", "&#124;")
+                fixed_inner = fixed_inner.replace("<", "&lt;").replace(">", "&gt;")
 
                 return f"\\htmlonly<code>{fixed_inner}</code>\\endhtmlonly"
             else:
@@ -36,25 +37,26 @@ def filter_text(content):
         if g_block_math:
             inner = g_block_math[2:-2]
             return f"\\f[{inner}\\f]"
-        
+
         if g_inline_math:
             inner = g_inline_math[1:-1]
             return f"\\f${inner}\\f$"
-        
+
         if g_escaped_pipe:
             return "&#124;"
-        
+
         return match.group(0)
 
     return pattern.sub(replacer, content)
 
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         sys.exit(0)
-    
+
     filename = sys.argv[1]
     try:
-        with open(filename, 'r', encoding='utf-8', errors='ignore') as f:
+        with open(filename, "r", encoding="utf-8", errors="ignore") as f:
             print(filter_text(f.read()))
     except Exception as e:
         sys.stderr.write(str(e))

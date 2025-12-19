@@ -1284,6 +1284,117 @@ void GLSLGenerator::processToken(const Token& token) {
         }
         break;
     }
+    case TokenType::ArgminN:
+    case TokenType::ArgmaxN: {
+        const auto& payload = std::get<TokenPayloadStackOp>(token.payload);
+        int n = payload.n;
+        if (n < 1) {
+            push(floatLiteral(0.0));
+            break;
+        }
+
+        std::vector<std::string> values(n);
+        for (int i = 0; i < n; ++i) {
+            values[i] = pop();
+        }
+
+        struct Node {
+            std::string val;
+            std::string idx;
+        };
+        std::vector<Node> current_level;
+        current_level.reserve(n);
+        for (int i = 0; i < n; ++i) {
+            current_level.push_back(
+                {values[i], floatLiteral(static_cast<double>(n - 1 - i))});
+        }
+
+        bool is_max = (token.type == TokenType::ArgmaxN);
+        std::string cmp = is_max ? ">" : "<";
+
+        while (current_level.size() > 1) {
+            std::vector<Node> next_level;
+            for (size_t i = 0; i < current_level.size(); i += 2) {
+                if (i + 1 < current_level.size()) {
+                    std::string winner_val = newTemp();
+                    std::string winner_idx = newTemp();
+                    const auto& left = current_level[i];
+                    const auto& right = current_level[i + 1];
+
+                    // Prefer smaller original index on tie.
+                    std::string cond = std::format(
+                        "({} {} {}) || ({} == {} && {} < {})", left.val, cmp,
+                        right.val, left.val, right.val, left.idx, right.idx);
+
+                    emitLine(std::format("float {} = ({}) ? {} : {};",
+                                         winner_val, cond, left.val,
+                                         right.val));
+                    emitLine(std::format("float {} = ({}) ? {} : {};",
+                                         winner_idx, cond, left.idx,
+                                         right.idx));
+                    next_level.push_back({winner_val, winner_idx});
+                } else {
+                    next_level.push_back(current_level[i]);
+                }
+            }
+            current_level = std::move(next_level);
+        }
+        push(current_level[0].idx);
+        break;
+    }
+    case TokenType::ArgsortN: {
+        const auto& payload = std::get<TokenPayloadStackOp>(token.payload);
+        int n = payload.n;
+        if (n < 1) {
+            break;
+        }
+        if (n == 1) {
+            (void)pop();
+            push(floatLiteral(0.0));
+            break;
+        }
+
+        std::vector<std::string> values(n);
+        std::vector<std::string> indices(n);
+        for (int i = 0; i < n; ++i) {
+            values[i] = pop();
+            indices[i] = floatLiteral(static_cast<double>(n - 1 - i));
+        }
+
+        auto network = get_sorting_network(n);
+        for (const auto& pair : network) {
+            int i1 = pair.first;
+            int i2 = pair.second;
+
+            std::string cond = std::format(
+                "({} > {}) || ({} == {} && {} > {})", values[i1], values[i2],
+                values[i1], values[i2], indices[i1], indices[i2]);
+
+            std::string next_v1 = newTemp();
+            std::string next_v2 = newTemp();
+            std::string next_i1 = newTemp();
+            std::string next_i2 = newTemp();
+
+            emitLine(std::format("float {} = ({}) ? {} : {};", next_v1, cond,
+                                 values[i2], values[i1]));
+            emitLine(std::format("float {} = ({}) ? {} : {};", next_v2, cond,
+                                 values[i1], values[i2]));
+            emitLine(std::format("float {} = ({}) ? {} : {};", next_i1, cond,
+                                 indices[i2], indices[i1]));
+            emitLine(std::format("float {} = ({}) ? {} : {};", next_i2, cond,
+                                 indices[i1], indices[i2]));
+
+            values[i1] = next_v1;
+            values[i2] = next_v2;
+            indices[i1] = next_i1;
+            indices[i2] = next_i2;
+        }
+
+        for (int i = n - 1; i >= 0; --i) {
+            push(indices[i]);
+        }
+        break;
+    }
 
     // Control flow
     case TokenType::LabelDef:

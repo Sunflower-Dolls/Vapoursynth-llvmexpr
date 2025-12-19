@@ -123,6 +123,9 @@ enum class TokenType : std::uint8_t {
     Drop,
     Swap,
     SortN,
+    ArgminN,
+    ArgmaxN,
+    ArgsortN,
 
     // Control Flow
     LabelDef, // #my_label

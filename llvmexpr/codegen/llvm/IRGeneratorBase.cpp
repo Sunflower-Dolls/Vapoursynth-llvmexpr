@@ -683,6 +683,116 @@ bool IRGeneratorBase::processCommonToken(const Token& token,
         }
         return true;
     }
+    case TokenType::ArgminN:
+    case TokenType::ArgmaxN: {
+        const auto& payload = std::get<TokenPayloadStackOp>(token.payload);
+        int n = payload.n;
+        if (n < 1) {
+            rpn_stack.push_back(
+                llvm::ConstantFP::get(builder.getFloatTy(), 0.0));
+            return true;
+        }
+
+        std::vector<llvm::Value*> values(n);
+        for (int i = 0; i < n; ++i) {
+            values[i] = rpn_stack.back();
+            rpn_stack.pop_back();
+        }
+
+        struct Node {
+            llvm::Value* val;
+            llvm::Value* idx;
+        };
+        std::vector<Node> current_level;
+        current_level.reserve(n);
+        for (int i = 0; i < n; ++i) {
+            current_level.push_back(
+                {values[i],
+                 llvm::ConstantFP::get(builder.getFloatTy(),
+                                       static_cast<double>(n - 1 - i))});
+        }
+
+        bool is_max = (token.type == TokenType::ArgmaxN);
+
+        while (current_level.size() > 1) {
+            std::vector<Node> next_level;
+            for (size_t i = 0; i < current_level.size(); i += 2) {
+                if (i + 1 < current_level.size()) {
+                    const auto& left = current_level[i];
+                    const auto& right = current_level[i + 1];
+
+                    llvm::Value* cmp_val =
+                        is_max ? builder.CreateFCmpOGT(left.val, right.val)
+                               : builder.CreateFCmpOLT(left.val, right.val);
+
+                    llvm::Value* eq_val =
+                        builder.CreateFCmpOEQ(left.val, right.val);
+                    llvm::Value* cmp_idx =
+                        builder.CreateFCmpOLT(left.idx, right.idx);
+                    llvm::Value* tie_break = builder.CreateAnd(eq_val, cmp_idx);
+                    llvm::Value* cond = builder.CreateOr(cmp_val, tie_break);
+
+                    next_level.push_back(
+                        {builder.CreateSelect(cond, left.val, right.val),
+                         builder.CreateSelect(cond, left.idx, right.idx)});
+                } else {
+                    next_level.push_back(current_level[i]);
+                }
+            }
+            current_level = std::move(next_level);
+        }
+        rpn_stack.push_back(current_level[0].idx);
+        return true;
+    }
+    case TokenType::ArgsortN: {
+        const auto& payload = std::get<TokenPayloadStackOp>(token.payload);
+        int n = payload.n;
+        if (n < 1) {
+            return true;
+        }
+        if (n == 1) {
+            rpn_stack.pop_back();
+            rpn_stack.push_back(
+                llvm::ConstantFP::get(builder.getFloatTy(), 0.0));
+            return true;
+        }
+
+        std::vector<llvm::Value*> values(n);
+        std::vector<llvm::Value*> indices(n);
+        for (int i = 0; i < n; ++i) {
+            values[i] = rpn_stack.back();
+            rpn_stack.pop_back();
+            indices[i] = llvm::ConstantFP::get(builder.getFloatTy(),
+                                               static_cast<double>(n - 1 - i));
+        }
+
+        auto network = get_sorting_network(n);
+        for (const auto& pair : network) {
+            int i1 = pair.first;
+            int i2 = pair.second;
+
+            llvm::Value* v1 = values[i1];
+            llvm::Value* v2 = values[i2];
+            llvm::Value* idx1 = indices[i1];
+            llvm::Value* idx2 = indices[i2];
+
+            llvm::Value* cmp_val = builder.CreateFCmpOGT(v1, v2);
+            llvm::Value* eq_val = builder.CreateFCmpOEQ(v1, v2);
+            llvm::Value* cmp_idx = builder.CreateFCmpOGT(idx1, idx2);
+            llvm::Value* tie_break = builder.CreateAnd(eq_val, cmp_idx);
+            llvm::Value* cond = builder.CreateOr(cmp_val, tie_break);
+
+            values[i1] = builder.CreateSelect(cond, v2, v1);
+            values[i2] = builder.CreateSelect(cond, v1, v2);
+            indices[i1] = builder.CreateSelect(cond, idx2, idx1);
+            indices[i2] = builder.CreateSelect(cond, idx1, idx2);
+        }
+
+        for (int i = n - 1; i >= 0; --i) {
+            rpn_stack.push_back(indices[i]);
+        }
+        return true;
+    }
 
     // Control Flow (no-op during this pass)
     case TokenType::LabelDef:

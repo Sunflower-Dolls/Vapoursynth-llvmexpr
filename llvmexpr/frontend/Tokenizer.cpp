@@ -281,15 +281,20 @@ inline std::optional<Token> parse_swap(std::string_view input) {
     return std::nullopt;
 }
 
-inline std::optional<Token> parse_sortn(std::string_view input) {
-    if (auto m = ctre::match<R"(^sort(\d+)$)">(input)) {
-        int n = svtoi(m.template get<1>().to_view());
-        if (n < 0) {
-            throw std::runtime_error("Invalid sortN value");
+template <FixedString Prefix, TokenType Type>
+inline std::optional<Token> parse_stack_n(std::string_view input) {
+    if (input.starts_with(Prefix.view())) {
+        auto suffix = input.substr(Prefix.view().size());
+        if (auto m = ctre::match<R"(^(\d+)$)">(suffix)) {
+            int n = svtoi(m.template get<1>().to_view());
+            if (n < 0) {
+                throw std::runtime_error(
+                    std::format("Invalid {}{} value", Prefix.view(), n));
+            }
+            return Token{.type = Type,
+                         .text = std::string(input),
+                         .payload = TokenPayloadStackOp{n}};
         }
-        return Token{.type = TokenType::SortN,
-                     .text = std::string(input),
-                     .payload = TokenPayloadStackOp{n}};
     }
     return std::nullopt;
 }
@@ -599,6 +604,21 @@ inline TokenBehavior sortn_behavior(const Token& t) {
     return {.arity = payload.n, .stack_effect = 0};
 }
 
+inline TokenBehavior argminn_behavior(const Token& t) {
+    const auto& payload = std::get<TokenPayloadStackOp>(t.payload);
+    return {.arity = payload.n, .stack_effect = 1 - payload.n};
+}
+
+inline TokenBehavior argmaxn_behavior(const Token& t) {
+    const auto& payload = std::get<TokenPayloadStackOp>(t.payload);
+    return {.arity = payload.n, .stack_effect = 1 - payload.n};
+}
+
+inline TokenBehavior argsortn_behavior(const Token& t) {
+    const auto& payload = std::get<TokenPayloadStackOp>(t.payload);
+    return {.arity = payload.n, .stack_effect = 0};
+}
+
 inline TokenBehavior prop_store_behavior(const Token& t) {
     const auto& payload = std::get<TokenPayloadPropStore>(t.payload);
     if (payload.type == PropWriteType::Delete) {
@@ -771,11 +791,31 @@ constexpr auto get_token_definitions() {
                         .behavior = DynamicBehaviorFn(swap_behavior),
                         .parser = parse_swap,
                         .availability = AVAILABILITY_ALL},
-        TokenDefinition{.type = TokenType::SortN,
-                        .name = "sortN",
-                        .behavior = DynamicBehaviorFn(sortn_behavior),
-                        .parser = parse_sortn,
-                        .availability = AVAILABILITY_ALL},
+        TokenDefinition{
+            .type = TokenType::SortN,
+            .name = "sortN",
+            .behavior = DynamicBehaviorFn(sortn_behavior),
+            .parser = parse_stack_n<FixedString{"sort"}, TokenType::SortN>,
+            .availability = AVAILABILITY_ALL},
+        TokenDefinition{
+            .type = TokenType::ArgminN,
+            .name = "argminN",
+            .behavior = DynamicBehaviorFn(argminn_behavior),
+            .parser = parse_stack_n<FixedString{"argmin"}, TokenType::ArgminN>,
+            .availability = AVAILABILITY_ALL},
+        TokenDefinition{
+            .type = TokenType::ArgmaxN,
+            .name = "argmaxN",
+            .behavior = DynamicBehaviorFn(argmaxn_behavior),
+            .parser = parse_stack_n<FixedString{"argmax"}, TokenType::ArgmaxN>,
+            .availability = AVAILABILITY_ALL},
+        TokenDefinition{
+            .type = TokenType::ArgsortN,
+            .name = "argsortN",
+            .behavior = DynamicBehaviorFn(argsortn_behavior),
+            .parser =
+                parse_stack_n<FixedString{"argsort"}, TokenType::ArgsortN>,
+            .availability = AVAILABILITY_ALL},
         TokenDefinition{.type = TokenType::LabelDef,
                         .name = "label_def",
                         .behavior = BEHAVIOR_NO_EFFECT,
