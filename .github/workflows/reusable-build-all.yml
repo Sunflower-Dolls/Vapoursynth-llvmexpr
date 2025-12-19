@@ -171,14 +171,20 @@ jobs:
         uses: actions/cache@v4
         with:
           path: vapoursynth/include
-          key: vs-headers-${{ runner.os }}-${{ github.sha }}
+          key: vs-headers-${{ runner.os }}-v1
           restore-keys: |
             vs-headers-${{ runner.os }}-
 
       - name: Download VS headers (Linux)
         if: runner.os == 'Linux' && steps.cache_vs_headers.outputs.cache-hit != 'true'
         shell: bash
-        run: git clone https://github.com/vapoursynth/vapoursynth --depth=1
+        run: |
+          if [ ! -d vapoursynth/include ]; then
+            rm -rf vapoursynth
+            git clone https://github.com/vapoursynth/vapoursynth --depth=1
+          else
+            echo "Using cached VapourSynth headers"
+          fi
 
       - name: Download VS headers and patch header location (Linux)
         if: runner.os == 'Linux'
