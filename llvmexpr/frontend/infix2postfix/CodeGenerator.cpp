@@ -363,7 +363,7 @@ void CodeGenerator::handle(const AssignStmt& stmt, PostfixBuilder& builder) {
     builder.append(b);
 #else
     generate(stmt.value.get(), builder);
-    builder.add_variable_store(var_name);
+    builder.addVariableStore(var_name);
 #endif
 }
 
@@ -395,7 +395,7 @@ void CodeGenerator::handle(const ArrayAssignStmt& stmt,
 #else
     generate(stmt.value.get(), builder);
     generate(array_access->index.get(), builder);
-    builder.add_array_store(array_name);
+    builder.addArrayStore(array_name);
 #endif
 }
 
