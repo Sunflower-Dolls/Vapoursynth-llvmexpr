@@ -17,8 +17,8 @@
  * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef LLVMEXPR_INFIX2POSTFIX_BUILTINS_HPP
-#define LLVMEXPR_INFIX2POSTFIX_BUILTINS_HPP
+#ifndef LLVMEXPR_FRONTEND_INFIX2POSTFIX_BUILTINS_HPP
+#define LLVMEXPR_FRONTEND_INFIX2POSTFIX_BUILTINS_HPP
 
 #include "AST.hpp"
 #include "CodeGenerator.hpp"
@@ -49,4 +49,4 @@ get_builtin_functions();
 
 } // namespace infix2postfix
 
-#endif
+#endif // LLVMEXPR_FRONTEND_INFIX2POSTFIX_BUILTINS_HPP

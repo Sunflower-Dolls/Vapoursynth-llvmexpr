@@ -17,8 +17,8 @@
  * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef LLVMEXPR_INFIX2POSTFIX_STDLIB_LIBRARYBASE_HPP
-#define LLVMEXPR_INFIX2POSTFIX_STDLIB_LIBRARYBASE_HPP
+#ifndef LLVMEXPR_FRONTEND_INFIX2POSTFIX_STDLIB_LIBRARYBASE_HPP
+#define LLVMEXPR_FRONTEND_INFIX2POSTFIX_STDLIB_LIBRARYBASE_HPP
 
 #include <concepts>
 #include <cstdint>
@@ -46,4 +46,4 @@ concept IsLibrary = requires {
 
 } // namespace infix2postfix::stdlib
 
-#endif // LLVMEXPR_INFIX2POSTFIX_STDLIB_LIBRARYBASE_HPP
+#endif // LLVMEXPR_FRONTEND_INFIX2POSTFIX_STDLIB_LIBRARYBASE_HPP

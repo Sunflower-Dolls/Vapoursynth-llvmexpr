@@ -728,6 +728,15 @@ Access a pixel at a fixed, constant offset from the current coordinate (`$X`, `$
 
 Access a pixel at a dynamically calculated coordinate using the 3-argument `dyn()` function. See [section 8.3](#83-mode-specific-functions) for details.
 
+##### VkExpr Multi-Pass Pipeline & Intermediate Buffers
+
+`VkExpr` can chain multiple infix stages by separating them with `---` inside a single `expr` string.
+
+- Stages are executed in order, and each segment is converted to postfix independently.
+- Stage `k` can read intermediate results from `$buf0` … `$buf{k-1}`; stage `0` has no buffers available.
+- `$bufN` behaves like a clip for pixel reads: use `$bufN`, `$bufN[x,y]:c|:m`, or `dyn($bufN, x, y, plane)` in later stages.
+- Intermediate buffers match the output resolution/format and are stored as `float32`; frame property access on `$bufN` is not supported.
+
 #### 7.2.2 `SingleExpr` mode
 
 In `SingleExpr` mode, all data I/O is explicit and uses absolute coordinates.

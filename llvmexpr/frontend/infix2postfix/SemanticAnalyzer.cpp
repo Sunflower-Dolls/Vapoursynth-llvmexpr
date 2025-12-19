@@ -30,8 +30,10 @@
 namespace infix2postfix {
 
 SemanticAnalyzer::SemanticAnalyzer(Mode mode, int num_inputs,
+                                   int num_intermediate_inputs,
                                    int library_line_count)
     : mode(mode), num_inputs(num_inputs),
+      num_intermediate_inputs(num_intermediate_inputs),
       library_line_count(library_line_count),
       global_scope(std::make_unique<SymbolTable>()),
       current_scope(global_scope.get()) {}
@@ -236,7 +238,7 @@ bool SemanticAnalyzer::analyze(const Program* program) {
     }
 
     // Check for unused global variables and functions
-    for (const auto& [name, symbol] : global_scope->get_symbols()) {
+    for (const auto& [name, symbol] : global_scope->getSymbols()) {
         if (!symbol->is_used) {
             if (symbol->name == "RESULT" || symbol->name == "_") {
                 continue;
@@ -252,13 +254,14 @@ bool SemanticAnalyzer::analyze(const Program* program) {
         }
     }
 
-    // Check if RESULT is defined in Expr mode
-    if (mode == Mode::Expr && !has_result) {
+    // Check if RESULT is defined in Expr/VkExpr mode
+    if ((mode == Mode::Expr || mode == Mode::VkExpr) && !has_result) {
         reportError("Final result must be assigned to variable 'RESULT'!",
                     Range{});
     }
 
-    if (mode == Mode::Expr && !result_defined_in_global_scope) {
+    if ((mode == Mode::Expr || mode == Mode::VkExpr) &&
+        !result_defined_in_global_scope) {
         reportError(
             "'RESULT' must be defined in the global scope in Expr mode.",
             Range{});
@@ -325,7 +328,7 @@ void SemanticAnalyzer::enterScope() {
 
 void SemanticAnalyzer::exitScope() {
     if (!scope_stack.empty()) {
-        current_scope = current_scope->get_parent();
+        current_scope = current_scope->getParent();
         scope_stack.pop_back();
     }
 }
@@ -407,8 +410,23 @@ Type SemanticAnalyzer::analyze(VariableExpr& expr) {
             }
             return Type::Value;
         }
-        if (get_clip_index(base_name) != -1) {
-            if (get_clip_index(base_name) > num_inputs - 1) {
+        if (auto buf_idx = get_buffer_index(base_name)) {
+            if (mode != Mode::VkExpr) {
+                reportError(
+                    "Intermediate buffers are only available in VkExpr mode.",
+                    expr.range);
+                return Type::Value;
+            }
+            if (*buf_idx < 0 || *buf_idx >= num_intermediate_inputs) {
+                reportError(
+                    std::format("Buffer '{}' is out of range for this stage.",
+                                base_name),
+                    expr.range);
+            }
+            return Type::Clip;
+        }
+        if (auto clip_idx = get_clip_index(base_name)) {
+            if (*clip_idx > num_inputs - 1) {
                 reportError(
                     std::format("Clip index '{}' is out of range", base_name),
                     expr.range);
@@ -479,7 +497,7 @@ Type SemanticAnalyzer::analyze(UnaryExpr& expr) {
     }
 
     auto right_type = analyzeExpr(expr.right.get());
-    if (!isConvertible(right_type, Type::Value, mode)) {
+    if (!is_convertible(right_type, Type::Value, mode)) {
         reportError(std::format("Cannot apply unary operator '{}' to type "
                                 "'{}' which is not convertible to a value.",
                                 token_type_to_string(expr.op.type),
@@ -494,14 +512,14 @@ Type SemanticAnalyzer::analyze(BinaryExpr& expr) {
     auto left_type = analyzeExpr(expr.left.get());
     auto right_type = analyzeExpr(expr.right.get());
 
-    if (!isConvertible(left_type, Type::Value, mode)) {
+    if (!is_convertible(left_type, Type::Value, mode)) {
         reportError(std::format("Left operand of binary operator '{}' has type "
                                 "'{}' which is not convertible to a value.",
                                 token_type_to_string(expr.op.type),
                                 enum_name(left_type)),
                     expr.range);
     }
-    if (!isConvertible(right_type, Type::Value, mode)) {
+    if (!is_convertible(right_type, Type::Value, mode)) {
         reportError(
             std::format("Right operand of binary operator '{}' has type "
                         "'{}' which is not convertible to a value.",
@@ -515,7 +533,7 @@ Type SemanticAnalyzer::analyze(BinaryExpr& expr) {
 
 Type SemanticAnalyzer::analyze(TernaryExpr& expr) {
     auto cond_type = analyzeExpr(expr.cond.get());
-    if (!isConvertible(cond_type, Type::Value, mode)) {
+    if (!is_convertible(cond_type, Type::Value, mode)) {
         reportError(std::format("Ternary condition has type '{}' which is not "
                                 "convertible to a value.",
                                 enum_name(cond_type)),
@@ -525,8 +543,8 @@ Type SemanticAnalyzer::analyze(TernaryExpr& expr) {
     auto true_type = analyzeExpr(expr.true_expr.get());
     auto false_type = analyzeExpr(expr.false_expr.get());
 
-    if (!isConvertible(true_type, Type::Value, mode) ||
-        !isConvertible(false_type, Type::Value, mode)) {
+    if (!is_convertible(true_type, Type::Value, mode) ||
+        !is_convertible(false_type, Type::Value, mode)) {
         reportError("Both branches of a ternary expression must be convertible "
                     "to a value.",
                     expr.range);
@@ -630,7 +648,7 @@ const FunctionSignature* SemanticAnalyzer::resolveOverload(
             }
         }
 
-        auto candidates = computeCandidates<const FunctionSignature*>(
+        auto candidates = compute_candidates<const FunctionSignature*>(
             possible_overloads, args.size(),
             [&](const FunctionSignature* /*sig*/,
                 size_t j) -> std::optional<Type> { return arg_types[j]; },
@@ -656,9 +674,9 @@ const FunctionSignature* SemanticAnalyzer::resolveOverload(
         }
 
         // Select best candidate
-        const auto* best_candidate = selectBestCandidate(candidates);
+        const auto* best_candidate = select_best_candidate(candidates);
 
-        if (isAmbiguous(candidates, best_candidate)) {
+        if (is_ambiguous(candidates, best_candidate)) {
             reportError(
                 std::format("Ambiguous call to overloaded function '{}'", name),
                 range);
@@ -701,14 +719,15 @@ const FunctionSignature* SemanticAnalyzer::resolveOverload(
         for (const auto& o : overloads) {
             if (static_cast<size_t>(o.arity) == args.size() &&
                 (!o.mode_restriction.has_value() ||
-                 o.mode_restriction.value() == mode)) {
+                 o.mode_restriction.value() == mode ||
+                 (o.mode_restriction == Mode::Expr && mode == Mode::VkExpr))) {
                 possible_overloads.push_back(&o);
             }
         }
 
         std::vector<std::optional<Type>> arg_types(args.size());
 
-        auto candidates = computeCandidates<const BuiltinFunction*>(
+        auto candidates = compute_candidates<const BuiltinFunction*>(
             possible_overloads, args.size(),
             [&](const BuiltinFunction* builtin,
                 size_t j) -> std::optional<Type> {
@@ -750,16 +769,15 @@ const FunctionSignature* SemanticAnalyzer::resolveOverload(
             reportError(
                 std::format(
                     "No matching overload for function '{}({})' in {} mode.",
-                    name, arg_types_str,
-                    mode == Mode::Expr ? "Expr" : "SingleExpr"),
+                    name, arg_types_str, enum_name(mode)),
                 range);
             return nullptr;
         }
 
         // Select best candidate
-        const auto* best_candidate = selectBestCandidate(candidates);
+        const auto* best_candidate = select_best_candidate(candidates);
 
-        if (isAmbiguous(candidates, best_candidate)) {
+        if (is_ambiguous(candidates, best_candidate)) {
             reportError(
                 std::format(
                     "Ambiguous call to overloaded built-in function '{}'",
@@ -795,7 +813,7 @@ const FunctionSignature* SemanticAnalyzer::resolveOverload(
         }
         for (const auto& arg : args) {
             auto arg_type = analyzeExpr(arg.get());
-            if (!isConvertible(arg_type, Type::Value, mode)) {
+            if (!is_convertible(arg_type, Type::Value, mode)) {
                 reportError(
                     std::format("Argument to function '{}' has type '{}' which "
                                 "is not convertible to Value.",
@@ -816,25 +834,47 @@ void SemanticAnalyzer::getAllSymbols(
     if (scope == nullptr) {
         return;
     }
-    for (const auto& [name, symbol] : scope->get_symbols()) {
+    for (const auto& [name, symbol] : scope->getSymbols()) {
         if (!symbols.contains(name)) {
             symbols[name] = symbol;
         }
     }
-    getAllSymbols(scope->get_parent(), symbols);
+    getAllSymbols(scope->getParent(), symbols);
 }
 
 void SemanticAnalyzer::validateClipReference(const std::string& clip_name,
-                                             const Range& range) {
+                                             const Range& range,
+                                             bool allow_buffer) {
     std::string name = clip_name;
 
     if (name.starts_with("$")) {
         name = name.substr(1);
-        if (get_clip_index(name) == -1) {
+        if (auto buf_idx = get_buffer_index(name)) {
+            if (!allow_buffer) {
+                reportError(
+                    "Intermediate buffers do not have frame properties.",
+                    range);
+                return;
+            }
+            if (mode != Mode::VkExpr) {
+                reportError(
+                    "Intermediate buffers are only available in VkExpr mode.",
+                    range);
+                return;
+            }
+            if (*buf_idx < 0 || *buf_idx >= num_intermediate_inputs) {
+                reportError(
+                    std::format("Buffer '{}' is out of range for this stage.",
+                                name),
+                    range);
+            }
+            return;
+        }
+        auto clip_idx_opt = get_clip_index(name);
+        if (!clip_idx_opt) {
             reportError(std::format("Invalid clip identifier '{}'.", clip_name),
                         range);
-        }
-        if (get_clip_index(name) > num_inputs - 1) {
+        } else if (*clip_idx_opt > num_inputs - 1) {
             reportError(std::format("Clip index '{}' is out of range", name),
                         range);
         }
@@ -852,7 +892,7 @@ void SemanticAnalyzer::validateClipReference(const std::string& clip_name,
 }
 
 Type SemanticAnalyzer::analyze(const PropAccessExpr& expr) {
-    validateClipReference(expr.clip.value, expr.range);
+    validateClipReference(expr.clip.value, expr.range, false);
     return Type::Value;
 }
 
@@ -874,10 +914,10 @@ Type SemanticAnalyzer::analyze(FrameDimensionExpr& expr) {
                   "deprecated and will be removed in a future version.",
                   expr.range);
 
-    if (mode == Mode::Expr) {
+    if (mode == Mode::Expr || mode == Mode::VkExpr) {
         reportError("frame.width[N] and frame.height[N] are only "
                     "available in SingleExpr mode. "
-                    "Use width and height directly in Expr mode.",
+                    "Use width and height directly in Expr/VkExpr mode.",
                     expr.range);
     }
 
@@ -909,7 +949,7 @@ Type SemanticAnalyzer::analyze(ArrayAccessExpr& expr) {
     expr.array_symbol = symbol;
 
     auto index_type = analyzeExpr(expr.index.get());
-    if (!isConvertible(index_type, Type::Value, mode)) {
+    if (!is_convertible(index_type, Type::Value, mode)) {
         reportError("Array index must be convertible to a value.",
                     expr.index->range());
     }
@@ -928,7 +968,7 @@ void SemanticAnalyzer::analyze(const ExprStmt& stmt) {
 void SemanticAnalyzer::analyze(AssignStmt& stmt) {
     if (stmt.name.value == "RESULT") {
         has_result = true;
-        if (mode == Mode::Expr) {
+        if (mode == Mode::Expr || mode == Mode::VkExpr) {
             if (current_function == nullptr && scope_stack.empty()) {
                 result_defined_in_global_scope = true;
             }
@@ -952,7 +992,7 @@ void SemanticAnalyzer::analyze(AssignStmt& stmt) {
                 (existing_symbol && existing_symbol->type == Type::Array);
 
             if (call_expr->callee == "resize") {
-                if (mode == Mode::Expr) {
+                if (mode == Mode::Expr || mode == Mode::VkExpr) {
                     reportError(
                         "resize() is only available in SingleExpr mode.",
                         stmt.range);
@@ -972,7 +1012,7 @@ void SemanticAnalyzer::analyze(AssignStmt& stmt) {
                 }
             }
 
-            if (mode == Mode::Expr) {
+            if (mode == Mode::Expr || mode == Mode::VkExpr) {
                 auto size_type = analyzeExpr(call_expr->args[0].get());
                 if (size_type != Type::Literal) {
                     reportError("Array size must be a literal constant.",
@@ -980,7 +1020,7 @@ void SemanticAnalyzer::analyze(AssignStmt& stmt) {
                 }
             } else {
                 auto size_type = analyzeExpr(call_expr->args[0].get());
-                if (!isConvertible(size_type, Type::Value, mode)) {
+                if (!is_convertible(size_type, Type::Value, mode)) {
                     reportError("Array size must be convertible to a value.",
                                 stmt.range);
                 }
@@ -994,7 +1034,7 @@ void SemanticAnalyzer::analyze(AssignStmt& stmt) {
         }
     }
     auto value_type = analyzeExpr(stmt.value.get());
-    if (!isConvertible(value_type, Type::Value, mode)) {
+    if (!is_convertible(value_type, Type::Value, mode)) {
         reportError(std::format("Variable assignment value must be convertible "
                                 "to a value, got {}.",
                                 enum_name(value_type)),
@@ -1029,7 +1069,7 @@ void SemanticAnalyzer::analyze(ArrayAssignStmt& stmt) {
     analyzeExpr(stmt.target.get());
 
     auto value_type = analyzeExpr(stmt.value.get());
-    if (!isConvertible(value_type, Type::Value, mode)) {
+    if (!is_convertible(value_type, Type::Value, mode)) {
         reportError("Array assignment value must be convertible to a value.",
                     stmt.value->range());
     }
@@ -1045,7 +1085,7 @@ void SemanticAnalyzer::analyze(const BlockStmt& stmt) {
 
 void SemanticAnalyzer::analyze(IfStmt& stmt) {
     auto cond_type = analyzeExpr(stmt.condition.get());
-    if (!isConvertible(cond_type, Type::Value, mode)) {
+    if (!is_convertible(cond_type, Type::Value, mode)) {
         reportError(std::format("If condition has type '{}' which is not "
                                 "convertible to a value.",
                                 enum_name(cond_type)),
@@ -1061,7 +1101,7 @@ void SemanticAnalyzer::analyze(IfStmt& stmt) {
 
 void SemanticAnalyzer::analyze(WhileStmt& stmt) {
     auto cond_type = analyzeExpr(stmt.condition.get());
-    if (!isConvertible(cond_type, Type::Value, mode)) {
+    if (!is_convertible(cond_type, Type::Value, mode)) {
         reportError(std::format("While condition has type '{}' which is not "
                                 "convertible to a value.",
                                 enum_name(cond_type)),
@@ -1237,7 +1277,7 @@ void SemanticAnalyzer::analyze(FunctionDef& stmt) {
         analyze(*stmt.body);
 
         // Check for unused local variables and parameters
-        for (const auto& [name, symbol] : current_scope->get_symbols()) {
+        for (const auto& [name, symbol] : current_scope->getSymbols()) {
             if (!symbol->is_used) {
                 if (symbol->name == "_") {
                     continue;

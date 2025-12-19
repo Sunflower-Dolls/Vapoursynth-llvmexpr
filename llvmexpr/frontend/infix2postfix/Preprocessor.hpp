@@ -17,8 +17,8 @@
  * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef LLVMEXPR_INFIX2POSTFIX_PREPROCESSOR_HPP
-#define LLVMEXPR_INFIX2POSTFIX_PREPROCESSOR_HPP
+#ifndef LLVMEXPR_FRONTEND_INFIX2POSTFIX_PREPROCESSOR_HPP
+#define LLVMEXPR_FRONTEND_INFIX2POSTFIX_PREPROCESSOR_HPP
 
 #include <memory>
 #include <stdexcept>
@@ -90,4 +90,4 @@ class Preprocessor {
 
 } // namespace infix2postfix
 
-#endif // LLVMEXPR_INFIX2POSTFIX_PREPROCESSOR_HPP
+#endif // LLVMEXPR_FRONTEND_INFIX2POSTFIX_PREPROCESSOR_HPP

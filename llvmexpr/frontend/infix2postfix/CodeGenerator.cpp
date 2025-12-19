@@ -29,8 +29,10 @@
 
 namespace infix2postfix {
 
-CodeGenerator::CodeGenerator(Mode mode, int num_inputs)
-    : mode(mode), num_inputs(num_inputs) {}
+CodeGenerator::CodeGenerator(Mode mode, int num_inputs,
+                             int num_intermediate_inputs)
+    : mode(mode), num_inputs(num_inputs),
+      num_intermediate_inputs(num_intermediate_inputs) {}
 
 std::string CodeGenerator::generate(const Program* program) {
     PostfixBuilder main_builder;
@@ -38,11 +40,11 @@ std::string CodeGenerator::generate(const Program* program) {
         generate(stmt.get(), main_builder);
     }
 
-    if (mode == Mode::Expr) {
-        main_builder.add_variable_load("RESULT");
+    if (mode == Mode::Expr || mode == Mode::VkExpr) {
+        main_builder.addVariableLoad("RESULT");
     }
 
-    return main_builder.get_expression();
+    return main_builder.getExpression();
 }
 
 CodeGenerator::ExprResult CodeGenerator::generateExpr(Expr* expr) {
@@ -57,7 +59,7 @@ std::string CodeGenerator::generateExprToString(Expr* expr) {
     }
     PostfixBuilder temp_builder;
     generate(expr, temp_builder);
-    return temp_builder.get_expression();
+    return temp_builder.getExpression();
 }
 
 Type CodeGenerator::generate(Expr* expr, PostfixBuilder& builder) {
@@ -78,7 +80,7 @@ void CodeGenerator::generate(Stmt* stmt, PostfixBuilder& builder) {
 }
 
 Type CodeGenerator::handle(const NumberExpr& expr, PostfixBuilder& builder) {
-    builder.add_number(expr.value.value);
+    builder.addNumber(expr.value.value);
     return Type::Literal;
 }
 
@@ -91,7 +93,13 @@ Type CodeGenerator::handle(const VariableExpr& expr, PostfixBuilder& builder) {
 
     if (name.starts_with("$")) {
         std::string base_name = name.substr(1);
-        builder.add_constant(base_name);
+        builder.addConstant(base_name);
+
+        if (auto buf_idx = get_buffer_index(base_name)) {
+            if (*buf_idx >= 0 && *buf_idx < num_intermediate_inputs) {
+                return Type::Clip;
+            }
+        }
 
         if (is_clip_name(base_name)) {
             return Type::Clip;
@@ -106,7 +114,7 @@ Type CodeGenerator::handle(const VariableExpr& expr, PostfixBuilder& builder) {
         var_name = expr.symbol->name;
     }
 
-    builder.add_variable_load(var_name);
+    builder.addVariableLoad(var_name);
 
     if (expr.symbol) {
         return expr.symbol->type;
@@ -122,7 +130,7 @@ Type CodeGenerator::handle(const UnaryExpr& expr, PostfixBuilder& builder) {
             if (!val.starts_with("-")) {
                 val = std::format("-{}", val);
             }
-            builder.add_number(val);
+            builder.addNumber(val);
             return Type::Literal;
         }
     }
@@ -130,12 +138,12 @@ Type CodeGenerator::handle(const UnaryExpr& expr, PostfixBuilder& builder) {
     generate(expr.right.get(), builder);
 
     if (expr.op.type == TokenType::Not) {
-        builder.add_number("0");
-        builder.add_op(TokenType::Eq);
+        builder.addNumber("0");
+        builder.addOp(TokenType::Eq);
         return Type::Value;
     }
 
-    builder.add_unary_op(expr.op.type);
+    builder.addUnaryOp(expr.op.type);
     return Type::Value;
 }
 
@@ -144,29 +152,29 @@ Type CodeGenerator::handle(const BinaryExpr& expr, PostfixBuilder& builder) {
 
     if (expr.op.type == TokenType::LogicalAnd ||
         expr.op.type == TokenType::LogicalOr) {
-        builder.add_number("0");
-        builder.add_op(TokenType::Eq);
-        builder.add_unary_op(TokenType::Not);
+        builder.addNumber("0");
+        builder.addOp(TokenType::Eq);
+        builder.addUnaryOp(TokenType::Not);
 
         generate(expr.right.get(), builder);
-        builder.add_number("0");
-        builder.add_op(TokenType::Eq);
-        builder.add_unary_op(TokenType::Not);
+        builder.addNumber("0");
+        builder.addOp(TokenType::Eq);
+        builder.addUnaryOp(TokenType::Not);
 
-        builder.add_op(expr.op.type);
+        builder.addOp(expr.op.type);
         return Type::Value;
     }
 
     generate(expr.right.get(), builder);
-    builder.add_op(expr.op.type);
+    builder.addOp(expr.op.type);
     return Type::Value;
 }
 
 Type CodeGenerator::handle(const TernaryExpr& expr, PostfixBuilder& builder) {
     generate(expr.cond.get(), builder);
-    builder.add_number("0");
-    builder.add_op(TokenType::Eq);
-    builder.add_unary_op(TokenType::Not);
+    builder.addNumber("0");
+    builder.addOp(TokenType::Eq);
+    builder.addUnaryOp(TokenType::Not);
 
     PostfixBuilder true_branch_builder;
     generate(expr.true_expr.get(), true_branch_builder);
@@ -176,7 +184,7 @@ Type CodeGenerator::handle(const TernaryExpr& expr, PostfixBuilder& builder) {
 
     builder.append(true_branch_builder);
     builder.append(false_branch_builder);
-    builder.add_ternary_op();
+    builder.addTernaryOp();
     return Type::Value;
 }
 
@@ -204,7 +212,7 @@ Type CodeGenerator::handle(const CallExpr& expr, PostfixBuilder& builder) {
                 generate(expr.args[i].get(), builder);
             }
         }
-        builder.add_function_call(expr.callee);
+        builder.addFunctionCall(expr.callee);
         return Type::Value;
     }
 
@@ -217,10 +225,10 @@ Type CodeGenerator::handle(const CallExpr& expr, PostfixBuilder& builder) {
         for (const auto& arg : expr.args) {
             generate(arg.get(), builder);
         }
-        builder.add_sortN(arg_count);
-        builder.add_dropN(n - 1);
-        builder.add_swapN(arg_count - n);
-        builder.add_dropN(arg_count - n);
+        builder.addSortN(arg_count);
+        builder.addDropN(n - 1);
+        builder.addSwapN(arg_count - n);
+        builder.addDropN(arg_count - n);
 
         return Type::Value;
     }
@@ -238,7 +246,7 @@ Type CodeGenerator::handle(const PropAccessExpr& expr,
         clip_name = clip_name.substr(1);
     }
 
-    builder.add_prop_access(clip_name, expr.prop.value);
+    builder.addPropAccess(clip_name, expr.prop.value);
     return Type::Value;
 }
 
@@ -252,8 +260,8 @@ Type CodeGenerator::handle(const StaticRelPixelAccessExpr& expr,
         clip_name = clip_name.substr(1);
     }
 
-    builder.add_static_pixel_access(clip_name, expr.offset_x.value,
-                                    expr.offset_y.value, expr.boundary_suffix);
+    builder.addStaticPixelAccess(clip_name, expr.offset_x.value,
+                                 expr.offset_y.value, expr.boundary_suffix);
     return Type::Value;
 }
 
@@ -261,7 +269,7 @@ Type CodeGenerator::handle(const FrameDimensionExpr& expr,
                            PostfixBuilder& builder) {
     std::string plane_idx_str =
         generateExprToString(expr.plane_index_expr.get());
-    builder.add_frame_dimension(expr.dimension_name, plane_idx_str);
+    builder.addFrameDimension(expr.dimension_name, plane_idx_str);
     return Type::Value;
 }
 
@@ -283,7 +291,7 @@ Type CodeGenerator::handle(const ArrayAccessExpr& expr,
     }
 
     generate(expr.index.get(), builder);
-    builder.add_array_load(array_name);
+    builder.addArrayLoad(array_name);
 
     return Type::Value;
 }
@@ -292,7 +300,7 @@ void CodeGenerator::handle(const ExprStmt& stmt, PostfixBuilder& builder) {
 #ifndef NDEBUG
     PostfixBuilder temp_builder;
     generate(stmt.expr.get(), temp_builder);
-    checkStackEffect(temp_builder.get_expression(), 0, stmt.range);
+    checkStackEffect(temp_builder.getExpression(), 0, stmt.range);
     builder.append(temp_builder);
 #else
     generate(stmt.expr.get(), builder);
@@ -317,7 +325,7 @@ void CodeGenerator::handle(const AssignStmt& stmt, PostfixBuilder& builder) {
 #else
             PostfixBuilder& b = builder;
 #endif
-            if (mode == Mode::Expr) {
+            if (mode == Mode::Expr || mode == Mode::VkExpr) {
                 auto* arg_expr = call_expr->args[0].get();
 
                 std::string size_value;
@@ -334,13 +342,13 @@ void CodeGenerator::handle(const AssignStmt& stmt, PostfixBuilder& builder) {
                     }
                 }
 
-                b.add_array_alloc_static(var_name, size_value);
+                b.addArrayAllocStatic(var_name, size_value);
             } else {
                 generate(call_expr->args[0].get(), b);
-                b.add_array_alloc_dynamic(var_name);
+                b.addArrayAllocDynamic(var_name);
             }
 #ifndef NDEBUG
-            checkStackEffect(b.get_expression(), 0, stmt.range);
+            checkStackEffect(b.getExpression(), 0, stmt.range);
             builder.append(b);
 #endif
             return;
@@ -350,8 +358,8 @@ void CodeGenerator::handle(const AssignStmt& stmt, PostfixBuilder& builder) {
 #ifndef NDEBUG
     PostfixBuilder b;
     generate(stmt.value.get(), b);
-    b.add_variable_store(var_name);
-    checkStackEffect(b.get_expression(), 0, stmt.range);
+    b.addVariableStore(var_name);
+    checkStackEffect(b.getExpression(), 0, stmt.range);
     builder.append(b);
 #else
     generate(stmt.value.get(), builder);
@@ -381,8 +389,8 @@ void CodeGenerator::handle(const ArrayAssignStmt& stmt,
     PostfixBuilder b;
     generate(stmt.value.get(), b);
     generate(array_access->index.get(), b);
-    b.add_array_store(array_name);
-    checkStackEffect(b.get_expression(), 0, stmt.range);
+    b.addArrayStore(array_name);
+    checkStackEffect(b.getExpression(), 0, stmt.range);
     builder.append(b);
 #else
     generate(stmt.value.get(), builder);
@@ -403,19 +411,19 @@ void CodeGenerator::handle(const IfStmt& stmt, PostfixBuilder& builder) {
         std::format("__internal_endif_{}", label_counter++);
 
     generate(stmt.condition.get(), builder);
-    builder.add_number("0");
-    builder.add_op(TokenType::Eq);
-    builder.add_conditional_jump(else_label);
+    builder.addNumber("0");
+    builder.addOp(TokenType::Eq);
+    builder.addConditionalJump(else_label);
 
     generate(stmt.then_branch.get(), builder);
 
     if (stmt.else_branch) {
-        builder.add_unconditional_jump(endif_label);
-        builder.add_label(else_label);
+        builder.addUnconditionalJump(endif_label);
+        builder.addLabel(else_label);
         generate(stmt.else_branch.get(), builder);
-        builder.add_label(endif_label);
+        builder.addLabel(endif_label);
     } else {
-        builder.add_label(else_label);
+        builder.addLabel(else_label);
     }
 }
 
@@ -425,14 +433,14 @@ void CodeGenerator::handle(const WhileStmt& stmt, PostfixBuilder& builder) {
     std::string end_label =
         std::format("__internal_while_end_{}", label_counter++);
 
-    builder.add_label(start_label);
+    builder.addLabel(start_label);
     generate(stmt.condition.get(), builder);
-    builder.add_number("0");
-    builder.add_op(TokenType::Eq);
-    builder.add_conditional_jump(end_label);
+    builder.addNumber("0");
+    builder.addOp(TokenType::Eq);
+    builder.addConditionalJump(end_label);
     generate(stmt.body.get(), builder);
-    builder.add_unconditional_jump(start_label);
-    builder.add_label(end_label);
+    builder.addUnconditionalJump(start_label);
+    builder.addLabel(end_label);
 }
 
 void CodeGenerator::handle(const ReturnStmt& stmt, PostfixBuilder& builder) {
@@ -441,18 +449,18 @@ void CodeGenerator::handle(const ReturnStmt& stmt, PostfixBuilder& builder) {
         const int call_id = call_site_id_stack.back();
         std::string ret_var_name = std::format("__internal_ret_{}_{}",
                                                current_function->name, call_id);
-        builder.add_variable_store(ret_var_name);
+        builder.addVariableStore(ret_var_name);
     }
 
     const int call_id = call_site_id_stack.back();
     std::string ret_label = std::format("__internal_ret_label_{}_{}",
                                         current_function->name, call_id);
-    builder.add_unconditional_jump(ret_label);
+    builder.addUnconditionalJump(ret_label);
 }
 
 void CodeGenerator::handle(const LabelStmt& stmt, PostfixBuilder& builder) {
     std::string label_name = stmt.symbol ? stmt.symbol->name : stmt.name.value;
-    builder.add_label(label_name);
+    builder.addLabel(label_name);
 }
 
 void CodeGenerator::handle(const GotoStmt& stmt, PostfixBuilder& builder) {
@@ -461,12 +469,12 @@ void CodeGenerator::handle(const GotoStmt& stmt, PostfixBuilder& builder) {
                                  : stmt.label.value;
     if (stmt.condition) {
         generate(stmt.condition.get(), builder);
-        builder.add_number("0");
-        builder.add_op(TokenType::Eq);
-        builder.add_unary_op(TokenType::Not);
-        builder.add_conditional_jump(label_name);
+        builder.addNumber("0");
+        builder.addOp(TokenType::Eq);
+        builder.addUnaryOp(TokenType::Not);
+        builder.addConditionalJump(label_name);
     } else {
-        builder.add_unconditional_jump(label_name);
+        builder.addUnconditionalJump(label_name);
     }
 }
 
@@ -496,12 +504,15 @@ void CodeGenerator::checkStackEffect([[maybe_unused]] const std::string& s,
 
 int CodeGenerator::computeStackEffect(const std::string& s,
                                       const Range& range) {
-    PostfixMode postfix_mode =
-        (mode == Mode::Expr) ? PostfixMode::Expr : PostfixMode::SingleExpr;
+    PostfixMode postfix_mode = PostfixMode::SingleExpr;
+    if (mode == Mode::Expr || mode == Mode::VkExpr) {
+        postfix_mode = PostfixMode::Expr;
+    }
 
     try {
         return compute_postfix_stack_effect(s, postfix_mode, range.start.line,
-                                            num_inputs);
+                                            num_inputs,
+                                            num_intermediate_inputs);
     } catch (const std::exception& e) {
         throw CodeGenError(e.what(), range);
     }
@@ -555,7 +566,7 @@ void CodeGenerator::inlineFunctionCall(
                             func_name, call_id, param_name);
 
             generate(args[i].get(), param_assignments);
-            param_assignments.add_variable_store(renamed_param);
+            param_assignments.addVariableStore(renamed_param);
             param_map[param_name] = renamed_param;
         }
     }
@@ -604,16 +615,16 @@ void CodeGenerator::inlineFunctionCall(
 
     PostfixBuilder body_builder;
     handle(*func_def->body, body_builder);
-    body_builder.prefix_labels(label_prefix);
+    body_builder.prefixLabels(label_prefix);
 
     std::string ret_label =
         std::format("__internal_ret_label_{}_{}", func_name, call_id);
-    body_builder.add_label(ret_label);
+    body_builder.addLabel(ret_label);
 
     if (sig.returns_value) {
         std::string ret_var =
             std::format("__internal_ret_{}_{}", func_name, call_id);
-        body_builder.add_variable_load(ret_var);
+        body_builder.addVariableLoad(ret_var);
     }
 
     // Restore state
@@ -630,7 +641,7 @@ void CodeGenerator::inlineFunctionCall(
     int expected_effect = sig.returns_value ? 1 : 0;
     try {
         int actual_effect =
-            computeStackEffect(inlined_builder.get_expression(), call_range);
+            computeStackEffect(inlined_builder.getExpression(), call_range);
         if (actual_effect != expected_effect) {
             throw CodeGenError(std::format("Function '{}' has "
                                            "unbalanced stack. "

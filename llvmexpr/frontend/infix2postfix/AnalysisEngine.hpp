@@ -17,8 +17,8 @@
  * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef LLVMEXPR_INFIX2POSTFIX_ANALYSISENGINE_HPP
-#define LLVMEXPR_INFIX2POSTFIX_ANALYSISENGINE_HPP
+#ifndef LLVMEXPR_FRONTEND_INFIX2POSTFIX_ANALYSISENGINE_HPP
+#define LLVMEXPR_FRONTEND_INFIX2POSTFIX_ANALYSISENGINE_HPP
 
 #include "AST.hpp"
 #include "Preprocessor.hpp"
@@ -49,6 +49,7 @@ class SemanticAnalyzer; // Forward declaration
 class AnalysisEngine {
   public:
     AnalysisEngine(const std::vector<Token>& tokens, Mode mode, int num_inputs,
+                   int num_intermediate_inputs,
                    const std::vector<LineMapping>& line_map,
                    int library_line_count = 0);
     ~AnalysisEngine();
@@ -77,6 +78,7 @@ class AnalysisEngine {
     std::vector<Token> tokens;
     Mode mode;
     int num_inputs;
+    int num_intermediate_inputs;
     std::vector<LineMapping> line_map;
     int library_line_count;
 
@@ -87,4 +89,4 @@ class AnalysisEngine {
 
 } // namespace infix2postfix
 
-#endif
+#endif // LLVMEXPR_FRONTEND_INFIX2POSTFIX_ANALYSISENGINE_HPP

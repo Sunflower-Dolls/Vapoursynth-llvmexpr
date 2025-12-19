@@ -364,6 +364,8 @@ In `Expr` and `VkExpr`, there are three ways to access pixel values from input c
 
 Boundary suffixes work the same as for clip access (`:c`, `:m`, `:b`). If no suffix is provided for `bufN...`, the global `boundary` parameter is used.
 
+Frame properties are not available on intermediate buffers.
+
 ##### **4.4.3. Pixel & Data I/O (`SingleExpr` only)**
 
 Since `SingleExpr` has no concept of a "current pixel," all data I/O must be explicit and use absolute coordinates.

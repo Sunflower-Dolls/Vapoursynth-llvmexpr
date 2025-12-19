@@ -25,9 +25,10 @@
 #include <format>
 #include <stdexcept>
 
-std::string convertInfixToPostfix(
+std::string convert_infix_to_postfix(
     const std::string& infix_expr, int num_inputs, infix2postfix::Mode mode,
-    const std::map<std::string, std::string>* predefined_macros) {
+    const std::map<std::string, std::string>* predefined_macros,
+    int num_intermediate_inputs) {
     try {
         std::string preprocessed_source = infix_expr;
         std::vector<infix2postfix::LineMapping> line_map;
@@ -58,7 +59,8 @@ std::string convertInfixToPostfix(
         infix2postfix::Tokenizer tokenizer(preprocessed_source);
         auto tokens = tokenizer.tokenize();
 
-        infix2postfix::AnalysisEngine engine(tokens, mode, num_inputs, line_map,
+        infix2postfix::AnalysisEngine engine(tokens, mode, num_inputs,
+                                             num_intermediate_inputs, line_map,
                                              library_line_count);
         bool success = engine.runAnalysis();
 

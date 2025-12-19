@@ -157,6 +157,9 @@ int main(int argc, char* argv[]) {
 
         if (mode == Mode::Expr) {
             preprocessor.addPredefinedMacro("__EXPR__", "");
+        } else if (mode == Mode::VkExpr) {
+            preprocessor.addPredefinedMacro("__EXPR__", "");
+            preprocessor.addPredefinedMacro("__GPU__", "");
         } else {
             preprocessor.addPredefinedMacro("__SINGLEEXPR__", "");
         }
@@ -197,7 +200,8 @@ int main(int argc, char* argv[]) {
         AnalysisEngine engine(
             tokens, mode,
             114514, // NOLINT(cppcoreguidelines-avoid-magic-numbers)
-            preprocess_result.line_map, preprocess_result.library_line_count);
+            0, preprocess_result.line_map,
+            preprocess_result.library_line_count);
 
         bool success = engine.runAnalysis();
 

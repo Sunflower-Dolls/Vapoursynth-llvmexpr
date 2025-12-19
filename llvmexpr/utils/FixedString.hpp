@@ -17,23 +17,25 @@
  * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef LLVMEXPR_FRONTEND_INFIX2POSTFIX_POSTFIXHELPER_HPP
-#define LLVMEXPR_FRONTEND_INFIX2POSTFIX_POSTFIXHELPER_HPP
+#ifndef LLVMEXPR_UTILS_FIXEDSTRING_HPP
+#define LLVMEXPR_UTILS_FIXEDSTRING_HPP
 
-#include <cstdint>
-#include <string>
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <string_view>
 
-namespace infix2postfix {
+template <std::size_t N> struct FixedString {
+    std::array<char, N> value;
 
-enum class PostfixMode : std::uint8_t {
-    Expr,
-    SingleExpr,
+    // NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)
+    explicit constexpr FixedString(const char (&str)[N]) {
+        std::ranges::copy(str, value.begin());
+    }
+
+    [[nodiscard]] constexpr std::string_view view() const {
+        return {value.data(), N - 1};
+    }
 };
 
-int compute_postfix_stack_effect(const std::string& postfix_expr,
-                                 PostfixMode mode, int line, int num_inputs,
-                                 int num_intermediate_inputs = 0);
-
-} // namespace infix2postfix
-
-#endif // LLVMEXPR_FRONTEND_INFIX2POSTFIX_POSTFIXHELPER_HPP
+#endif // LLVMEXPR_UTILS_FIXEDSTRING_HPP

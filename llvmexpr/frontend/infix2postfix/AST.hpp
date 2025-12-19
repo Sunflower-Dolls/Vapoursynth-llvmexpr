@@ -17,8 +17,8 @@
  * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef LLVMEXPR_INFIX2POSTFIX_AST_HPP
-#define LLVMEXPR_INFIX2POSTFIX_AST_HPP
+#ifndef LLVMEXPR_FRONTEND_INFIX2POSTFIX_AST_HPP
+#define LLVMEXPR_FRONTEND_INFIX2POSTFIX_AST_HPP
 
 #include "Symbol.hpp"
 #include "types.hpp"
@@ -448,4 +448,4 @@ auto get_if(Wrapper* wrapper) -> decltype(std::get_if<T>(&wrapper->value)) {
 
 } // namespace infix2postfix
 
-#endif
+#endif // LLVMEXPR_FRONTEND_INFIX2POSTFIX_AST_HPP

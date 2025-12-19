@@ -18,6 +18,7 @@
  */
 
 #include "Tokenizer.hpp"
+#include "../utils/FixedString.hpp"
 
 #include <algorithm>
 #include <array>
@@ -70,19 +71,6 @@ inline int svtoi(std::string_view sv) {
     }
     return val;
 }
-
-template <std::size_t N> struct FixedString {
-    std::array<char, N> value;
-
-    // NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)
-    explicit constexpr FixedString(const char (&str)[N]) {
-        std::ranges::copy(str, value.begin());
-    }
-
-    [[nodiscard]] constexpr std::string_view view() const {
-        return {value.data(), N - 1};
-    }
-};
 
 using Availability = TokenDefinition::Availability;
 

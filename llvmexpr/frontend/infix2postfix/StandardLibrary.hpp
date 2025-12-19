@@ -17,8 +17,8 @@
  * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef LLVMEXPR_INFIX2POSTFIX_STANDARDLIBRARY_HPP
-#define LLVMEXPR_INFIX2POSTFIX_STANDARDLIBRARY_HPP
+#ifndef LLVMEXPR_FRONTEND_INFIX2POSTFIX_STANDARDLIBRARY_HPP
+#define LLVMEXPR_FRONTEND_INFIX2POSTFIX_STANDARDLIBRARY_HPP
 
 // Import all standard library definitions
 #include "stdlib/Algorithms.hpp"
@@ -111,4 +111,4 @@ class StandardLibraryManager {
 
 } // namespace infix2postfix
 
-#endif // LLVMEXPR_INFIX2POSTFIX_STANDARDLIBRARY_HPP
+#endif // LLVMEXPR_FRONTEND_INFIX2POSTFIX_STANDARDLIBRARY_HPP

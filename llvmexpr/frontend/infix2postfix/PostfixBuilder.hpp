@@ -17,8 +17,8 @@
  * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef LLVMEXPR_INFIX2POSTFIX_POSTFIXBUILDER_HPP
-#define LLVMEXPR_INFIX2POSTFIX_POSTFIXBUILDER_HPP
+#ifndef LLVMEXPR_FRONTEND_INFIX2POSTFIX_POSTFIXBUILDER_HPP
+#define LLVMEXPR_FRONTEND_INFIX2POSTFIX_POSTFIXBUILDER_HPP
 
 #include "types.hpp"
 
@@ -32,67 +32,67 @@ class PostfixBuilder {
     PostfixBuilder() = default;
 
     // General
-    void add_op(TokenType type);
-    void add_unary_op(TokenType type);
-    void add_ternary_op();
-    void add_function_call(const std::string& func_name);
+    void addOp(TokenType type);
+    void addUnaryOp(TokenType type);
+    void addTernaryOp();
+    void addFunctionCall(const std::string& func_name);
     void append(const PostfixBuilder& other);
-    [[nodiscard]] std::string get_expression() const;
+    [[nodiscard]] std::string getExpression() const;
     void clear();
     [[nodiscard]] bool empty() const;
 
     // Literals & Variables
-    void add_number(const std::string& num_literal);
-    void add_constant(const std::string& const_name);
-    void add_variable_load(const std::string& var_name);
-    void add_variable_store(const std::string& var_name);
+    void addNumber(const std::string& num_literal);
+    void addConstant(const std::string& const_name);
+    void addVariableLoad(const std::string& var_name);
+    void addVariableStore(const std::string& var_name);
 
     // Control Flow
-    void add_label(const std::string& label_name);
-    void add_conditional_jump(const std::string& label_name);
-    void add_unconditional_jump(const std::string& label_name);
-    void prefix_labels(const std::string& prefix);
+    void addLabel(const std::string& label_name);
+    void addConditionalJump(const std::string& label_name);
+    void addUnconditionalJump(const std::string& label_name);
+    void prefixLabels(const std::string& prefix);
 
     // Data Access & I/O
-    void add_prop_access(const std::string& clip_name,
-                         const std::string& prop_name);
-    void add_prop_exist(const std::string& clip_name,
-                        const std::string& prop_name);
-    void add_set_prop(const std::string& prop_name, const std::string& suffix);
-    void add_delete_prop(const std::string& prop_name);
-    void add_static_pixel_access(const std::string& clip_name,
-                                 const std::string& x, const std::string& y,
-                                 const std::string& suffix);
-    void add_dyn_pixel_access_expr(const std::string& clip_name,
-                                   const std::string& suffix);
-    void add_dyn_pixel_access_single(const std::string& clip_name,
-                                     const std::string& plane);
-    void add_store_expr();
-    void add_store_single(const std::string& plane);
-    void add_frame_dimension(const std::string& dim, const std::string& plane);
-    void add_exit_marker();
+    void addPropAccess(const std::string& clip_name,
+                       const std::string& prop_name);
+    void addPropExist(const std::string& clip_name,
+                      const std::string& prop_name);
+    void addSetProp(const std::string& prop_name, const std::string& suffix);
+    void addDeleteProp(const std::string& prop_name);
+    void addStaticPixelAccess(const std::string& clip_name,
+                              const std::string& x, const std::string& y,
+                              const std::string& suffix);
+    void addDynPixelAccessExpr(const std::string& clip_name,
+                               const std::string& suffix);
+    void addDynPixelAccessSingle(const std::string& clip_name,
+                                 const std::string& plane);
+    void addStoreExpr();
+    void addStoreSingle(const std::string& plane);
+    void addFrameDimension(const std::string& dim, const std::string& plane);
+    void addExitMarker();
 
     // Stack manipulation
-    void add_dropN(int count = 1);
-    void add_dupN(int count = 0);
-    void add_swapN(int count = 1);
-    void add_sortN(int count);
+    void addDropN(int count = 1);
+    void addDupN(int count = 0);
+    void addSwapN(int count = 1);
+    void addSortN(int count);
 
     // Array operations
-    void add_array_alloc_static(const std::string& array_name,
-                                const std::string& size);
-    void add_array_alloc_dynamic(const std::string& array_name);
-    void add_array_load(const std::string& array_name);
-    void add_array_store(const std::string& array_name);
+    void addArrayAllocStatic(const std::string& array_name,
+                             const std::string& size);
+    void addArrayAllocDynamic(const std::string& array_name);
+    void addArrayLoad(const std::string& array_name);
+    void addArrayStore(const std::string& array_name);
 
     // For raw/unstructured parts
-    void add_raw(const std::string& raw_string);
+    void addRaw(const std::string& raw_string);
 
   private:
-    void push_token(const std::string& token);
+    void pushToken(const std::string& token);
     std::vector<std::string> tokens;
 };
 
 } // namespace infix2postfix
 
-#endif
+#endif // LLVMEXPR_FRONTEND_INFIX2POSTFIX_POSTFIXBUILDER_HPP

@@ -17,8 +17,8 @@
  * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef LLVMEXPR_INFIX2POSTFIX_SEMANTICANALYZER_HPP
-#define LLVMEXPR_INFIX2POSTFIX_SEMANTICANALYZER_HPP
+#ifndef LLVMEXPR_FRONTEND_INFIX2POSTFIX_SEMANTICANALYZER_HPP
+#define LLVMEXPR_FRONTEND_INFIX2POSTFIX_SEMANTICANALYZER_HPP
 
 #include "AST.hpp"
 #include "AnalysisEngine.hpp"
@@ -35,7 +35,8 @@ namespace infix2postfix {
 
 class SemanticAnalyzer {
   public:
-    SemanticAnalyzer(Mode mode, int num_inputs, int library_line_count = 0);
+    SemanticAnalyzer(Mode mode, int num_inputs, int num_intermediate_inputs = 0,
+                     int library_line_count = 0);
 
     class ScopeGuard {
       public:
@@ -141,11 +142,12 @@ class SemanticAnalyzer {
 
     bool pathAlwaysReturns(Stmt* stmt);
 
-    void validateClipReference(const std::string& clip_name,
-                               const Range& range);
+    void validateClipReference(const std::string& clip_name, const Range& range,
+                               bool allow_buffer = true);
 
     Mode mode;
     int num_inputs;
+    int num_intermediate_inputs;
     int library_line_count;
     bool has_result = false;
     bool result_defined_in_global_scope = false;
@@ -184,4 +186,4 @@ class SemanticAnalyzer {
 
 } // namespace infix2postfix
 
-#endif
+#endif // LLVMEXPR_FRONTEND_INFIX2POSTFIX_SEMANTICANALYZER_HPP

@@ -25,8 +25,9 @@
 #include <map>
 #include <string>
 
-std::string convertInfixToPostfix(
+std::string convert_infix_to_postfix(
     const std::string& infix_expr, int num_inputs, infix2postfix::Mode mode,
-    const std::map<std::string, std::string>* predefined_macros = nullptr);
+    const std::map<std::string, std::string>* predefined_macros = nullptr,
+    int num_intermediate_inputs = 0);
 
 #endif

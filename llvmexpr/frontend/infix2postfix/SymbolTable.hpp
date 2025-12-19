@@ -17,8 +17,8 @@
  * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef LLVMEXPR_INFIX2POSTFIX_SYMBOLTABLE_HPP
-#define LLVMEXPR_INFIX2POSTFIX_SYMBOLTABLE_HPP
+#ifndef LLVMEXPR_FRONTEND_INFIX2POSTFIX_SYMBOLTABLE_HPP
+#define LLVMEXPR_FRONTEND_INFIX2POSTFIX_SYMBOLTABLE_HPP
 
 #include "Symbol.hpp"
 
@@ -37,10 +37,10 @@ class SymbolTable {
     [[nodiscard]] std::shared_ptr<Symbol>
     resolve(const std::string& name) const;
 
-    [[nodiscard]] SymbolTable* get_parent() const { return parent; }
+    [[nodiscard]] SymbolTable* getParent() const { return parent; }
 
     [[nodiscard]] const std::map<std::string, std::shared_ptr<Symbol>>&
-    get_symbols() const {
+    getSymbols() const {
         return symbols;
     }
 
@@ -51,4 +51,4 @@ class SymbolTable {
 
 } // namespace infix2postfix
 
-#endif
+#endif // LLVMEXPR_FRONTEND_INFIX2POSTFIX_SYMBOLTABLE_HPP

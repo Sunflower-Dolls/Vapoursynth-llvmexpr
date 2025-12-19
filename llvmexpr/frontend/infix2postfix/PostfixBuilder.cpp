@@ -26,213 +26,213 @@
 
 namespace infix2postfix {
 
-void PostfixBuilder::push_token(const std::string& token) {
+void PostfixBuilder::pushToken(const std::string& token) {
     if (!token.empty()) {
         tokens.push_back(token);
     }
 }
 
-void PostfixBuilder::add_op(TokenType type) {
+void PostfixBuilder::addOp(TokenType type) {
     switch (type) {
     case TokenType::Plus:
-        push_token("+");
+        pushToken("+");
         break;
     case TokenType::Minus:
-        push_token("-");
+        pushToken("-");
         break;
     case TokenType::Star:
-        push_token("*");
+        pushToken("*");
         break;
     case TokenType::Slash:
-        push_token("/");
+        pushToken("/");
         break;
     case TokenType::Percent:
-        push_token("%");
+        pushToken("%");
         break;
     case TokenType::StarStar:
-        push_token("pow");
+        pushToken("pow");
         break;
     case TokenType::LogicalAnd:
-        push_token("and");
+        pushToken("and");
         break;
     case TokenType::LogicalOr:
-        push_token("or");
+        pushToken("or");
         break;
     case TokenType::BitAnd:
-        push_token("bitand");
+        pushToken("bitand");
         break;
     case TokenType::BitOr:
-        push_token("bitor");
+        pushToken("bitor");
         break;
     case TokenType::BitXor:
-        push_token("bitxor");
+        pushToken("bitxor");
         break;
     case TokenType::Eq:
-        push_token("=");
+        pushToken("=");
         break;
     case TokenType::Ne:
-        push_token("=");
-        push_token("not");
+        pushToken("=");
+        pushToken("not");
         break;
     case TokenType::Lt:
-        push_token("<");
+        pushToken("<");
         break;
     case TokenType::Le:
-        push_token("<=");
+        pushToken("<=");
         break;
     case TokenType::Gt:
-        push_token(">");
+        pushToken(">");
         break;
     case TokenType::Ge:
-        push_token(">=");
+        pushToken(">=");
         break;
     default:
         std::unreachable();
     }
 }
 
-void PostfixBuilder::add_unary_op(TokenType type) {
+void PostfixBuilder::addUnaryOp(TokenType type) {
     switch (type) {
     case TokenType::Minus:
-        push_token("neg");
+        pushToken("neg");
         break;
     case TokenType::Not:
-        push_token("not");
+        pushToken("not");
         break;
     case TokenType::BitNot:
-        push_token("bitnot");
+        pushToken("bitnot");
         break;
     default:
         std::unreachable();
     }
 }
 
-void PostfixBuilder::add_ternary_op() { push_token("?"); }
+void PostfixBuilder::addTernaryOp() { pushToken("?"); }
 
-void PostfixBuilder::add_function_call(const std::string& func_name) {
-    push_token(func_name);
+void PostfixBuilder::addFunctionCall(const std::string& func_name) {
+    pushToken(func_name);
 }
 
-void PostfixBuilder::add_number(const std::string& num_literal) {
-    push_token(num_literal);
+void PostfixBuilder::addNumber(const std::string& num_literal) {
+    pushToken(num_literal);
 }
 
-void PostfixBuilder::add_constant(const std::string& const_name) {
-    push_token(const_name);
+void PostfixBuilder::addConstant(const std::string& const_name) {
+    pushToken(const_name);
 }
 
-void PostfixBuilder::add_variable_load(const std::string& var_name) {
-    push_token(var_name + "@");
+void PostfixBuilder::addVariableLoad(const std::string& var_name) {
+    pushToken(var_name + "@");
 }
 
-void PostfixBuilder::add_variable_store(const std::string& var_name) {
-    push_token(var_name + "!");
+void PostfixBuilder::addVariableStore(const std::string& var_name) {
+    pushToken(var_name + "!");
 }
 
-void PostfixBuilder::add_label(const std::string& label_name) {
-    push_token("#" + label_name);
+void PostfixBuilder::addLabel(const std::string& label_name) {
+    pushToken("#" + label_name);
 }
 
-void PostfixBuilder::add_conditional_jump(const std::string& label_name) {
-    push_token(label_name + "#");
+void PostfixBuilder::addConditionalJump(const std::string& label_name) {
+    pushToken(label_name + "#");
 }
 
-void PostfixBuilder::add_unconditional_jump(const std::string& label_name) {
-    push_token("1");
-    add_conditional_jump(label_name);
+void PostfixBuilder::addUnconditionalJump(const std::string& label_name) {
+    pushToken("1");
+    addConditionalJump(label_name);
 }
 
-void PostfixBuilder::add_prop_access(const std::string& clip_name,
-                                     const std::string& prop_name) {
-    push_token(std::format("{}.{}", clip_name, prop_name));
+void PostfixBuilder::addPropAccess(const std::string& clip_name,
+                                   const std::string& prop_name) {
+    pushToken(std::format("{}.{}", clip_name, prop_name));
 }
 
-void PostfixBuilder::add_prop_exist(const std::string& clip_name,
-                                    const std::string& prop_name) {
-    push_token(std::format("{}.{}?", clip_name, prop_name));
+void PostfixBuilder::addPropExist(const std::string& clip_name,
+                                  const std::string& prop_name) {
+    pushToken(std::format("{}.{}?", clip_name, prop_name));
 }
 
-void PostfixBuilder::add_set_prop(const std::string& prop_name,
-                                  const std::string& suffix) {
-    push_token(std::format("{}${}", prop_name, suffix));
+void PostfixBuilder::addSetProp(const std::string& prop_name,
+                                const std::string& suffix) {
+    pushToken(std::format("{}${}", prop_name, suffix));
 }
 
-void PostfixBuilder::add_delete_prop(const std::string& prop_name) {
-    push_token(std::format("{}$d", prop_name));
+void PostfixBuilder::addDeleteProp(const std::string& prop_name) {
+    pushToken(std::format("{}$d", prop_name));
 }
 
-void PostfixBuilder::add_static_pixel_access(const std::string& clip_name,
-                                             const std::string& x,
-                                             const std::string& y,
-                                             const std::string& suffix) {
-    push_token(std::format("{}[{},{}]{}", clip_name, x, y, suffix));
+void PostfixBuilder::addStaticPixelAccess(const std::string& clip_name,
+                                          const std::string& x,
+                                          const std::string& y,
+                                          const std::string& suffix) {
+    pushToken(std::format("{}[{},{}]{}", clip_name, x, y, suffix));
 }
 
-void PostfixBuilder::add_dyn_pixel_access_expr(const std::string& clip_name,
-                                               const std::string& suffix) {
-    push_token(std::format("{}[]{}", clip_name, suffix));
+void PostfixBuilder::addDynPixelAccessExpr(const std::string& clip_name,
+                                           const std::string& suffix) {
+    pushToken(std::format("{}[]{}", clip_name, suffix));
 }
 
-void PostfixBuilder::add_dyn_pixel_access_single(const std::string& clip_name,
-                                                 const std::string& plane) {
-    push_token(std::format("{}^{}[]", clip_name, plane));
+void PostfixBuilder::addDynPixelAccessSingle(const std::string& clip_name,
+                                             const std::string& plane) {
+    pushToken(std::format("{}^{}[]", clip_name, plane));
 }
 
-void PostfixBuilder::add_store_expr() { push_token("@[]"); }
+void PostfixBuilder::addStoreExpr() { pushToken("@[]"); }
 
-void PostfixBuilder::add_store_single(const std::string& plane) {
-    push_token(std::format("@[]^{}", plane));
+void PostfixBuilder::addStoreSingle(const std::string& plane) {
+    pushToken(std::format("@[]^{}", plane));
 }
 
-void PostfixBuilder::add_frame_dimension(const std::string& dim,
-                                         const std::string& plane) {
-    push_token(std::format("{}^{}", dim, plane));
+void PostfixBuilder::addFrameDimension(const std::string& dim,
+                                       const std::string& plane) {
+    pushToken(std::format("{}^{}", dim, plane));
 }
 
-void PostfixBuilder::add_exit_marker() { push_token("^exit^"); }
+void PostfixBuilder::addExitMarker() { pushToken("^exit^"); }
 
-void PostfixBuilder::add_dropN(int count) {
-    push_token(std::format("drop{}", count));
+void PostfixBuilder::addDropN(int count) {
+    pushToken(std::format("drop{}", count));
 }
 
-void PostfixBuilder::add_dupN(int count) {
-    push_token(std::format("dup{}", count));
+void PostfixBuilder::addDupN(int count) {
+    pushToken(std::format("dup{}", count));
 }
 
-void PostfixBuilder::add_swapN(int count) {
-    push_token(std::format("swap{}", count));
+void PostfixBuilder::addSwapN(int count) {
+    pushToken(std::format("swap{}", count));
 }
 
-void PostfixBuilder::add_sortN(int count) {
-    push_token(std::format("sort{}", count));
+void PostfixBuilder::addSortN(int count) {
+    pushToken(std::format("sort{}", count));
 }
 
-void PostfixBuilder::add_array_alloc_static(const std::string& array_name,
-                                            const std::string& size) {
-    push_token(std::format("{}{{}}^{}", array_name, size));
+void PostfixBuilder::addArrayAllocStatic(const std::string& array_name,
+                                         const std::string& size) {
+    pushToken(std::format("{}{{}}^{}", array_name, size));
 }
 
-void PostfixBuilder::add_array_alloc_dynamic(const std::string& array_name) {
-    push_token(std::format("{}{{}}^", array_name));
+void PostfixBuilder::addArrayAllocDynamic(const std::string& array_name) {
+    pushToken(std::format("{}{{}}^", array_name));
 }
 
-void PostfixBuilder::add_array_load(const std::string& array_name) {
-    push_token(std::format("{}{{}}@", array_name));
+void PostfixBuilder::addArrayLoad(const std::string& array_name) {
+    pushToken(std::format("{}{{}}@", array_name));
 }
 
-void PostfixBuilder::add_array_store(const std::string& array_name) {
-    push_token(std::format("{}{{}}!", array_name));
+void PostfixBuilder::addArrayStore(const std::string& array_name) {
+    pushToken(std::format("{}{{}}!", array_name));
 }
 
-void PostfixBuilder::add_raw(const std::string& raw_string) {
+void PostfixBuilder::addRaw(const std::string& raw_string) {
     std::stringstream ss(raw_string);
     std::string token;
     while (ss >> token) {
-        push_token(token);
+        pushToken(token);
     }
 }
 
-std::string PostfixBuilder::get_expression() const {
+std::string PostfixBuilder::getExpression() const {
     if (tokens.empty()) {
         return "";
     }
@@ -264,7 +264,7 @@ void PostfixBuilder::append(const PostfixBuilder& other) {
     tokens.insert(tokens.end(), other.tokens.begin(), other.tokens.end());
 }
 
-void PostfixBuilder::prefix_labels(const std::string& prefix) {
+void PostfixBuilder::prefixLabels(const std::string& prefix) {
     for (auto& token : tokens) {
         if (token.empty()) {
             continue;

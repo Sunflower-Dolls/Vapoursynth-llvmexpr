@@ -17,8 +17,8 @@
  * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef LLVMEXPR_INFIX2POSTFIX_CODEGENERATOR_HPP
-#define LLVMEXPR_INFIX2POSTFIX_CODEGENERATOR_HPP
+#ifndef LLVMEXPR_FRONTEND_INFIX2POSTFIX_CODEGENERATOR_HPP
+#define LLVMEXPR_FRONTEND_INFIX2POSTFIX_CODEGENERATOR_HPP
 
 #include "AST.hpp"
 #include "PostfixBuilder.hpp"
@@ -50,7 +50,7 @@ class CodeGenerator {
         Type type;
     };
 
-    CodeGenerator(Mode mode, int num_inputs);
+    CodeGenerator(Mode mode, int num_inputs, int num_intermediate_inputs = 0);
 
     std::string generate(const Program* program);
 
@@ -97,6 +97,7 @@ class CodeGenerator {
 
     Mode mode;
     int num_inputs;
+    int num_intermediate_inputs;
     int label_counter = 0;
     int call_site_counter = 0;
 
@@ -110,4 +111,4 @@ class CodeGenerator {
 
 } // namespace infix2postfix
 
-#endif // LLVMEXPR_INFIX2POSTFIX_CODEGENERATOR_HPP
+#endif // LLVMEXPR_FRONTEND_INFIX2POSTFIX_CODEGENERATOR_HPP

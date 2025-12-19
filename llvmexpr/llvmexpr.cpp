@@ -451,9 +451,9 @@ exprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
                             (input_vi->format.sampleType == stFloat) ? 1 : 0);
                 }
 
-                expr_strs.at(i) =
-                    convertInfixToPostfix(input_expr, d->num_inputs,
-                                          infix2postfix::Mode::Expr, &macros);
+                expr_strs.at(i) = convert_infix_to_postfix(
+                    input_expr, d->num_inputs, infix2postfix::Mode::Expr,
+                    &macros);
             } else {
                 expr_strs.at(i) = input_expr;
             }
@@ -769,7 +769,7 @@ singleExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
                     std::to_string(input_vi->format.subSamplingH);
             }
 
-            processed_expr = convertInfixToPostfix(
+            processed_expr = convert_infix_to_postfix(
                 expr_str, d->num_inputs, infix2postfix::Mode::Single, &macros);
         } else {
             processed_expr = expr_str;
@@ -1567,11 +1567,13 @@ vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
                             (input_vi->format.sampleType == stFloat) ? 1 : 0);
                 }
 
-                for (auto& stage : stages) {
+                for (size_t stage_idx = 0; stage_idx < stages.size();
+                     ++stage_idx) {
+                    auto& stage = stages[stage_idx];
                     if (!stage.empty()) {
-                        stage = convertInfixToPostfix(stage, d->num_inputs,
-                                                      infix2postfix::Mode::Expr,
-                                                      &macros);
+                        stage = convert_infix_to_postfix(
+                            stage, d->num_inputs, infix2postfix::Mode::VkExpr,
+                            &macros, static_cast<int>(stage_idx));
                     }
                 }
             }

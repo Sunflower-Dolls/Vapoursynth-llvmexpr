@@ -17,15 +17,19 @@
  * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef LLVMEXPR_INFIX2POSTFIX_TYPES_HPP
-#define LLVMEXPR_INFIX2POSTFIX_TYPES_HPP
+#ifndef LLVMEXPR_FRONTEND_INFIX2POSTFIX_TYPES_HPP
+#define LLVMEXPR_FRONTEND_INFIX2POSTFIX_TYPES_HPP
 
 #include "llvmexpr/frontend/Tokenizer.hpp"
+#include "llvmexpr/utils/FixedString.hpp"
 
 #include <algorithm>
 #include <array>
+#include <cctype>
+#include <charconv>
 #include <cstdint>
 #include <format>
+#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
@@ -43,6 +47,7 @@ struct Range {
     SourceLocation start;
     SourceLocation end;
 
+    // NOLINTNEXTLINE(readability-identifier-naming)
     [[nodiscard]] std::string to_string() const {
         return std::format("{}:{} - {}:{}", start.line, start.column, end.line,
                            end.column);
@@ -197,7 +202,7 @@ struct Token {
     Range range;
 };
 
-enum class Mode : std::uint8_t { Expr, Single };
+enum class Mode : std::uint8_t { Expr, Single, VkExpr };
 
 enum class GlobalMode : std::uint8_t { None, All, Specific };
 
@@ -219,25 +224,54 @@ struct FunctionSignature {
     std::set<std::string> used_globals;
 };
 
-inline int get_clip_index(const std::string& s) {
+template <FixedString Prefix>
+inline std::optional<int> get_index_with_prefix(const std::string& s) {
+    if (!s.starts_with(Prefix.view())) {
+        return std::nullopt;
+    }
+    auto idx_str = s.substr(Prefix.view().size());
+    if (idx_str.empty()) {
+        return std::nullopt;
+    }
+
+    if (!std::ranges::all_of(idx_str,
+                             [](char c) { return std::isdigit(c) != 0; })) {
+        return std::nullopt;
+    }
+
+    int idx = 0;
+    const char* begin = idx_str.data();
+    const char* end = begin + static_cast<std::ptrdiff_t>(idx_str.size());
+    auto res = std::from_chars(begin, end, idx);
+    if (res.ec != std::errc{} || res.ptr != end) {
+        return std::nullopt;
+    }
+    return idx;
+}
+
+template <FixedString Prefix> inline bool is_name(const std::string& s) {
+    return get_index_with_prefix<Prefix>(s).has_value();
+}
+
+inline std::optional<int> get_clip_index(const std::string& s) {
     if (s.length() == 1 && s[0] >= 'a' && s[0] <= 'z') {
         return parse_std_clip_idx(s[0]);
     }
-    if (s.starts_with("src")) {
-        for (size_t i = 3; i < s.length(); ++i) {
-            if (std::isdigit(s[i]) == 0) {
-                return -1;
-            }
-        }
-        return std::stoi(s.substr(3));
-    }
-    return -1;
+    return get_index_with_prefix<FixedString{"src"}>(s);
 }
 
 inline bool is_clip_name(const std::string& s) {
-    return get_clip_index(s) != -1;
+    return get_clip_index(s).has_value();
+}
+
+inline std::optional<int> get_buffer_index(const std::string& s) {
+    return get_index_with_prefix<FixedString{"buf"}>(s);
+}
+
+inline bool is_buffer_name(const std::string& s) {
+    return is_name<FixedString{"buf"}>(s);
 }
 
 } // namespace infix2postfix
 
-#endif
+#endif // LLVMEXPR_FRONTEND_INFIX2POSTFIX_TYPES_HPP

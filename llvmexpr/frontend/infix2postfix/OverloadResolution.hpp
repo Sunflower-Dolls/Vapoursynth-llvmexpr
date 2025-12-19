@@ -17,8 +17,8 @@
  * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef LLVMEXPR_INFIX2POSTFIX_OVERLOADRESOLUTION_HPP
-#define LLVMEXPR_INFIX2POSTFIX_OVERLOADRESOLUTION_HPP
+#ifndef LLVMEXPR_FRONTEND_INFIX2POSTFIX_OVERLOADRESOLUTION_HPP
+#define LLVMEXPR_FRONTEND_INFIX2POSTFIX_OVERLOADRESOLUTION_HPP
 
 #include "types.hpp"
 
@@ -28,7 +28,7 @@
 
 namespace infix2postfix {
 
-inline bool isConvertible(Type from, Type to, Mode mode) {
+inline bool is_convertible(Type from, Type to, Mode mode) {
     if (from == Type::Void) {
         return false;
     }
@@ -45,7 +45,7 @@ template <typename T> struct OverloadCandidate {
 
 template <typename T>
 const OverloadCandidate<T>*
-selectBestCandidate(std::vector<OverloadCandidate<T>>& candidates) {
+select_best_candidate(std::vector<OverloadCandidate<T>>& candidates) {
     if (candidates.empty()) {
         return nullptr;
     }
@@ -65,8 +65,8 @@ selectBestCandidate(std::vector<OverloadCandidate<T>>& candidates) {
 }
 
 template <typename T>
-bool isAmbiguous(const std::vector<OverloadCandidate<T>>& candidates,
-                 const OverloadCandidate<T>* best) {
+bool is_ambiguous(const std::vector<OverloadCandidate<T>>& candidates,
+                  const OverloadCandidate<T>* best) {
     if (!best || candidates.size() <= 1) {
         return false;
     }
@@ -81,9 +81,9 @@ bool isAmbiguous(const std::vector<OverloadCandidate<T>>& candidates,
 
 template <typename T, typename ArgTypeGetter, typename ParamTypeGetter>
 std::vector<OverloadCandidate<T>>
-computeCandidates(const std::vector<T>& overloads, size_t arg_count,
-                  ArgTypeGetter get_arg_type, ParamTypeGetter get_param_type,
-                  Mode mode) {
+compute_candidates(const std::vector<T>& overloads, size_t arg_count,
+                   ArgTypeGetter get_arg_type, ParamTypeGetter get_param_type,
+                   Mode mode) {
     std::vector<OverloadCandidate<T>> candidates;
 
     for (const auto& item : overloads) {
@@ -104,7 +104,7 @@ computeCandidates(const std::vector<T>& overloads, size_t arg_count,
             Type param_type = param_type_opt.value();
 
             if (arg_type != param_type) {
-                if (isConvertible(arg_type, param_type, mode)) {
+                if (is_convertible(arg_type, param_type, mode)) {
                     conversion_count++;
                     if (first_conversion_index == -1) {
                         first_conversion_index = static_cast<int>(j);
@@ -127,4 +127,4 @@ computeCandidates(const std::vector<T>& overloads, size_t arg_count,
 
 } // namespace infix2postfix
 
-#endif
+#endif // LLVMEXPR_FRONTEND_INFIX2POSTFIX_OVERLOADRESOLUTION_HPP

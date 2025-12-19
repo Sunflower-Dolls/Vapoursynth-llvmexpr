@@ -38,9 +38,9 @@ PostfixBuilder handle_dyn_expr_3args(CodeGenerator* codegen,
     b.append(codegen->generateExpr(expr.args[2].get()).postfix);
 
     auto clip_res = codegen->generateExpr(expr.args[0].get());
-    std::string clip_name = clip_res.postfix.get_expression();
+    std::string clip_name = clip_res.postfix.getExpression();
 
-    b.add_dyn_pixel_access_expr(clip_name, ":c");
+    b.addDynPixelAccessExpr(clip_name, ":c");
     return b;
 }
 
@@ -52,7 +52,7 @@ PostfixBuilder handle_dyn_expr_4args(CodeGenerator* codegen,
     b.append(codegen->generateExpr(expr.args[2].get()).postfix);
 
     auto clip_res = codegen->generateExpr(expr.args[0].get());
-    std::string clip_name = clip_res.postfix.get_expression();
+    std::string clip_name = clip_res.postfix.getExpression();
 
     auto* boundary_expr = get_if<NumberExpr>(expr.args[3].get());
     int boundary_mode = std::stoi(boundary_expr->value.value);
@@ -72,14 +72,14 @@ PostfixBuilder handle_dyn_expr_4args(CodeGenerator* codegen,
             std::format("Invalid boundary mode '{}' for dyn()", boundary_mode),
             expr.range);
     }
-    b.add_dyn_pixel_access_expr(clip_name, suffix);
+    b.addDynPixelAccessExpr(clip_name, suffix);
     return b;
 }
 
 PostfixBuilder handle_dyn_single(CodeGenerator* codegen, const CallExpr& expr) {
     // Signature: dyn($clip, x, y, plane)
     auto clip_res = codegen->generateExpr(expr.args[0].get());
-    std::string clip_name = clip_res.postfix.get_expression();
+    std::string clip_name = clip_res.postfix.getExpression();
 
     auto* plane_expr = get_if<NumberExpr>(expr.args[3].get());
     std::string plane_idx = plane_expr->value.value;
@@ -87,7 +87,7 @@ PostfixBuilder handle_dyn_single(CodeGenerator* codegen, const CallExpr& expr) {
     PostfixBuilder b;
     b.append(codegen->generateExpr(expr.args[1].get()).postfix);
     b.append(codegen->generateExpr(expr.args[2].get()).postfix);
-    b.add_dyn_pixel_access_single(clip_name, plane_idx);
+    b.addDynPixelAccessSingle(clip_name, plane_idx);
     return b;
 }
 
@@ -97,7 +97,7 @@ PostfixBuilder handle_store_expr(CodeGenerator* codegen, const CallExpr& expr) {
     b.append(codegen->generateExpr(expr.args[2].get()).postfix);
     b.append(codegen->generateExpr(expr.args[0].get()).postfix);
     b.append(codegen->generateExpr(expr.args[1].get()).postfix);
-    b.add_store_expr();
+    b.addStoreExpr();
     return b;
 }
 
@@ -111,7 +111,7 @@ PostfixBuilder handle_store_single(CodeGenerator* codegen,
     b.append(codegen->generateExpr(expr.args[3].get()).postfix);
     b.append(codegen->generateExpr(expr.args[0].get()).postfix);
     b.append(codegen->generateExpr(expr.args[1].get()).postfix);
-    b.add_store_single(plane_idx);
+    b.addStoreSingle(plane_idx);
     return b;
 }
 
@@ -123,7 +123,7 @@ PostfixBuilder handle_set_prop_typed(CodeGenerator* codegen,
 
     PostfixBuilder b;
     b.append(codegen->generateExpr(expr.args[1].get()).postfix);
-    b.add_set_prop(prop_name_expr->name.value, suffix);
+    b.addSetProp(prop_name_expr->name.value, suffix);
     return b;
 }
 
@@ -151,14 +151,14 @@ PostfixBuilder handle_remove_prop([[maybe_unused]] CodeGenerator* codegen,
     auto* prop_name_expr = get_if<VariableExpr>(expr.args[0].get());
 
     PostfixBuilder b;
-    b.add_delete_prop(prop_name_expr->name.value);
+    b.addDeleteProp(prop_name_expr->name.value);
     return b;
 }
 
 PostfixBuilder handle_exit([[maybe_unused]] CodeGenerator* codegen,
                            [[maybe_unused]] const CallExpr& expr) {
     PostfixBuilder b;
-    b.add_exit_marker();
+    b.addExitMarker();
     return b;
 }
 
@@ -166,12 +166,12 @@ PostfixBuilder handle_is_prop_exist(CodeGenerator* codegen,
                                     const CallExpr& expr) {
     // is_prop_exist(clip, prop_name)
     auto clip_res = codegen->generateExpr(expr.args[0].get());
-    std::string clip_name = clip_res.postfix.get_expression();
+    std::string clip_name = clip_res.postfix.getExpression();
 
     auto* prop_name_expr = get_if<VariableExpr>(expr.args[1].get());
 
     PostfixBuilder b;
-    b.add_prop_exist(clip_name, prop_name_expr->name.value);
+    b.addPropExist(clip_name, prop_name_expr->name.value);
     return b;
 }
 
