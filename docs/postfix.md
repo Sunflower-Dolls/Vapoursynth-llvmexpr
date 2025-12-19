@@ -4,6 +4,9 @@
 
 Note that `Expr` has two backends: the standard CPU `llvmexpr.Expr` and the GPU-accelerated `llvmexpr.VkExpr`. Both share the same syntax and semantics described here.
 
+> [!NOTE]
+> `VkExpr` additionally supports a multi-pass pipeline using `##` stage separators and `bufN` intermediate buffers. See the `VkExpr`-specific section under [4.4. Data Access & Output](#44-data-access--output).
+
 ---
 
 ### **1. Core Concepts & Execution Models**
@@ -304,7 +307,7 @@ Arrays must be allocated before use. The allocation method depends on whether th
 
 #### **4.4. Data Access & Output**
 
-Both `Expr` and `SingleExpr` can read pixel data and frame properties. However, their methods and capabilities differ significantly due to their execution models.
+Both `Expr`/`VkExpr` and `SingleExpr` can read pixel data and frame properties. However, their methods and capabilities differ significantly due to their execution models.
 
 > [!IMPORTANT]
 > **Read-After-Write Behavior for Pixels**
@@ -313,11 +316,11 @@ Both `Expr` and `SingleExpr` can read pixel data and frame properties. However, 
 > *   **Reading** (e.g., relative access, `[]`) always reads from the **input frames**.
 > *   **Writing** (e.g., implicit output, `@[]`) always writes to the **output frame**.
 >
-> Therefore, if you write a value to a pixel and then immediately read from the same coordinate, you will get the **original input value**, not the value you just wrote. To pass data between steps, use Arrays.
+> Therefore, if you write a value to a pixel and then immediately read from the same coordinate, you will get the **original input value**, not the value you just wrote. To pass data between steps, use Arrays (SingleExpr), `VkExpr` multi-pass buffers or separate into multiple plugin calls.
 
-##### **4.4.1. Pixel Access (`Expr` only)**
+##### **4.4.1. Pixel Access (`Expr` / `VkExpr`)**
 
-In `Expr`, there are three ways to access pixel values from input clips, all of which are specific to this mode.
+In `Expr` and `VkExpr`, there are three ways to access pixel values from input clips.
 
 - **Current Pixel Access:** `clip`
   - Simply using a clip identifier (e.g., `x`, `y`, `srcN`) is the most fundamental operation. It pushes the value of the pixel at the current coordinate (`X`, `Y`) from that clip onto the stack. All basic expressions like `x 2 *` rely on this behavior.
@@ -339,9 +342,29 @@ In `Expr`, there are three ways to access pixel values from input clips, all of 
     - `:b`: Uses the behavior from the filter's global `boundary` parameter.
 
 > [!WARNING]
-> Absolute access may not be vectorized by the JIT compiler if coordinates are computed at runtime, which can cause severe performance degradation. Use relative access with constant offsets where possible.
+> On the CPU backend, absolute access may not be vectorized by the JIT compiler if coordinates are computed at runtime, which can cause severe performance degradation. Use relative access with constant offsets where possible.
 
-##### **4.4.2. Pixel & Data I/O (`SingleExpr` only)**
+##### **4.4.2. Multi-Pass Pipeline & Intermediate Buffers (`VkExpr` only)**
+
+`VkExpr` supports executing multiple postfix expressions sequentially for the same plane (a multi-pass pipeline).
+
+- **Stage separator:** Use `##` to separate stages inside a single `expr` string.
+  - Each stage is tokenized and analyzed independently.
+  - Stage outputs are computed in order (left to right).
+- **Intermediate buffers:** Each completed stage writes its per-pixel result to an intermediate buffer named `bufN` (0-indexed by stage).
+  - `buf0` is the output of the first stage, `buf1` the second, and so on.
+  - A stage can only read buffers from *earlier* stages (e.g., stage 2 can read `buf0` and `buf1`).
+  - Intermediate buffers are stored as `float32` on the GPU, with no clamping / quantization.
+
+`bufN` supports the same access forms as clip identifiers:
+
+- **Current Pixel Access:** `bufN`
+- **Relative Access:** `bufN[relX, relY]:[mode]`
+- **Absolute Access:** `absX absY bufN[]:[mode]`
+
+Boundary suffixes work the same as for clip access (`:c`, `:m`, `:b`). If no suffix is provided for `bufN...`, the global `boundary` parameter is used.
+
+##### **4.4.3. Pixel & Data I/O (`SingleExpr` only)**
 
 Since `SingleExpr` has no concept of a "current pixel," all data I/O must be explicit and use absolute coordinates.
 
@@ -363,7 +386,7 @@ Since `SingleExpr` has no concept of a "current pixel," all data I/O must be exp
 > [!IMPORTANT]
 > If a pixel is not explicitly written to, its value is copied from the first input clip (`src0`).
 
-##### **4.4.3. Frame Property Access**
+##### **4.4.4. Frame Property Access**
 
 - **Reading (Both `Expr` and `SingleExpr`):** `clip.PropertyName`
   - Loads a scalar numerical frame property. `clip` can be any clip identifier (`x`, `y`, `srcN`, etc.).
