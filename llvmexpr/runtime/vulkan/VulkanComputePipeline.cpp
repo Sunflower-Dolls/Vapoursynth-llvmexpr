@@ -21,6 +21,7 @@
 #include "VulkanContext.hpp"
 #include "VulkanMemory.hpp"
 
+#include <algorithm>
 #include <memory>
 #include <mutex>
 #include <shaderc/shaderc.hpp>
@@ -220,10 +221,9 @@ void VulkanComputePipeline::updateDescriptorSets(
 
     // Update cache
     cached_input_buffers.clear();
-    cached_input_buffers.reserve(input_buffers.size());
-    for (auto* buf : input_buffers) {
-        cached_input_buffers.push_back(buf->buffer);
-    }
+    cached_input_buffers.resize(input_buffers.size());
+    std::ranges::transform(input_buffers, cached_input_buffers.begin(),
+                           [](const auto* buf) { return buf->buffer; });
     cached_output_buffer = output_buffer.buffer;
     cached_props_buffer = new_props_buffer_handle;
 

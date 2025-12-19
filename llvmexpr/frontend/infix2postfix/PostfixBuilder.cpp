@@ -21,6 +21,7 @@
 
 #include <cctype>
 #include <format>
+#include <numeric>
 #include <sstream>
 
 namespace infix2postfix {
@@ -236,10 +237,11 @@ std::string PostfixBuilder::get_expression() const {
         return "";
     }
 
-    size_t total_len = 0;
-    for (const auto& token : tokens) {
-        total_len += token.length();
-    }
+    size_t total_len =
+        std::accumulate(tokens.begin(), tokens.end(), size_t{0},
+                        [](size_t sum, const std::string& token) {
+                            return sum + token.length();
+                        });
     total_len += tokens.size() - 1; // for spaces
 
     std::string result;

@@ -570,11 +570,11 @@ Type SemanticAnalyzer::analyze(CallExpr& expr) {
 
         auto it = written_properties.find(prop_name);
         if (it != written_properties.end()) {
-            auto& [stored_suffix, stored_range] = it->second;
+            auto& stored_suffix = it->second.first;
             if (stored_suffix != suffix) {
                 if (stored_suffix == "d") {
                     stored_suffix = suffix;
-                    stored_range = expr.range;
+                    it->second.second = expr.range;
                 } else if (suffix != "d") {
                     reportError(
                         std::format("Property '{}' is written with "

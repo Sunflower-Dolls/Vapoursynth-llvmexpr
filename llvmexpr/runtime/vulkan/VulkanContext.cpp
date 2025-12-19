@@ -206,10 +206,8 @@ void VulkanContext::pickPhysicalDevice() {
         return;
     }
 
-    for (const auto& dev : devices) {
-        if (select_device(dev)) {
-            return;
-        }
+    if (std::ranges::any_of(devices, select_device)) {
+        return;
     }
 
     throw std::runtime_error(std::format(
@@ -226,11 +224,12 @@ void VulkanContext::createDevice() {
 
     std::vector<vk::ExtensionProperties> available_extensions =
         physical_device.enumerateDeviceExtensionProperties();
-    for (const auto& ext : available_extensions) {
-        if (strcmp(ext.extensionName, "VK_KHR_portability_subset") == 0) {
-            device_extensions.push_back("VK_KHR_portability_subset");
-            break;
-        }
+    const bool has_portability_subset = std::ranges::any_of(
+        available_extensions, [](const vk::ExtensionProperties& ext) {
+            return strcmp(ext.extensionName, "VK_KHR_portability_subset") == 0;
+        });
+    if (has_portability_subset) {
+        device_extensions.push_back("VK_KHR_portability_subset");
     }
 
     vk::DeviceCreateInfo create_info({}, queue_create_info,

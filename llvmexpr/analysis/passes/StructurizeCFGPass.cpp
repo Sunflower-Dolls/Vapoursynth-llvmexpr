@@ -310,11 +310,8 @@ bool node_split_make_reducible(std::vector<CFGBlock>& cfg,
                     if (in_component[(size_t)p] != 0) {
                         continue; // keep SCC-internal edges pointing to original
                     }
-                    for (int& s : cfg[(size_t)p].successors) {
-                        if (s == entry) {
-                            s = entry_clone;
-                        }
-                    }
+                    std::ranges::replace(cfg[(size_t)p].successors, entry,
+                                         entry_clone);
                 }
             }
 
@@ -400,11 +397,7 @@ bool tail_duplicate_trivial_joins(std::vector<CFGBlock>& cfg,
             cfg.push_back(std::move(clone));
             origin_map.push_back(origin_map[(size_t)c]);
 
-            for (int& s : cfg[(size_t)p].successors) {
-                if (s == c) {
-                    s = clone_idx;
-                }
-            }
+            std::ranges::replace(cfg[(size_t)p].successors, c, clone_idx);
         }
 
         changed = true;

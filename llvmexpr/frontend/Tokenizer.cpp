@@ -75,7 +75,7 @@ template <std::size_t N> struct FixedString {
     std::array<char, N> value;
 
     // NOLINTNEXTLINE(modernize-avoid-c-arrays,cppcoreguidelines-avoid-c-arrays)
-    constexpr FixedString(const char (&str)[N]) {
+    explicit constexpr FixedString(const char (&str)[N]) {
         std::ranges::copy(str, value.begin());
     }
 

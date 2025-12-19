@@ -647,12 +647,13 @@ bool GLSLGenerator::canStructureFrom(int start_block, int stop_block,
         }
         [[nodiscard]] bool handleNonlocalEdge(int /*block*/, int next,
                                               int stop_block,
-                                              LoopContext& ctx) const {
+                                              const LoopContext& ctx) const {
             auto saved = ctx;
             return gen->canEdgeToBlock(next, stop_block, saved);
         }
-        bool handleBranch(int /*block*/, int t, int f, int join,
-                          int /*stop_block*/, LoopContext& ctx) const {
+        [[nodiscard]] bool handleBranch(int /*block*/, int t, int f, int join,
+                                        int /*stop_block*/,
+                                        const LoopContext& ctx) const {
             auto saved_t = ctx;
             auto saved_f = ctx;
             return gen->canEdgeToBlock(t, join, saved_t) &&
