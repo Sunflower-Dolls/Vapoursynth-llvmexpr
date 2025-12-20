@@ -27,8 +27,6 @@
 #include <map>
 #include <memory>
 #include <mutex>
-#include <queue>
-#include <semaphore>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -46,9 +44,7 @@
 #include "frontend/Tokenizer.hpp"
 #include "runtime/llvm/Compiler.hpp"
 #include "runtime/llvm/Jit.hpp"
-#include "runtime/vulkan/VulkanComputePipeline.hpp"
-#include "runtime/vulkan/VulkanContext.hpp"
-#include "runtime/vulkan/VulkanMemory.hpp"
+#include "runtime/vulkan/VkExprExecutor.hpp"
 
 constexpr uint32_t PROP_READ_NAN_PAYLOAD =
     0x7FC0BEEF; // qNaN with payload 0xBEEF
@@ -853,67 +849,6 @@ singleExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
                              static_cast<int>(deps.size()), d.release(), core);
 }
 
-struct VkStream {
-    struct PlaneResources {
-        std::vector<vkexpr::VulkanBuffer> input_buffers;
-        std::vector<vkexpr::VulkanBuffer> input_staging_buffers;
-        vkexpr::VulkanBuffer output_buffer;
-        vkexpr::VulkanBuffer output_staging_buffer;
-        vkexpr::VulkanBuffer props_buffer;
-        vkexpr::VulkanBuffer props_staging_buffer;
-        std::vector<vkexpr::VulkanBuffer> intermediate_buffers;
-        VkDeviceSize buffer_size = 0;
-        VkDeviceSize props_size = 0;
-        bool initialized = false;
-    };
-
-    std::unique_ptr<vkexpr::VulkanMemory> memory;
-    std::array<std::vector<std::unique_ptr<vkexpr::VulkanComputePipeline>>, 3>
-        pipelines;
-    std::array<PlaneResources, 3> plane_resources;
-    vk::raii::CommandPool command_pool = nullptr;
-    vk::raii::CommandBuffer command_buffer = nullptr;
-    vk::raii::Fence fence = nullptr;
-
-    VkStream() = default;
-    // NOLINTNEXTLINE(modernize-use-equals-default)
-    ~VkStream() {
-        for (auto& res : plane_resources) {
-            freePlaneResources(res);
-        }
-    }
-    VkStream(const VkStream&) = delete;
-    VkStream& operator=(const VkStream&) = delete;
-    VkStream(VkStream&&) = delete;
-    VkStream& operator=(VkStream&&) = delete;
-
-    void freePlaneResources(PlaneResources& res) const {
-        if (res.initialized) {
-            for (auto& buf : res.input_buffers) {
-                memory->destroyBuffer(buf);
-            }
-            for (auto& buf : res.input_staging_buffers) {
-                memory->destroyBuffer(buf);
-            }
-            res.input_buffers.clear();
-            res.input_staging_buffers.clear();
-            memory->destroyBuffer(res.output_buffer);
-            memory->destroyBuffer(res.output_staging_buffer);
-            for (auto& buf : res.intermediate_buffers) {
-                memory->destroyBuffer(buf);
-            }
-            res.intermediate_buffers.clear();
-            res.initialized = false;
-            res.buffer_size = 0;
-        }
-        if (res.props_buffer.isValid()) {
-            memory->destroyBuffer(res.props_buffer);
-            memory->destroyBuffer(res.props_staging_buffer);
-            res.props_size = 0;
-        }
-    }
-};
-
 struct VkExprData : BaseExprData {
     std::array<PlaneOp, 3> plane_op = {};
     std::array<std::vector<std::vector<Token>>, 3> tokens_stages;
@@ -921,16 +856,8 @@ struct VkExprData : BaseExprData {
         analysis_managers;
 
     int device_id = -1;
-    vkexpr::VulkanContext* ctx = nullptr;
-
-    // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers)
-    int num_streams = 8;
-    std::vector<std::unique_ptr<VkStream>> streams;
-    std::unique_ptr<std::counting_semaphore<>> semaphore;
-    std::queue<int> free_stream_indices;
-    std::mutex stream_mutex;
-
-    std::vector<VSVideoFormat> input_formats;
+    int num_streams = 8; // NOLINT(cppcoreguidelines-avoid-magic-numbers)
+    std::unique_ptr<vkexpr::VkExprExecutor> executor;
 
     std::string dump_glsl_path;
 };
@@ -971,466 +898,9 @@ const VSFrame*
                 continue;
             }
 
-            int width = vsapi->getFrameWidth(dst_frame, plane);
-            int height = vsapi->getFrameHeight(dst_frame, plane);
-            VkDeviceSize buffer_size = static_cast<VkDeviceSize>(width) *
-                                       static_cast<VkDeviceSize>(height) *
-                                       sizeof(float);
-
             try {
-                int stream_idx = 0;
-                d->semaphore->acquire();
-                {
-                    std::lock_guard<std::mutex> lock(d->stream_mutex);
-                    stream_idx = d->free_stream_indices.front();
-                    d->free_stream_indices.pop();
-                }
-
-                struct StreamReleaser {
-                    VkExprData* d;
-                    int idx;
-
-                    StreamReleaser(VkExprData* d, int idx) : d(d), idx(idx) {}
-
-                    StreamReleaser(const StreamReleaser&) = delete;
-                    StreamReleaser& operator=(const StreamReleaser&) = delete;
-                    StreamReleaser(StreamReleaser&&) = delete;
-                    StreamReleaser& operator=(StreamReleaser&&) = delete;
-
-                    ~StreamReleaser() {
-                        {
-                            std::lock_guard<std::mutex> lock(d->stream_mutex);
-                            d->free_stream_indices.push(idx);
-                        }
-                        d->semaphore->release();
-                    }
-                } releaser(d, stream_idx);
-
-                auto& stream = *d->streams[stream_idx];
-                auto& plane_res = stream.plane_resources.at(plane);
-
-                // Initialize or resize buffers if needed
-                size_t num_stages = stream.pipelines.at(plane).size();
-                size_t num_intermediates =
-                    (num_stages > 1) ? (num_stages - 1) : 0;
-
-                if (!plane_res.initialized ||
-                    plane_res.buffer_size != buffer_size ||
-                    plane_res.intermediate_buffers.size() !=
-                        num_intermediates) {
-                    if (plane_res.initialized) {
-                        stream.freePlaneResources(plane_res);
-                        for (auto& buf : plane_res.intermediate_buffers) {
-                            stream.memory->destroyBuffer(buf);
-                        }
-                        plane_res.intermediate_buffers.clear();
-                    }
-
-                    plane_res.input_buffers.reserve(d->num_inputs);
-                    plane_res.input_staging_buffers.reserve(d->num_inputs);
-                    for (int i = 0; i < d->num_inputs; ++i) {
-                        plane_res.input_buffers.push_back(
-                            stream.memory->createGPUBuffer(buffer_size));
-                        plane_res.input_staging_buffers.push_back(
-                            stream.memory->createStagingBuffer(buffer_size,
-                                                               true));
-                    }
-
-                    plane_res.output_buffer =
-                        stream.memory->createGPUBuffer(buffer_size);
-                    plane_res.output_staging_buffer =
-                        stream.memory->createStagingBuffer(buffer_size, false);
-
-                    // Intermediate buffers
-                    plane_res.intermediate_buffers.resize(num_intermediates);
-                    for (size_t i = 0; i < num_intermediates; ++i) {
-                        plane_res.intermediate_buffers[i] =
-                            stream.memory->createGPUBuffer(buffer_size);
-                    }
-
-                    plane_res.buffer_size = buffer_size;
-                    plane_res.initialized = true;
-                }
-
-                // Props buffers
-                VkDeviceSize props_size = props.size() * sizeof(float);
-                if (props_size > 0) {
-                    if (!plane_res.props_buffer.isValid() ||
-                        plane_res.props_size < props_size) {
-
-                        if (plane_res.props_buffer.isValid()) {
-                            stream.memory->destroyBuffer(
-                                plane_res.props_buffer);
-                            stream.memory->destroyBuffer(
-                                plane_res.props_staging_buffer);
-                        }
-
-                        plane_res.props_buffer = stream.memory->createGPUBuffer(
-                            props_size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-                                            VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-                        plane_res.props_staging_buffer =
-                            stream.memory->createStagingBuffer(props_size,
-                                                               true);
-                        plane_res.props_size = props_size;
-                    }
-                }
-
-                std::vector<vkexpr::VulkanBuffer*> src_buffer_ptrs(
-                    d->num_inputs);
-
-                for (int i = 0; i < d->num_inputs; ++i) {
-                    src_buffer_ptrs[i] = &plane_res.input_buffers[i];
-
-                    const uint8_t* src_ptr =
-                        vsapi->getReadPtr(src_frames[i], plane);
-                    ptrdiff_t src_stride =
-                        vsapi->getStride(src_frames[i], plane);
-
-                    const VSVideoFormat& in_fmt = d->input_formats[i];
-                    int bpp = in_fmt.bytesPerSample;
-
-                    auto* mapped_data = static_cast<float*>(
-                        plane_res.input_staging_buffers[i].getMappedData());
-
-                    // NOLINTBEGIN
-                    if (in_fmt.sampleType == stInteger) {
-                        // Integer to float conversion
-                        for (int row = 0; row < height; ++row) {
-                            const uint8_t* rowPtr =
-                                src_ptr + (row * src_stride);
-                            float* outRow =
-                                mapped_data + (static_cast<size_t>(row) *
-                                               static_cast<size_t>(width));
-                            for (int col = 0; col < width; ++col) {
-                                if (bpp == 1) {
-                                    outRow[col] =
-                                        static_cast<float>(rowPtr[col]);
-                                } else if (bpp == 2) {
-                                    outRow[col] = static_cast<float>(
-                                        reinterpret_cast<const uint16_t*>(
-                                            rowPtr)[col]);
-                                } else {
-                                    outRow[col] = static_cast<float>(
-                                        reinterpret_cast<const uint32_t*>(
-                                            rowPtr)[col]);
-                                }
-                            }
-                        }
-                    } else {
-                        // Float input
-                        if (bpp == 4) {
-                            for (int row = 0; row < height; ++row) {
-                                const uint8_t* rowPtr =
-                                    src_ptr + (row * src_stride);
-                                float* outRow =
-                                    mapped_data + (static_cast<size_t>(row) *
-                                                   static_cast<size_t>(width));
-                                std::memcpy(outRow, rowPtr,
-                                            static_cast<size_t>(width) *
-                                                sizeof(float));
-                            }
-                        } else if (bpp == 2) {
-                            for (int row = 0; row < height; ++row) {
-                                const uint8_t* rowPtr =
-                                    src_ptr + (row * src_stride);
-                                float* outRow =
-                                    mapped_data + (static_cast<size_t>(row) *
-                                                   static_cast<size_t>(width));
-                                for (int col = 0; col < width; ++col) {
-                                    uint16_t halfBits =
-                                        reinterpret_cast<const uint16_t*>(
-                                            rowPtr)[col];
-                                    uint32_t sign = (halfBits >> 15) & 0x1;
-                                    uint32_t exp = (halfBits >> 10) & 0x1F;
-                                    uint32_t mant = halfBits & 0x3FF;
-                                    uint32_t floatBits;
-                                    if (exp == 0) {
-                                        if (mant == 0) {
-                                            floatBits = sign << 31;
-                                        } else {
-                                            // Denormalized
-                                            exp = 1;
-                                            while ((mant & 0x400) == 0) {
-                                                mant <<= 1;
-                                                exp--;
-                                            }
-                                            mant &= 0x3FF;
-                                            floatBits =
-                                                (sign << 31) |
-                                                ((exp + 127 - 15) << 23) |
-                                                (mant << 13);
-                                        }
-                                    } else if (exp == 31) {
-                                        // Inf or NaN
-                                        floatBits = (sign << 31) | 0x7F800000 |
-                                                    (mant << 13);
-                                    } else {
-                                        floatBits = (sign << 31) |
-                                                    ((exp + 127 - 15) << 23) |
-                                                    (mant << 13);
-                                    }
-                                    outRow[col] =
-                                        std::bit_cast<float>(floatBits);
-                                }
-                            }
-                        } else {
-                            throw std::runtime_error(
-                                "Unsupported float sample size.");
-                        }
-                    }
-                    // NOLINTEND
-                    stream.memory->flushBuffer(
-                        plane_res.input_staging_buffers[i], buffer_size);
-                }
-
-                // Upload props
-                if (plane_res.props_buffer.isValid()) {
-                    std::memcpy(plane_res.props_staging_buffer.getMappedData(),
-                                props.data(), props_size);
-                    stream.memory->flushBuffer(plane_res.props_staging_buffer,
-                                               props_size);
-                }
-
-                stream.command_buffer.reset();
-                vk::CommandBufferBeginInfo begin_info(
-                    vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
-                stream.command_buffer.begin(begin_info);
-
-                // Upload input buffers
-                for (int i = 0; i < d->num_inputs; ++i) {
-                    vk::BufferCopy region(0, 0, buffer_size);
-                    stream.command_buffer.copyBuffer(
-                        vk::Buffer(plane_res.input_staging_buffers[i].buffer),
-                        vk::Buffer(plane_res.input_buffers[i].buffer), region);
-                }
-
-                // Upload props
-                if (plane_res.props_buffer.isValid()) {
-                    vk::BufferCopy region(0, 0, props_size);
-                    stream.command_buffer.copyBuffer(
-                        vk::Buffer(plane_res.props_staging_buffer.buffer),
-                        vk::Buffer(plane_res.props_buffer.buffer), region);
-                }
-
-                // Transfer -> compute barriers for inputs/props
-                std::vector<vk::BufferMemoryBarrier> to_compute_barriers;
-                to_compute_barriers.reserve(static_cast<size_t>(d->num_inputs) +
-                                            1);
-                for (int i = 0; i < d->num_inputs; ++i) {
-                    vk::BufferMemoryBarrier b;
-                    b.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
-                    b.dstAccessMask = vk::AccessFlagBits::eShaderRead;
-                    b.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                    b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                    b.buffer = vk::Buffer(plane_res.input_buffers[i].buffer);
-                    b.offset = 0;
-                    b.size = VK_WHOLE_SIZE;
-                    to_compute_barriers.push_back(b);
-                }
-                if (plane_res.props_buffer.isValid()) {
-                    vk::BufferMemoryBarrier b;
-                    b.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
-                    b.dstAccessMask = vk::AccessFlagBits::eShaderRead;
-                    b.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                    b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                    b.buffer = vk::Buffer(plane_res.props_buffer.buffer);
-                    b.offset = 0;
-                    b.size = VK_WHOLE_SIZE;
-                    to_compute_barriers.push_back(b);
-                }
-                if (!to_compute_barriers.empty()) {
-                    stream.command_buffer.pipelineBarrier(
-                        vk::PipelineStageFlagBits::eTransfer,
-                        vk::PipelineStageFlagBits::eComputeShader, {}, {},
-                        to_compute_barriers, {});
-                }
-
-                for (size_t s = 0; s < num_stages; ++s) {
-                    // [src0..srcM, buf0..buf(s-1)]
-                    std::vector<vkexpr::VulkanBuffer*> dispatch_inputs;
-                    dispatch_inputs.reserve(d->num_inputs + s);
-
-                    for (int i = 0; i < d->num_inputs; ++i) {
-                        dispatch_inputs.push_back(&plane_res.input_buffers[i]);
-                    }
-                    for (size_t k = 0; k < s; ++k) {
-                        dispatch_inputs.push_back(
-                            &plane_res.intermediate_buffers[k]);
-                    }
-
-                    // Output
-                    vkexpr::VulkanBuffer* dispatch_output = nullptr;
-                    if (s == num_stages - 1) {
-                        dispatch_output = &plane_res.output_buffer;
-                    } else {
-                        dispatch_output = &plane_res.intermediate_buffers[s];
-                    }
-
-                    // Dispatch
-                    stream.pipelines.at(plane).at(s)->recordDispatch(
-                        stream.command_buffer, dispatch_inputs,
-                        *dispatch_output,
-                        plane_res.props_buffer.isValid()
-                            ? &plane_res.props_buffer
-                            : nullptr,
-                        static_cast<uint32_t>(width),
-                        static_cast<uint32_t>(height), n);
-
-                    // Barrier if not last stage
-                    if (s < num_stages - 1) {
-                        vk::BufferMemoryBarrier b;
-                        b.srcAccessMask = vk::AccessFlagBits::eShaderWrite;
-                        b.dstAccessMask = vk::AccessFlagBits::eShaderRead;
-                        b.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                        b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                        b.buffer = vk::Buffer(dispatch_output->buffer);
-                        b.offset = 0;
-                        b.size = VK_WHOLE_SIZE;
-                        std::vector<vk::BufferMemoryBarrier> bar = {b};
-
-                        stream.command_buffer.pipelineBarrier(
-                            vk::PipelineStageFlagBits::eComputeShader,
-                            vk::PipelineStageFlagBits::eComputeShader, {}, {},
-                            bar, {});
-                    }
-                }
-
-                uint8_t* dst_ptr = vsapi->getWritePtr(dst_frame, plane);
-                ptrdiff_t dst_stride = vsapi->getStride(dst_frame, plane);
-
-                // Download and convert from float32 to output format
-                const VSVideoFormat& out_fmt = d->vi.format;
-                int out_bpp = out_fmt.bytesPerSample;
-
-                // Compute -> transfer barrier for output, then download
-                vk::BufferMemoryBarrier to_transfer;
-                to_transfer.srcAccessMask = vk::AccessFlagBits::eShaderWrite;
-                to_transfer.dstAccessMask = vk::AccessFlagBits::eTransferRead;
-                to_transfer.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                to_transfer.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                to_transfer.buffer = vk::Buffer(plane_res.output_buffer.buffer);
-                to_transfer.offset = 0;
-                to_transfer.size = VK_WHOLE_SIZE;
-                std::array<vk::BufferMemoryBarrier, 1> to_transfer_barriers = {
-                    to_transfer};
-                stream.command_buffer.pipelineBarrier(
-                    vk::PipelineStageFlagBits::eComputeShader,
-                    vk::PipelineStageFlagBits::eTransfer, {}, {},
-                    to_transfer_barriers, {});
-
-                vk::BufferCopy download_region(0, 0, buffer_size);
-                stream.command_buffer.copyBuffer(
-                    vk::Buffer(plane_res.output_buffer.buffer),
-                    vk::Buffer(plane_res.output_staging_buffer.buffer),
-                    download_region);
-
-                stream.command_buffer.end();
-
-                vk::SubmitInfo submit_info;
-                submit_info.setCommandBuffers(*stream.command_buffer);
-                d->ctx->submit(submit_info, *stream.fence);
-
-                auto result = d->ctx->getDevice().waitForFences(
-                    *stream.fence, VK_TRUE, UINT64_MAX);
-                if (result != vk::Result::eSuccess) {
-                    throw std::runtime_error("Failed to wait for VkExpr fence");
-                }
-                d->ctx->getDevice().resetFences(*stream.fence);
-
-                stream.memory->invalidateBuffer(plane_res.output_staging_buffer,
-                                                buffer_size);
-                const auto* mapped_out = static_cast<const float*>(
-                    plane_res.output_staging_buffer.getMappedData());
-
-                // NOLINTBEGIN
-                if (out_fmt.sampleType == stInteger) {
-                    // Float to integer with clamping
-                    int maxVal = (1 << out_fmt.bitsPerSample) - 1;
-                    for (int row = 0; row < height; ++row) {
-                        uint8_t* outRowPtr = dst_ptr + (row * dst_stride);
-                        const float* inRow =
-                            mapped_out + (static_cast<size_t>(row) *
-                                          static_cast<size_t>(width));
-                        for (int col = 0; col < width; ++col) {
-                            float val = inRow[col];
-                            float clamped = std::clamp(
-                                val, 0.0F, static_cast<float>(maxVal));
-                            int intVal =
-                                static_cast<int>(std::nearbyint(clamped));
-                            if (out_bpp == 1) {
-                                outRowPtr[col] = static_cast<uint8_t>(intVal);
-                            } else if (out_bpp == 2) {
-                                reinterpret_cast<uint16_t*>(outRowPtr)[col] =
-                                    static_cast<uint16_t>(intVal);
-                            } else {
-                                reinterpret_cast<uint32_t*>(outRowPtr)[col] =
-                                    static_cast<uint32_t>(intVal);
-                            }
-                        }
-                    }
-                } else {
-                    // Float output
-                    if (out_bpp == 4) {
-                        for (int row = 0; row < height; ++row) {
-                            uint8_t* outRowPtr = dst_ptr + (row * dst_stride);
-                            const float* inRow =
-                                mapped_out + (static_cast<size_t>(row) *
-                                              static_cast<size_t>(width));
-                            std::memcpy(outRowPtr, inRow,
-                                        static_cast<size_t>(width) *
-                                            sizeof(float));
-                        }
-                    } else if (out_bpp == 2) {
-                        for (int row = 0; row < height; ++row) {
-                            uint8_t* outRowPtr = dst_ptr + (row * dst_stride);
-                            const float* inRow =
-                                mapped_out + (static_cast<size_t>(row) *
-                                              static_cast<size_t>(width));
-                            for (int col = 0; col < width; ++col) {
-                                float val = inRow[col];
-                                auto floatBits = std::bit_cast<uint32_t>(val);
-                                uint32_t sign = (floatBits >> 31) & 0x1;
-                                int32_t exp =
-                                    ((floatBits >> 23) & 0xFF) - 127 + 15;
-                                uint32_t mant = (floatBits >> 13) & 0x3FF;
-                                uint16_t halfBits;
-                                if (std::isnan(val)) {
-                                    halfBits = static_cast<uint16_t>(
-                                        (sign << 15) | 0x7C00 |
-                                        (mant ? mant : 1));
-                                } else if (std::isinf(val)) {
-                                    halfBits = static_cast<uint16_t>(
-                                        (sign << 15) | 0x7C00);
-                                } else if (exp <= 0) {
-                                    // Underflow to zero or denormal
-                                    if (exp < -10) {
-                                        halfBits =
-                                            static_cast<uint16_t>(sign << 15);
-                                    } else {
-                                        mant = (mant | 0x400) >> (1 - exp);
-                                        halfBits = static_cast<uint16_t>(
-                                            (sign << 15) | mant);
-                                    }
-                                } else if (exp >= 31) {
-                                    // Overflow to infinity
-                                    halfBits = static_cast<uint16_t>(
-                                        (sign << 15) | 0x7C00);
-                                } else {
-                                    halfBits = static_cast<uint16_t>(
-                                        (sign << 15) |
-                                        (static_cast<uint32_t>(exp) << 10) |
-                                        mant);
-                                }
-                                reinterpret_cast<uint16_t*>(outRowPtr)[col] =
-                                    halfBits;
-                            }
-                        }
-                    } else {
-                        throw std::runtime_error(
-                            "Unsupported float sample size.");
-                    }
-                    // NOLINTEND
-                }
+                d->executor->processPlane(plane, n, src_frames, dst_frame,
+                                          props, vsapi);
 
             } catch (const std::exception& e) {
                 for (const auto& frame : src_frames) {
@@ -1459,13 +929,7 @@ vkExprFree(void* instanceData, [[maybe_unused]] VSCore* core,
            const VSAPI* vsapi) {
     // NOLINTEND(readability-identifier-naming)
     auto* raw = static_cast<VkExprData*>(instanceData);
-    if (raw->semaphore != nullptr) {
-        for (int i = 0; i < raw->num_streams; ++i) {
-            raw->semaphore->acquire();
-        }
-        raw->streams.clear();
-    }
-
+    raw->executor.reset();
     std::unique_ptr<VkExprData> d(raw);
     for (auto* node : d->nodes) {
         vsapi->freeNode(node);
@@ -1483,12 +947,6 @@ vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
     try {
         // Validate and initialize clips
         validate_and_init_clips<true>(d.get(), in, vsapi);
-
-        // Store input formats for CPU-side conversion
-        d->input_formats.resize(d->num_inputs);
-        for (int i = 0; i < d->num_inputs; ++i) {
-            d->input_formats[i] = vsapi->getVideoInfo(d->nodes[i])->format;
-        }
 
         parse_format_param(d.get(), in, vsapi, core);
 
@@ -1640,90 +1098,52 @@ vkExprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
             throw std::runtime_error("device_id must be >= -1");
         }
 
-        d->semaphore =
-            std::make_unique<std::counting_semaphore<>>(d->num_streams);
-        d->streams.resize(d->num_streams);
+        auto num_props_floats =
+            static_cast<uint32_t>(1 + d->required_props.size()); // N + props
 
-        d->ctx = &vkexpr::VulkanContext::getInstance(d->device_id);
-        auto& ctx = *d->ctx;
+        std::array<std::vector<std::string>, 3> glsl_stages;
+        for (int i = 0; i < d->vi.format.numPlanes; ++i) {
+            if (d->plane_op.at(i) != PlaneOp::PoProcess) {
+                continue;
+            }
 
-        for (int k = 0; k < d->num_streams; ++k) {
-            d->streams[k] = std::make_unique<VkStream>();
-            d->streams[k]->memory = std::make_unique<vkexpr::VulkanMemory>(ctx);
-            d->free_stream_indices.push(k);
+            auto num_stages = d->tokens_stages.at(i).size();
+            glsl_stages.at(i).resize(num_stages);
 
-            vk::CommandPoolCreateInfo pool_info(
-                vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
-                ctx.getQueueFamilyIndex());
-            d->streams[k]->command_pool =
-                vk::raii::CommandPool(ctx.getDevice(), pool_info);
+            for (size_t s = 0; s < num_stages; ++s) {
+                analysis::ExpressionAnalysisResults analysis_results(
+                    *d->analysis_managers.at(i).at(s));
+                GLSLGenerator generator(
+                    d->tokens_stages.at(i).at(s), d->num_inputs,
+                    static_cast<int>(s),
+                    d->vi.width / (i == 0 ? 1 : d->vi.format.subSamplingW),
+                    d->vi.height / (i == 0 ? 1 : d->vi.format.subSamplingH),
+                    d->mirror_boundary, d->prop_map, analysis_results);
 
-            vk::CommandBufferAllocateInfo cmd_info(
-                *d->streams[k]->command_pool, vk::CommandBufferLevel::ePrimary,
-                1);
-            auto cmd_buffers =
-                vk::raii::CommandBuffers(ctx.getDevice(), cmd_info);
-            d->streams[k]->command_buffer = std::move(cmd_buffers[0]);
+                glsl_stages.at(i).at(s) = generator.generate();
 
-            vk::FenceCreateInfo fence_info;
-            d->streams[k]->fence = vk::raii::Fence(ctx.getDevice(), fence_info);
-
-            auto num_props_floats = static_cast<uint32_t>(
-                1 + d->required_props.size()); // N + props
-
-            for (int i = 0; i < d->vi.format.numPlanes; ++i) {
-                if (d->plane_op.at(i) != PlaneOp::PoProcess) {
-                    continue;
-                }
-
-                auto num_stages = d->tokens_stages.at(i).size();
-                d->streams[k]->pipelines.at(i).resize(num_stages);
-
-                for (size_t s = 0; s < num_stages; ++s) {
-                    analysis::ExpressionAnalysisResults analysis_results(
-                        *d->analysis_managers.at(i).at(s));
-                    GLSLGenerator generator(
-                        d->tokens_stages.at(i).at(s), d->num_inputs,
-                        static_cast<int>(s),
-                        d->vi.width / (i == 0 ? 1 : d->vi.format.subSamplingW),
-                        d->vi.height / (i == 0 ? 1 : d->vi.format.subSamplingH),
-                        d->mirror_boundary, d->prop_map, analysis_results);
-                    std::string shader = generator.generate();
-                    // printf("Generated GLSL:\n%s\n", shader.c_str());
-
-                    if (k == 0 && !d->dump_glsl_path.empty()) {
-                        std::string plane_specific_path = d->dump_glsl_path;
-                        size_t dot_pos = plane_specific_path.rfind('.');
-                        std::string suffix =
-                            std::format(".plane{}.stage{}", i, s);
-
-                        // If only one stage, maybe keep original naming to avoid breaking scripts?
-                        // But consistency is better. Let's use stage suffix always if multi-stage?
-                        // Or always use it.
-                        // Original was ".planeX".
-                        // New ".planeX.stageY".
-
-                        if (dot_pos != std::string::npos) {
-                            plane_specific_path.insert(dot_pos, suffix);
-                        } else {
-                            plane_specific_path += suffix;
-                        }
-
-                        std::ofstream glsl_file(plane_specific_path);
-                        if (glsl_file.is_open()) {
-                            glsl_file << shader;
-                            glsl_file.close();
-                        }
+                if (!d->dump_glsl_path.empty()) {
+                    std::string plane_specific_path = d->dump_glsl_path;
+                    size_t dot_pos = plane_specific_path.rfind('.');
+                    std::string suffix = std::format(".plane{}.stage{}", i, s);
+                    if (dot_pos != std::string::npos) {
+                        plane_specific_path.insert(dot_pos, suffix);
+                    } else {
+                        plane_specific_path += suffix;
                     }
 
-                    d->streams[k]->pipelines.at(i).at(s) =
-                        std::make_unique<vkexpr::VulkanComputePipeline>(
-                            ctx, shader,
-                            static_cast<uint32_t>(d->num_inputs + s),
-                            num_props_floats);
+                    std::ofstream glsl_file(plane_specific_path);
+                    if (glsl_file.is_open()) {
+                        glsl_file << glsl_stages.at(i).at(s);
+                        glsl_file.close();
+                    }
                 }
             }
         }
+
+        d->executor = std::make_unique<vkexpr::VkExprExecutor>(
+            d->device_id, d->num_streams, d->num_inputs, std::move(glsl_stages),
+            num_props_floats);
 
     } catch (const std::exception& e) {
         for (auto* node : d->nodes) {

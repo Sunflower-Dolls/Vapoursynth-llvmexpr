@@ -133,6 +133,7 @@ sources = [
   'llvmexpr/runtime/vulkan/VulkanContext.cpp',
   'llvmexpr/runtime/vulkan/VulkanMemory.cpp',
   'llvmexpr/runtime/vulkan/VulkanComputePipeline.cpp',
+  'llvmexpr/runtime/vulkan/VkExprExecutor.cpp',
 ]
 
 vulkan_headers_dep = dependency(
