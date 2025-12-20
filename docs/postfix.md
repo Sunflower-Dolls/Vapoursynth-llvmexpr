@@ -2,7 +2,8 @@
 
 `llvmexpr` provides two powerful VapourSynth functions that evaluate mathematical or logical expressions: `Expr` and `SingleExpr`. Their core is the `expr` string, which uses Reverse Polish Notation (RPN). This guide details the syntax of that string, highlighting the differences between the two functions.
 
-Note that `Expr` has two backends: the standard CPU `llvmexpr.Expr` and the GPU-accelerated `llvmexpr.VkExpr`. Both share the same syntax and semantics described here.
+> [!NOTE]
+> `Expr` has two backends: the standard CPU `llvmexpr.Expr` and the GPU-accelerated `llvmexpr.VkExpr`. The core postfix language is shared, but `VkExpr` adds a multi-pass execution pipeline and `bufN` intermediate buffers, so the full set of capabilities is not identical.
 
 > [!NOTE]
 > `VkExpr` additionally supports a multi-pass pipeline using `##` stage separators and `bufN` intermediate buffers. See the `VkExpr`-specific section under [4.4. Data Access & Output](#44-data-access--output).
@@ -355,6 +356,8 @@ In `Expr` and `VkExpr`, there are three ways to access pixel values from input c
   - `buf0` is the output of the first stage, `buf1` the second, and so on.
   - A stage can only read buffers from *earlier* stages (e.g., stage 2 can read `buf0` and `buf1`).
   - Intermediate buffers are stored as `float32` on the GPU, with no clamping / quantization.
+- Within a single stage, reads always come from the original input frames (no read-after-write). Stage boundaries are the mechanism that makes intermediate results readable via `bufN`.
+- On CPU you can express “multi-pass” by chaining multiple `Expr` filters. On GPU, splitting into multiple plugin calls can add extra synchronization and round-trips between system memory and VRAM; `VkExpr` stages keep intermediate results on the GPU.
 
 `bufN` supports the same access forms as clip identifiers:
 

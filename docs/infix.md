@@ -10,6 +10,8 @@ The infix transpiler supports two distinct execution models, corresponding to Va
 
 This is the traditional model, used by both `llvmexpr.Expr` (CPU) and `llvmexpr.VkExpr` (GPU). The script is executed once for *every single pixel* of the output frame. It is ideal for standard image filtering, such as applying a brightness curve, combining clips, or spatial filtering.
 
+`VkExpr` additionally supports a **multi-pass pipeline**: you can split the `expr` string into multiple infix stages with `---`. Each stage still runs per-pixel, but stages execute sequentially and later stages can read earlier results via `$bufN` (see [VkExpr Multi-Pass Pipeline & Intermediate Buffers](#vkexpr-multi-pass-pipeline--intermediate-buffers)).
+
 - **Key Characteristics:**
     - Operates on a "current pixel" concept, with `$X` and `$Y` coordinates available.
     - The final value assigned to the special `RESULT` variable is implicitly written to the current pixel's location.
@@ -365,11 +367,11 @@ This technique is essential for writing complex recursive macros that perform op
 The preprocessor provides several built-in macros that expose information about the execution context.
 
 #### Mode-Specific Macros
-| Macro            | Description                                                                                                                          |
-| :--------------- | :----------------------------------------------------------------------------------------------------------------------------------- |
-| `__EXPR__`       | Defined when compiling in `Expr` mode (per-pixel).                                                                                   |
-| `__SINGLEEXPR__` | Defined when compiling in `SingleExpr` mode (per-frame).                                                                             |
-| `__GPU__`        | Defined when the code is executed by `VkExpr`. This is the only semantic difference between running on `Expr` and `VkExpr` backends. |
+| Macro            | Description                                                   |
+| :--------------- | :------------------------------------------------------------ |
+| `__EXPR__`       | Defined when compiling in `Expr` mode (per-pixel).            |
+| `__SINGLEEXPR__` | Defined when compiling in `SingleExpr` mode (per-frame).      |
+| `__GPU__`        | Defined when the code is compiled for `VkExpr` (GPU backend). |
 
 #### Context Macros (when `infix=1` is used)
 These are defined by the VapourSynth filter when it invokes the transpiler.
@@ -736,6 +738,8 @@ Access a pixel at a dynamically calculated coordinate using the 3-argument `dyn(
 - Stage `k` can read intermediate results from `$buf0` … `$buf{k-1}`; stage `0` has no buffers available.
 - `$bufN` behaves like a clip for pixel reads: use `$bufN`, `$bufN[x,y]:c|:m`, or `dyn($bufN, x, y, plane)` in later stages.
 - Intermediate buffers match the output resolution/format and are stored as `float32`; frame property access on `$bufN` is not supported.
+- Within a single stage, reads still come from the original input frames (no read-after-write). Use stage boundaries and `$bufN` when you need to feed one computation step into the next.
+- On CPU, “multi-pass” is typically just multiple `Expr` calls in your VapourSynth script. On GPU, multiple plugin calls can introduce extra synchronization and transfers; `VkExpr` stages keep intermediates on the GPU.
 
 #### 7.2.2 `SingleExpr` mode
 

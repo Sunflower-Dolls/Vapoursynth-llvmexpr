@@ -12,7 +12,11 @@ For the `Expr` mode, two backends are available:
 
 `llvmexpr.Expr` is designed to be a powerful and feature-rich alternative to `akarin.Expr`. It is (almost) fully compatible with `akarin`'s syntax and extends it with additional features, most notably **Turing-complete control flow**, **array and dynamic memory allocation**, **advanced math functions** and **C-style infix syntax**. See [Migrating From Akarin](docs/migrating_from_akarin.md) for a detailed comparison.
 
-`llvmexpr.VkExpr` is fully compatible with `llvmexpr.Expr`'s syntax (both postfix and infix) and semantics. It allows running the same expressions on the GPU. The only difference is that in infix mode, an additional `__GPU__` macro is defined.
+`llvmexpr.VkExpr` runs the same expression language on the GPU. For a single-stage expression (no `bufN` usage), it aims to match `llvmexpr.Expr`'s behavior, but it is not strictly “the same”:
+
+- `VkExpr` adds a **multi-pass pipeline** inside a single `expr` string (postfix: `##`, infix: `---`) and **intermediate buffers** (`bufN` / `$bufN`) to pass data between stages.
+- Intermediate buffers are stored as `float32` on the GPU (no clamping / quantization between stages), so multi-pass expressions can produce results that are impossible to express as a single `Expr` stage.
+- In infix mode, an additional `__GPU__` macro is defined for conditional compilation.
 
 In terms of performance, `llvmexpr` may excel at complex mathematical computations. However, its performance can be limited by memory access patterns. In scenarios involving heavy random memory access or specific spatial operations (see `rotate clip` in benchmarks), `akarin.Expr` may offer better performance.
 
@@ -77,8 +81,10 @@ llvmexpr.VkExpr(clip[] clips, string[] expr[, int format, int boundary=0, int nu
 
 `VkExpr` supports executing multiple expressions sequentially for the same plane, with efficient zero-copy data transfer between them.
 
-- **Separator**: Use `##` to separate different stages in the expression string.
-- **Intermediate Access**: Use `bufN` to access the result of the N-th stage (0-indexed). `buf0` is the result of the first expression, `buf1` is the second, and so on. Relative and absolute access for buffers are also supported.
+- **Separators**: Postfix uses `##`; infix uses `---` to split stages inside a single `expr` string.
+- **Intermediate access**: Postfix uses `bufN`; infix uses `$bufN` to read the result of the N-th stage (0-indexed). Relative and absolute access are supported.
+- **Execution model**: Each stage is a full per-plane pass. Stage boundaries are the mechanism that makes intermediate results readable (unlike read-after-write within a single per-pixel stage).
+- **Why this exists**: On CPU you can usually just chain multiple `Expr` calls in VapourSynth. On GPU, splitting work into multiple plugin calls often forces extra synchronization and transfers and additional submission overhead; multi-pass keeps intermediates on the GPU.
 
 **Example:**
 ```python
