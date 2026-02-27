@@ -19,6 +19,9 @@
 
 #include "Compiler.hpp"
 
+#include <algorithm>
+#include <cctype>
+#include <cstdlib>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -30,6 +33,8 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/PassInstrumentation.h"
+#include "llvm/IR/PassTimingInfo.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Support/FileSystem.h"
@@ -38,6 +43,36 @@
 #include "../../codegen/llvm/Diagnostics.hpp"
 #include "../../codegen/llvm/ExprIRGenerator.hpp"
 #include "../../codegen/llvm/SingleExprIRGenerator.hpp"
+
+namespace {
+
+bool is_env_var_enabled(const char* value) {
+    if (value == nullptr || *value == '\0') {
+        return false;
+    }
+
+    std::string normalized;
+    for (const char* ptr = value; *ptr != '\0'; ++ptr) {
+        const auto ch = static_cast<unsigned char>(*ptr);
+        if (std::isspace(ch) != 0) {
+            continue;
+        }
+        normalized.push_back(static_cast<char>(std::tolower(ch)));
+    }
+
+    if (normalized.empty()) {
+        return false;
+    }
+
+    return normalized != "0" && normalized != "false" && normalized != "off" &&
+           normalized != "no";
+}
+
+bool is_time_passes_enabled() {
+    return is_env_var_enabled(std::getenv("LLVMEXPR_TIME_PASSES"));
+}
+
+} // namespace
 
 Compiler::Compiler(
     std::vector<Token> tokens_in, const VSVideoInfo* out_vi,
@@ -181,7 +216,15 @@ CompiledFunction Compiler::compileWithApproxMath(int actual_approx_math) {
         llvm::CGSCCAnalysisManager cgam;
         llvm::ModuleAnalysisManager mam;
 
-        llvm::PassBuilder pb;
+        const bool time_passes_enabled = is_time_passes_enabled();
+        llvm::PassInstrumentationCallbacks pic;
+        llvm::TimePassesHandler time_passes_handler(time_passes_enabled);
+
+        if (time_passes_enabled) {
+            time_passes_handler.registerCallbacks(pic);
+        }
+
+        llvm::PassBuilder pb(nullptr, llvm::PipelineTuningOptions(), {}, &pic);
         pb.registerModuleAnalyses(mam);
         pb.registerFunctionAnalyses(fam);
         pb.registerCGSCCAnalyses(cgam);
@@ -204,6 +247,10 @@ CompiledFunction Compiler::compileWithApproxMath(int actual_approx_math) {
                 "Failed to create default optimization pipeline.");
         }
         mpm.run(*module, mam);
+
+        if (time_passes_enabled) {
+            time_passes_handler.print();
+        }
     }
 
     // Verify module after optimization
