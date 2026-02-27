@@ -109,6 +109,31 @@ def _try_load_plugins(plugin_paths: List[str], *, quiet: bool) -> None:
                 print(f"Warning: failed to load plugin {path!r}: {type(e).__name__}: {e}")
 
 
+INIT_TIME_PASSES_EXPR = 'x x x[-1,-1] x[0,-1] x[1,-1] x[-1,0] x x[1,0] x[-1,1] x[0,1] x[1,1] + + + + + + + + 9 / - 1.5 * 1.0 x[-1,-1] x[0,-1] x[1,-1] x[-1,0] x x[1,0] x[-1,1] x[0,1] x[1,1] + + + + + + + + 9 / x[-2,-2] x[-2,0] + x[-2,2] + x[0,-2] + x[0,2] + x[2,-2] + x[2,0] + x[2,2] + 9 / - abs x x[-1,-1] x[0,-1] x[1,-1] x[-1,0] x x[1,0] x[-1,1] x[0,1] x[1,1] + + + + + + + + 9 / - abs x[-1,-1] x[0,-1] x[1,-1] x[-1,0] x x[1,0] x[-1,1] x[0,1] x[1,1] + + + + + + + + 9 / x[-2,-2] x[-2,0] + x[-2,2] + x[0,-2] + x[0,2] + x[2,-2] + x[2,0] + x[2,2] + 9 / - abs max 0.01 + / 0 max 5.0 * 0.1 * 0.95 min - * 1.0 x[-1,-1] x[1,-1] -1 * x[-1,0] 2 * x[1,0] -2 * x[-1,1] x[1,1] -1 * + + + + + abs 2 pow x[-1,-1] x[0,-1] 2 * x[1,-1] x[-1,1] -1 * x[0,1] -2 * x[1,1] -1 * + + + + + abs 2 pow + sqrt 0.01 * 0.3 min - 1.0 x[-1,-1] x - 2 pow x[0,-1] x - 2 pow + x[1,-1] x - 2 pow + x[-1,0] x - 2 pow + x[1,0] x - 2 pow + x[-1,1] x - 2 pow + x[0,1] x - 2 pow + x[1,1] x - 2 pow + 8 / 0.005 * 0.3 min - * * + x[-1,-1] x[0,-1] min x[1,-1] min x[-1,0] min x[1,0] min x[-1,1] min x[0,1] min x[1,1] min x[-1,-1] x[0,-1] max x[1,-1] max x[-1,0] max x[1,0] max x[-1,1] max x[0,1] max x[1,1] max clamp'
+INIT_TIME_PASSES_REPEAT = 5
+INIT_TIME_PASSES_TAIL = "max max max max"
+
+
+def _run_time_passes_init() -> None:
+    previous_env = os.environ.get("LLVMEXPR_TIME_PASSES")
+    os.environ["LLVMEXPR_TIME_PASSES"] = "1"
+
+    try:
+        clip = core.std.BlankClip(width=3840, height=2160, format=vs.YUV420P16, length=500)
+        expr = " ".join([INIT_TIME_PASSES_EXPR] * INIT_TIME_PASSES_REPEAT)
+        init_clip = core.llvmexpr.Expr(
+            clips=[clip],
+            expr=f"{expr} {INIT_TIME_PASSES_TAIL}",
+            opt_level=1,
+        )
+        init_clip.get_frame(0)
+    finally:
+        if previous_env is None:
+            os.environ.pop("LLVMEXPR_TIME_PASSES", None)
+        else:
+            os.environ["LLVMEXPR_TIME_PASSES"] = previous_env
+
+
 class ExprBackend(abc.ABC):
     """Abstract base class for an expression evaluation backend."""
 
@@ -477,6 +502,19 @@ def run_benchmark(args: argparse.Namespace) -> int:
             print(name)
         return 0
 
+    if args.time_passes_init or args.init_only:
+        if not args.quiet:
+            print("Running LLVMEXPR_TIME_PASSES initialization...")
+        try:
+            _run_time_passes_init()
+        except Exception as e:
+            print(f"Error: failed to run init workload: {type(e).__name__}: {e}")
+            return 5
+        if not args.quiet:
+            print("Initialization workload completed.\n")
+        if args.init_only:
+            return 0
+
     results: Dict[str, Dict[str, str]] = {test_name: {} for test_name in test_names}
     json_results: Dict[str, Dict[str, Dict[str, Any]]] = {test_name: {} for test_name in test_names}
 
@@ -642,6 +680,8 @@ if __name__ == "__main__":
     parser.add_argument("--llvmexpr-plugin", type=str, default=os.environ.get("LLVMEXPR_PLUGIN_PATH"))
     parser.add_argument("--akarin-plugin", type=str, default=os.environ.get("AKARIN_PLUGIN_PATH"))
     parser.add_argument("--load-plugin", action="append", default=[], help="Extra plugin paths to load (repeatable)")
+    parser.add_argument("--time-passes-init", action="store_true", help="Run legacy LLVMEXPR_TIME_PASSES init workload before benchmarks")
+    parser.add_argument("--init-only", action="store_true", help="Run only the init workload and exit")
 
     parser.add_argument("--json", type=str, default=None, help="Write JSON report to path")
     parser.add_argument("--markdown", type=str, default=None, help="Write Markdown table to path")

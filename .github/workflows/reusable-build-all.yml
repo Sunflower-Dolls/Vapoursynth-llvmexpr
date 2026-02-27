@@ -401,11 +401,10 @@ jobs:
           export VK_ICD_FILENAMES="C:/lavapipe/share/vulkan/icd.d/lvp_icd.x86_64.json"
           powershell.exe -Command "reg add \"HKLM\SOFTWARE\Khronos\Vulkan\Drivers\" /v \"C:\lavapipe\share\vulkan\icd.d\lvp_icd.x86_64.json\" /t REG_DWORD /d 0 /f"
 
-          python benchmarks/benchmark_init.py
-          
           python benchmarks/benchmark.py \
             --llvmexpr-plugin "$PWD/builddir_release/${{ inputs.library_name }}" \
             --backends "llvmexpr,VkExpr" \
+            --time-passes-init \
             --frames 800 \
             --warmup 5 \
             --fail-on-no-results \
