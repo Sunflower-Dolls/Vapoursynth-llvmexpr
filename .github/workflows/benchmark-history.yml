@@ -1,0 +1,60 @@
+name: Benchmark History
+
+on:
+  workflow_run:
+    workflows: ["Build and Release"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: benchmark-history-${{ github.event.workflow_run.head_branch || github.ref_name || 'manual' }}
+  cancel-in-progress: true
+
+jobs:
+  report:
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build benchmark history report
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p benchmark-history
+          python3 scripts/benchmark_history_report.py \
+            --repo "${{ github.repository }}" \
+            --token "${GITHUB_TOKEN}" \
+            --source-workflow "build.yml" \
+            --branch "main" \
+            --event "push" \
+            --artifact-prefix "benchmark-" \
+            --output-json "benchmark-history/history.json" \
+            --output-html "benchmark-history/index.html"
+
+      - name: Upload benchmark history artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-history
+          path: benchmark-history
+          if-no-files-found: error
+
+      - name: Write summary
+        run: |
+          echo "Benchmark history artifact uploaded: \`benchmark-history\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- HTML report: \`benchmark-history/index.html\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Raw data: \`benchmark-history/history.json\`" >> "$GITHUB_STEP_SUMMARY"
