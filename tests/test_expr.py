@@ -528,6 +528,41 @@ def test_validation_errors(backend: str, expr: str, err_msg: str) -> None:
         expr_func(c, expr)
 
 
+def test_tiling_param_validation_expr_backend() -> None:
+    clip = core.std.BlankClip(format=vs.GRAYS, width=4, height=4, color=0.0)
+    with pytest.raises(vs.Error, match="tile_x must be -1 or >= 0"):
+        core.llvmexpr.Expr(clip, "x", tile_x=-2)
+    with pytest.raises(vs.Error, match="tile_y must be -1 or >= 0"):
+        core.llvmexpr.Expr(clip, "x", tile_y=-2)
+
+
+def test_tiling_matches_baseline_expr_backend(ramp_clip: vs.VideoNode) -> None:
+    expr = "x[-1,0] x[1,0] + X +"
+    baseline = core.llvmexpr.Expr(ramp_clip, expr, vs.GRAYS, tile_x=0, tile_y=0)
+    tiled = core.llvmexpr.Expr(ramp_clip, expr, vs.GRAYS, tile_x=8, tile_y=4)
+
+    f_baseline = baseline.get_frame(0)
+    f_tiled = tiled.get_frame(0)
+    for y in range(baseline.height):
+        for x in range(baseline.width):
+            assert f_tiled[0][y, x] == pytest.approx(f_baseline[0][y, x])
+
+
+@pytest.mark.parametrize("tile_x, tile_y", [(-1, 0), (0, -1), (-1, -1)])
+def test_auto_tiling_matches_baseline_expr_backend(
+    ramp_clip: vs.VideoNode, tile_x: int, tile_y: int
+) -> None:
+    expr = "x[-1,0] x[1,0] + X +"
+    baseline = core.llvmexpr.Expr(ramp_clip, expr, vs.GRAYS, tile_x=0, tile_y=0)
+    autotiled = core.llvmexpr.Expr(ramp_clip, expr, vs.GRAYS, tile_x=tile_x, tile_y=tile_y)
+
+    f_baseline = baseline.get_frame(0)
+    f_autotiled = autotiled.get_frame(0)
+    for y in range(baseline.height):
+        for x in range(baseline.width):
+            assert f_autotiled[0][y, x] == pytest.approx(f_baseline[0][y, x])
+
+
 subsampled_test_cases = [
     # Relative access within bounds
     pytest.param("x[0,-1]", 1, 1, 1.0, id="subsampled_rel_in_bounds"),

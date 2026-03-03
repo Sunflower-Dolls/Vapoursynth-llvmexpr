@@ -38,11 +38,12 @@ ExprIRGenerator::ExprIRGenerator(
     const analysis::ExpressionAnalysisResults& analysis_results_in,
     llvm::LLVMContext& context_ref, llvm::Module& module_ref,
     llvm::IRBuilder<>& builder_ref, MathLibraryManager& math_mgr,
-    std::string func_name_in, int approx_math_in)
+    std::string func_name_in, int approx_math_in, int tile_x_in, int tile_y_in)
     : IRGeneratorBase(tokens_in, out_vi, in_vi, width_in, height_in, mirror,
                       p_map, analysis_results_in, context_ref, module_ref,
                       builder_ref, math_mgr, std::move(func_name_in),
-                      approx_math_in) {}
+                      approx_math_in),
+      tile_x(tile_x_in), tile_y(tile_y_in) {}
 
 void ExprIRGenerator::defineFunctionSignature() {
     llvm::Type* void_ty = llvm::Type::getVoidTy(context);
@@ -78,18 +79,16 @@ void ExprIRGenerator::generateLoops() {
     builder.SetInsertPoint(entry_bb);
 
     llvm::Function* parent_func = builder.GetInsertBlock()->getParent();
-    llvm::BasicBlock* loop_y_header =
-        llvm::BasicBlock::Create(context, "loop_y_header", parent_func);
-    llvm::BasicBlock* loop_y_body =
-        llvm::BasicBlock::Create(context, "loop_y_body", parent_func);
-    llvm::BasicBlock* loop_y_exit =
-        llvm::BasicBlock::Create(context, "loop_y_exit", parent_func);
 
     llvm::Value* y_var =
         builder.CreateAlloca(builder.getInt32Ty(), nullptr, "y.var");
     llvm::Value* x_var =
         builder.CreateAlloca(builder.getInt32Ty(), nullptr, "x.var");
-    builder.CreateStore(builder.getInt32(0), y_var);
+    llvm::Value* y_tile_var =
+        builder.CreateAlloca(builder.getInt32Ty(), nullptr, "y_tile.var");
+    llvm::Value* x_tile_var =
+        builder.CreateAlloca(builder.getInt32Ty(), nullptr, "x_tile.var");
+    builder.CreateStore(builder.getInt32(0), y_tile_var);
 
     const auto& coord_usage = analysis_results.getCoordinateUsageResult();
 
@@ -150,20 +149,100 @@ void ExprIRGenerator::generateLoops() {
         noalias_scope_lists[i] = llvm::MDNode::get(context, others);
     }
 
-    builder.CreateBr(loop_y_header);
-
-    builder.SetInsertPoint(loop_y_header);
-    llvm::Value* y_val = builder.CreateLoad(builder.getInt32Ty(), y_var, "y");
-    llvm::Value* y_cond =
-        builder.CreateICmpSLT(y_val, builder.getInt32(height), "y.cond");
-    builder.CreateCondBr(y_cond, loop_y_body, loop_y_exit);
-
-    builder.SetInsertPoint(loop_y_body);
-
-    // Pre-calculate and cache row pointers
-    row_ptr_cache.clear();
     const auto& clip_access_result =
         analysis_results.getRelAccessAnalysisResult();
+
+    llvm::Value* width_val = builder.getInt32(width);
+    llvm::Value* height_val = builder.getInt32(height);
+    llvm::Value* start_main_x = builder.getInt32(-clip_access_result.min_rel_x);
+    llvm::Value* end_main_x =
+        builder.getInt32(width - clip_access_result.max_rel_x);
+
+    bool has_left_peel = // NOLINT(cppcoreguidelines-init-variables)
+        clip_access_result.min_rel_x < 0;
+    bool has_right_peel = // NOLINT(cppcoreguidelines-init-variables)
+        clip_access_result.max_rel_x > 0;
+
+    const int effective_tile_x = (tile_x <= 0) ? width : tile_x;
+    const int effective_tile_y = (tile_y <= 0) ? height : tile_y;
+
+    auto min_i32 = [&](llvm::Value* lhs, llvm::Value* rhs,
+                       const char* name) -> llvm::Value* {
+        llvm::Value* cond = builder.CreateICmpSLT(lhs, rhs);
+        return builder.CreateSelect(cond, lhs, rhs, name);
+    };
+
+    auto emit_x_range_loop = [&](llvm::Value* end_x, bool no_x_bounds_check,
+                                 const char* block_name_prefix) {
+        llvm::BasicBlock* header_bb = llvm::BasicBlock::Create(
+            context, std::format("{}_header", block_name_prefix), parent_func);
+        llvm::BasicBlock* body_bb = llvm::BasicBlock::Create(
+            context, std::format("{}_body", block_name_prefix), parent_func);
+        llvm::BasicBlock* exit_bb = llvm::BasicBlock::Create(
+            context, std::format("{}_exit", block_name_prefix), parent_func);
+
+        builder.CreateBr(header_bb);
+
+        builder.SetInsertPoint(header_bb);
+        llvm::Value* x_val =
+            builder.CreateLoad(builder.getInt32Ty(), x_var, "x_range");
+        llvm::Value* cond = builder.CreateICmpSLT(x_val, end_x);
+        llvm::BranchInst* range_br =
+            builder.CreateCondBr(cond, body_bb, exit_bb);
+        addLoopMetadata(range_br);
+
+        builder.SetInsertPoint(body_bb);
+        generate_x_loop_body(x_var, x_fp_var, y_var, y_fp_var,
+                             no_x_bounds_check);
+        builder.CreateBr(header_bb);
+
+        builder.SetInsertPoint(exit_bb);
+    };
+
+    llvm::BasicBlock* y_tile_header =
+        llvm::BasicBlock::Create(context, "y_tile_header", parent_func);
+    llvm::BasicBlock* y_tile_body =
+        llvm::BasicBlock::Create(context, "y_tile_body", parent_func);
+    llvm::BasicBlock* y_tile_exit =
+        llvm::BasicBlock::Create(context, "y_tile_exit", parent_func);
+
+    builder.CreateBr(y_tile_header);
+
+    builder.SetInsertPoint(y_tile_header);
+    llvm::Value* y_tile_val =
+        builder.CreateLoad(builder.getInt32Ty(), y_tile_var, "y_tile");
+    llvm::Value* y_tile_cond = builder.CreateICmpSLT(y_tile_val, height_val);
+    builder.CreateCondBr(y_tile_cond, y_tile_body, y_tile_exit);
+
+    builder.SetInsertPoint(y_tile_body);
+    llvm::Value* y_tile_next_unclamped =
+        builder.CreateAdd(y_tile_val, builder.getInt32(effective_tile_y));
+    llvm::Value* y_tile_end =
+        min_i32(y_tile_next_unclamped, height_val, "y_tile_end");
+    builder.CreateStore(y_tile_val, y_var);
+    if (coord_usage.uses_y) {
+        builder.CreateStore(
+            builder.CreateSIToFP(y_tile_val, builder.getFloatTy()), y_fp_var);
+    }
+
+    llvm::BasicBlock* row_header =
+        llvm::BasicBlock::Create(context, "row_header", parent_func);
+    llvm::BasicBlock* row_body =
+        llvm::BasicBlock::Create(context, "row_body", parent_func);
+    llvm::BasicBlock* row_exit =
+        llvm::BasicBlock::Create(context, "row_exit", parent_func);
+
+    builder.CreateBr(row_header);
+
+    builder.SetInsertPoint(row_header);
+    llvm::Value* y_val = builder.CreateLoad(builder.getInt32Ty(), y_var, "y");
+    llvm::Value* y_cond = builder.CreateICmpSLT(y_val, y_tile_end, "y.cond");
+    builder.CreateCondBr(y_cond, row_body, row_exit);
+
+    builder.SetInsertPoint(row_body);
+
+    // Pre-calculate and cache row pointers for this row.
+    row_ptr_cache.clear();
     for (const auto& access : clip_access_result.unique_rel_y_accesses) {
         int clip_idx = access.clip_idx;
         int vs_clip_idx = clip_idx + 1;
@@ -183,100 +262,54 @@ void ExprIRGenerator::generateLoops() {
         row_ptr_cache[access] = row_ptr;
     }
 
-    llvm::Value* width_val = builder.getInt32(width);
-    llvm::Value* start_main_x = builder.getInt32(-clip_access_result.min_rel_x);
-    llvm::Value* end_main_x =
-        builder.getInt32(width - clip_access_result.max_rel_x);
+    llvm::BasicBlock* x_tile_header =
+        llvm::BasicBlock::Create(context, "x_tile_header", parent_func);
+    llvm::BasicBlock* x_tile_body =
+        llvm::BasicBlock::Create(context, "x_tile_body", parent_func);
+    llvm::BasicBlock* x_tile_exit =
+        llvm::BasicBlock::Create(context, "x_tile_exit", parent_func);
 
-    bool has_left_peel = // NOLINT(cppcoreguidelines-init-variables)
-        clip_access_result.min_rel_x < 0;
-    bool has_right_peel = // NOLINT(cppcoreguidelines-init-variables)
-        clip_access_result.max_rel_x > 0;
+    builder.CreateStore(builder.getInt32(0), x_tile_var);
+    builder.CreateBr(x_tile_header);
 
-    llvm::BasicBlock* loop_x_start_bb =
-        llvm::BasicBlock::Create(context, "loop_x_start", parent_func);
-    llvm::BasicBlock* loop_x_exit_bb =
-        llvm::BasicBlock::Create(context, "loop_x_exit", parent_func);
+    builder.SetInsertPoint(x_tile_header);
+    llvm::Value* x_tile_val =
+        builder.CreateLoad(builder.getInt32Ty(), x_tile_var, "x_tile");
+    llvm::Value* x_tile_cond =
+        builder.CreateICmpSLT(x_tile_val, width_val, "x_tile.cond");
+    builder.CreateCondBr(x_tile_cond, x_tile_body, x_tile_exit);
 
-    builder.CreateBr(loop_x_start_bb);
-    builder.SetInsertPoint(loop_x_start_bb);
+    builder.SetInsertPoint(x_tile_body);
+    llvm::Value* x_tile_next_unclamped =
+        builder.CreateAdd(x_tile_val, builder.getInt32(effective_tile_x));
+    llvm::Value* x_tile_end =
+        min_i32(x_tile_next_unclamped, width_val, "x_tile_end");
 
-    builder.CreateStore(builder.getInt32(0), x_var);
+    builder.CreateStore(x_tile_val, x_var);
     if (coord_usage.uses_x) {
-        builder.CreateStore(llvm::ConstantFP::get(builder.getFloatTy(), 0.0),
-                            x_fp_var);
+        builder.CreateStore(
+            builder.CreateSIToFP(x_tile_val, builder.getFloatTy()), x_fp_var);
     }
 
     if (has_left_peel) {
-        llvm::BasicBlock* left_peel_header =
-            llvm::BasicBlock::Create(context, "left_peel_header", parent_func);
-        llvm::BasicBlock* left_peel_body =
-            llvm::BasicBlock::Create(context, "left_peel_body", parent_func);
-        llvm::BasicBlock* after_left_peel =
-            llvm::BasicBlock::Create(context, "after_left_peel", parent_func);
-
-        builder.CreateBr(left_peel_header);
-        builder.SetInsertPoint(left_peel_header);
-        llvm::Value* x_val =
-            builder.CreateLoad(builder.getInt32Ty(), x_var, "x_peel_l");
-        llvm::Value* cond = builder.CreateICmpSLT(x_val, start_main_x);
-        llvm::BranchInst* left_peel_br =
-            builder.CreateCondBr(cond, left_peel_body, after_left_peel);
-        addLoopMetadata(left_peel_br);
-
-        builder.SetInsertPoint(left_peel_body);
-        generate_x_loop_body(x_var, x_fp_var, y_var, y_fp_var, false);
-        builder.CreateBr(left_peel_header);
-
-        builder.SetInsertPoint(after_left_peel);
+        llvm::Value* left_end =
+            min_i32(x_tile_end, start_main_x, "left_peel_end");
+        emit_x_range_loop(left_end, false, "left_peel");
     }
 
-    llvm::BasicBlock* main_loop_header =
-        llvm::BasicBlock::Create(context, "main_loop_header", parent_func);
-    llvm::BasicBlock* main_loop_body =
-        llvm::BasicBlock::Create(context, "main_loop_body", parent_func);
-    llvm::BasicBlock* after_main_loop =
-        llvm::BasicBlock::Create(context, "after_main_loop", parent_func);
-
-    builder.CreateBr(main_loop_header);
-    builder.SetInsertPoint(main_loop_header);
-    llvm::Value* x_val_main =
-        builder.CreateLoad(builder.getInt32Ty(), x_var, "x_main");
-    llvm::Value* main_cond = builder.CreateICmpSLT(x_val_main, end_main_x);
-
-    llvm::BranchInst* loop_br =
-        builder.CreateCondBr(main_cond, main_loop_body, after_main_loop);
-    addLoopMetadata(loop_br);
-
-    builder.SetInsertPoint(main_loop_body);
-    generate_x_loop_body(x_var, x_fp_var, y_var, y_fp_var, true);
-    builder.CreateBr(main_loop_header);
-
-    builder.SetInsertPoint(after_main_loop);
+    llvm::Value* main_end = min_i32(x_tile_end, end_main_x, "main_end");
+    emit_x_range_loop(main_end, true, "main_loop");
 
     if (has_right_peel) {
-        llvm::BasicBlock* right_peel_header =
-            llvm::BasicBlock::Create(context, "right_peel_header", parent_func);
-        llvm::BasicBlock* right_peel_body =
-            llvm::BasicBlock::Create(context, "right_peel_body", parent_func);
-
-        builder.CreateBr(right_peel_header);
-        builder.SetInsertPoint(right_peel_header);
-        llvm::Value* x_val =
-            builder.CreateLoad(builder.getInt32Ty(), x_var, "x_peel_r");
-        llvm::Value* cond = builder.CreateICmpSLT(x_val, width_val);
-        llvm::BranchInst* right_peel_br =
-            builder.CreateCondBr(cond, right_peel_body, loop_x_exit_bb);
-        addLoopMetadata(right_peel_br);
-
-        builder.SetInsertPoint(right_peel_body);
-        generate_x_loop_body(x_var, x_fp_var, y_var, y_fp_var, false);
-        builder.CreateBr(right_peel_header);
-    } else {
-        builder.CreateBr(loop_x_exit_bb);
+        emit_x_range_loop(x_tile_end, false, "right_peel");
     }
 
-    builder.SetInsertPoint(loop_x_exit_bb);
+    llvm::Value* x_tile_next =
+        builder.CreateAdd(x_tile_val, builder.getInt32(effective_tile_x));
+    builder.CreateStore(x_tile_next, x_tile_var);
+    builder.CreateBr(x_tile_header);
+
+    builder.SetInsertPoint(x_tile_exit);
     llvm::Value* y_next = builder.CreateAdd(y_val, builder.getInt32(1));
     builder.CreateStore(y_next, y_var);
     if (coord_usage.uses_y) {
@@ -286,9 +319,15 @@ void ExprIRGenerator::generateLoops() {
             y_fp_val, llvm::ConstantFP::get(builder.getFloatTy(), 1.0));
         builder.CreateStore(y_fp_next, y_fp_var);
     }
-    builder.CreateBr(loop_y_header);
+    builder.CreateBr(row_header);
 
-    builder.SetInsertPoint(loop_y_exit);
+    builder.SetInsertPoint(row_exit);
+    llvm::Value* y_tile_next =
+        builder.CreateAdd(y_tile_val, builder.getInt32(effective_tile_y));
+    builder.CreateStore(y_tile_next, y_tile_var);
+    builder.CreateBr(y_tile_header);
+
+    builder.SetInsertPoint(y_tile_exit);
     builder.CreateRetVoid();
 }
 

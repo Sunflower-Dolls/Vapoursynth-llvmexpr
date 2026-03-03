@@ -81,13 +81,15 @@ Compiler::Compiler(
     const std::map<std::pair<int, std::string>, int>& p_map,
     std::string function_name, int opt_level_in, int approx_math_in,
     const analysis::ExpressionAnalysisResults& analysis_results_in,
-    ExprMode mode, const std::vector<std::string>& output_props)
+    int tile_x_in, int tile_y_in, ExprMode mode,
+    const std::vector<std::string>& output_props)
     : tokens(std::move(tokens_in)), vo(out_vi), vi(in_vi),
       num_inputs(static_cast<int>(in_vi.size())), width(width_in),
       height(height_in), mirror_boundary(mirror),
       dump_ir_path(std::move(dump_path)), prop_map(p_map),
       func_name(std::move(function_name)), opt_level(opt_level_in),
-      approx_math(approx_math_in), expr_mode(mode), output_props(output_props),
+      approx_math(approx_math_in), tile_x(tile_x_in), tile_y(tile_y_in),
+      expr_mode(mode), output_props(output_props),
       analysis_results(analysis_results_in) {}
 
 CompiledFunction Compiler::compile() {
@@ -141,7 +143,7 @@ CompiledFunction Compiler::compileWithApproxMath(int actual_approx_math) {
         ir_gen = std::make_unique<ExprIRGenerator>(
             tokens, vo, vi, width, height, mirror_boundary, prop_map,
             analysis_results, *context, *module, builder, math_manager,
-            func_name, actual_approx_math);
+            func_name, actual_approx_math, tile_x, tile_y);
     } else {
         ir_gen = std::make_unique<SingleExprIRGenerator>(
             tokens, vo, vi, mirror_boundary, prop_map, output_props,
@@ -276,10 +278,10 @@ CompiledFunction Compiler::compileWithApproxMath(int actual_approx_math) {
     // Handle vectorization fallback
     if (diagnostic_handler.hasVectorizationFailed() && approx_math == 2 &&
         actual_approx_math == 1) {
-        Compiler fallback_compiler(std::vector<Token>(tokens), vo, vi, width,
-                                   height, mirror_boundary, dump_ir_path,
-                                   prop_map, func_name, opt_level, approx_math,
-                                   analysis_results, expr_mode, output_props);
+        Compiler fallback_compiler(
+            std::vector<Token>(tokens), vo, vi, width, height, mirror_boundary,
+            dump_ir_path, prop_map, func_name, opt_level, approx_math,
+            analysis_results, tile_x, tile_y, expr_mode, output_props);
         return fallback_compiler.compileWithApproxMath(0);
     }
 

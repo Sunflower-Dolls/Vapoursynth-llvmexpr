@@ -32,7 +32,8 @@ class ExprIRGenerator : public IRGeneratorBase {
         const analysis::ExpressionAnalysisResults& analysis_results_in,
         llvm::LLVMContext& context_ref, llvm::Module& module_ref,
         llvm::IRBuilder<>& builder_ref, MathLibraryManager& math_mgr,
-        std::string func_name_in, int approx_math_in);
+        std::string func_name_in, int approx_math_in, int tile_x_in,
+        int tile_y_in);
 
   protected:
     void defineFunctionSignature() override;
@@ -51,6 +52,9 @@ class ExprIRGenerator : public IRGeneratorBase {
     void generate_x_loop_body(llvm::Value* x_var, llvm::Value* x_fp_var,
                               llvm::Value* y_var, llvm::Value* y_fp_var,
                               bool no_x_bounds_check);
+
+    int tile_x;
+    int tile_y;
 
     // Arrays
     std::map<std::string, llvm::Value*> named_arrays;

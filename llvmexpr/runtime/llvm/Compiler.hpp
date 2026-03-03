@@ -38,6 +38,7 @@ class Compiler {
              const std::map<std::pair<int, std::string>, int>& p_map,
              std::string function_name, int opt_level_in, int approx_math_in,
              const analysis::ExpressionAnalysisResults& analysis_results_in,
+             int tile_x_in = 0, int tile_y_in = 0,
              ExprMode mode = ExprMode::Expr,
              const std::vector<std::string>& output_props = {});
 
@@ -56,6 +57,8 @@ class Compiler {
     std::string func_name;
     int opt_level;
     int approx_math;
+    int tile_x;
+    int tile_y;
     ExprMode expr_mode;
     const std::vector<std::string>& output_props;
 

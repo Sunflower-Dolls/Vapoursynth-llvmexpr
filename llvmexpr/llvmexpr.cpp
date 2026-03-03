@@ -19,16 +19,19 @@
 
 #include <array>
 #include <bit>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <format>
 #include <fstream>
+#include <limits>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -74,6 +77,8 @@ struct ExprData : BaseExprData {
     std::array<CompiledFunction, 3> compiled;
     std::array<std::vector<Token>, 3> tokens;
     std::array<std::unique_ptr<analysis::AnalysisManager>, 3> analysis_managers;
+    int tile_x = 0;
+    int tile_y = 0;
 };
 
 struct SingleExprData : BaseExprData {
@@ -93,6 +98,9 @@ struct SingleExprFrameData {
 
 thread_local SingleExprFrameData
     g_frame_data; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+
+std::unordered_map<std::string, std::pair<int, int>> expr_autotune_cache;
+std::mutex expr_autotune_cache_mutex;
 
 template <bool check_dimensions>
 void validate_and_init_clips(BaseExprData* d, const VSMap* in,
@@ -183,6 +191,27 @@ void parse_common_params(BaseExprData* d, const VSMap* in, const VSAPI* vsapi) {
     }
 }
 
+void parse_expr_tiling_params(ExprData* d, const VSMap* in,
+                              const VSAPI* vsapi) {
+    int err = 0;
+    d->tile_x = static_cast<int>(vsapi->mapGetInt(in, "tile_x", 0, &err));
+    if (err != 0) {
+        d->tile_x = -1;
+    }
+
+    d->tile_y = static_cast<int>(vsapi->mapGetInt(in, "tile_y", 0, &err));
+    if (err != 0) {
+        d->tile_y = -1;
+    }
+
+    if (d->tile_x < -1) {
+        throw std::runtime_error("tile_x must be -1 or >= 0.");
+    }
+    if (d->tile_y < -1) {
+        throw std::runtime_error("tile_y must be -1 or >= 0.");
+    }
+}
+
 void read_frame_properties(
     std::vector<float>& props, const std::vector<const VSFrame*>& src_frames,
     const std::vector<std::pair<int, std::string>>& required_props, int n,
@@ -241,7 +270,8 @@ std::string generate_cache_key(
     const std::string& expr, const VSVideoInfo* vo, const VSAPI* vsapi,
     const std::vector<const VSVideoInfo*>& vi, bool mirror,
     const std::map<std::pair<int, std::string>, int>& prop_map, int plane_width,
-    int plane_height, const std::vector<std::string>& output_props = {}) {
+    int plane_height, const std::vector<std::string>& output_props = {},
+    int tile_x = 0, int tile_y = 0) {
     auto get_vf_name = [&](const VSVideoFormat* vf) {
         std::array<char, 32> // NOLINT(cppcoreguidelines-avoid-magic-numbers)
             vf_name_buffer{};
@@ -265,6 +295,8 @@ std::string generate_cache_key(
     for (const auto& prop : output_props) {
         result += std::format("|out_prop={}", prop);
     }
+
+    result += std::format("|tile_x={}|tile_y={}", tile_x, tile_y);
 
     return result;
 }
@@ -333,37 +365,152 @@ const VSFrame*
                         expr_str += token.text;
                     }
 
-                    const std::string key = generate_cache_key(
-                        expr_str, &d->vi, vsapi, vi, d->mirror_boundary,
-                        d->prop_map, width, height);
+                    auto get_or_compile = [&](int resolved_tile_x,
+                                              int resolved_tile_y) {
+                        const std::string key = generate_cache_key(
+                            expr_str, &d->vi, vsapi, vi, d->mirror_boundary,
+                            d->prop_map, width, height, {}, resolved_tile_x,
+                            resolved_tile_y);
 
-                    std::lock_guard<std::mutex> lock(cache_mutex);
-                    if (!jit_cache.contains(key)) {
-                        size_t key_hash = std::hash<std::string>{}(key);
-                        std::string func_name =
-                            std::format("process_plane_{}_{}", plane, key_hash);
+                        std::lock_guard<std::mutex> lock(cache_mutex);
+                        if (!jit_cache.contains(key)) {
+                            size_t key_hash = std::hash<std::string>{}(key);
+                            std::string func_name = std::format(
+                                "process_plane_{}_{}", plane, key_hash);
 
-                        try {
-                            analysis::ExpressionAnalysisResults results(
-                                *d->analysis_managers.at(plane));
-                            Compiler compiler(
-                                std::vector<Token>(d->tokens.at(plane)), &d->vi,
-                                vi, width, height, d->mirror_boundary,
-                                d->dump_ir_path, d->prop_map, func_name,
-                                d->opt_level, d->approx_math, results);
-                            jit_cache[key] = compiler.compile();
-                        } catch (const std::exception& e) {
-                            std::string error_msg = std::format(
-                                "Compilation error for plane {}: {}", plane,
-                                e.what());
-                            for (const auto& frame : src_frames) {
-                                vsapi->freeFrame(frame);
+                            try {
+                                analysis::ExpressionAnalysisResults results(
+                                    *d->analysis_managers.at(plane));
+                                Compiler compiler(
+                                    std::vector<Token>(d->tokens.at(plane)),
+                                    &d->vi, vi, width, height,
+                                    d->mirror_boundary, d->dump_ir_path,
+                                    d->prop_map, func_name, d->opt_level,
+                                    d->approx_math, results, resolved_tile_x,
+                                    resolved_tile_y);
+                                jit_cache[key] = compiler.compile();
+                            } catch (...) {
+                                for (const auto& frame : src_frames) {
+                                    vsapi->freeFrame(frame);
+                                }
+                                vsapi->freeFrame(dst_frame);
+                                throw;
                             }
-                            vsapi->freeFrame(dst_frame);
-                            throw;
+                        }
+                        return jit_cache.at(key);
+                    };
+
+                    const bool auto_tile_x = d->tile_x == -1;
+                    const bool auto_tile_y = d->tile_y == -1;
+
+                    if (!auto_tile_x && !auto_tile_y) {
+                        d->compiled.at(plane) =
+                            get_or_compile(d->tile_x, d->tile_y);
+                    } else {
+                        const std::string autotune_key = generate_cache_key(
+                            expr_str, &d->vi, vsapi, vi, d->mirror_boundary,
+                            d->prop_map, width, height, {}, d->tile_x,
+                            d->tile_y);
+
+                        int best_tile_x = 0;
+                        int best_tile_y = 0;
+                        bool has_autotuned = false;
+                        {
+                            std::lock_guard<std::mutex> lock(
+                                expr_autotune_cache_mutex);
+                            auto it = expr_autotune_cache.find(autotune_key);
+                            if (it != expr_autotune_cache.end()) {
+                                best_tile_x = it->second.first;
+                                best_tile_y = it->second.second;
+                                has_autotuned = true;
+                            }
+                        }
+
+                        if (!has_autotuned) {
+                            constexpr std::array<int, 8> AUTO_TILE_CANDIDATES = {
+                                1,  4,   8,  16, 32,
+                                64, 128, 256}; // NOLINT(cppcoreguidelines-avoid-magic-numbers)
+
+                            std::vector<std::pair<int, int>> candidates;
+                            if (auto_tile_x && auto_tile_y) {
+                                candidates.reserve(AUTO_TILE_CANDIDATES.size() *
+                                                   AUTO_TILE_CANDIDATES.size());
+                                for (int tx : AUTO_TILE_CANDIDATES) {
+                                    for (int ty : AUTO_TILE_CANDIDATES) {
+                                        candidates.emplace_back(tx, ty);
+                                    }
+                                }
+                            } else if (auto_tile_x) {
+                                candidates.reserve(AUTO_TILE_CANDIDATES.size());
+                                for (int tx : AUTO_TILE_CANDIDATES) {
+                                    candidates.emplace_back(tx, d->tile_y);
+                                }
+                            } else {
+                                candidates.reserve(AUTO_TILE_CANDIDATES.size());
+                                for (int ty : AUTO_TILE_CANDIDATES) {
+                                    candidates.emplace_back(d->tile_x, ty);
+                                }
+                            }
+
+                            double best_time_ns =
+                                std::numeric_limits<double>::max();
+                            CompiledFunction best_compiled;
+
+                            for (const auto& [candidate_tile_x,
+                                              candidate_tile_y] : candidates) {
+                                CompiledFunction candidate = get_or_compile(
+                                    candidate_tile_x, candidate_tile_y);
+
+                                // Warm-up once before measuring.
+                                candidate.func_ptr(nullptr, rwptrs.data(),
+                                                   strides.data(),
+                                                   props.data());
+
+                                constexpr int MEASURED_RUNS =
+                                    2; // NOLINT(cppcoreguidelines-avoid-magic-numbers)
+                                const auto start =
+                                    std::chrono::steady_clock::now();
+                                for (int run = 0; run < MEASURED_RUNS; ++run) {
+                                    candidate.func_ptr(nullptr, rwptrs.data(),
+                                                       strides.data(),
+                                                       props.data());
+                                }
+                                const auto end =
+                                    std::chrono::steady_clock::now();
+
+                                const double avg_time_ns =
+                                    static_cast<double>(
+                                        std::chrono::duration_cast<
+                                            std::chrono::nanoseconds>(end -
+                                                                      start)
+                                            .count()) /
+                                    static_cast<double>(MEASURED_RUNS);
+                                if (avg_time_ns < best_time_ns) {
+                                    best_time_ns = avg_time_ns;
+                                    best_tile_x = candidate_tile_x;
+                                    best_tile_y = candidate_tile_y;
+                                    best_compiled = candidate;
+                                }
+                            }
+
+                            if (best_compiled.func_ptr == nullptr) {
+                                throw std::runtime_error(
+                                    "Auto tile benchmark failed to select a "
+                                    "candidate.");
+                            }
+
+                            {
+                                std::lock_guard<std::mutex> lock(
+                                    expr_autotune_cache_mutex);
+                                expr_autotune_cache[autotune_key] = {
+                                    best_tile_x, best_tile_y};
+                            }
+                            d->compiled.at(plane) = best_compiled;
+                        } else {
+                            d->compiled.at(plane) =
+                                get_or_compile(best_tile_x, best_tile_y);
                         }
                     }
-                    d->compiled.at(plane) = jit_cache.at(key);
                 }
 
                 d->compiled.at(plane).func_ptr(nullptr, rwptrs.data(),
@@ -491,6 +638,7 @@ exprCreate(const VSMap* in, VSMap* out, [[maybe_unused]] void* userData,
         }
 
         parse_common_params(d.get(), in, vsapi);
+        parse_expr_tiling_params(d.get(), in, vsapi);
 
     } catch (const std::exception& e) {
         for (auto* node : d->nodes) {
@@ -616,7 +764,7 @@ const VSFrame*
                         std::vector<Token>(d->tokens), &d->vi, vi, d->vi.width,
                         d->vi.height, d->mirror_boundary, d->dump_ir_path,
                         d->prop_map, func_name, d->opt_level, d->approx_math,
-                        results, ExprMode::SingleExpr, output_prop_names);
+                        results, 0, 0, ExprMode::SingleExpr, output_prop_names);
                     jit_cache[key] = compiler.compile();
                 } catch (const std::exception& e) {
                     for (const auto& frame : src_frames) {
@@ -1202,7 +1350,8 @@ VapourSynthPluginInit2(VSPlugin* plugin, const VSPLUGINAPI* vspapi) {
     vspapi->registerFunction(
         "Expr",
         "clips:vnode[];expr:data[];format:int:opt;boundary:int:opt;"
-        "dump_ir:data:opt;opt_level:int:opt;approx_math:int:opt;infix:int:opt;",
+        "dump_ir:data:opt;opt_level:int:opt;approx_math:int:opt;infix:int:opt;"
+        "tile_x:int:opt;tile_y:int:opt;",
         "clip:vnode;", exprCreate, nullptr, plugin);
     vspapi->registerFunction("SingleExpr",
                              "clips:vnode[];expr:data;format:int:opt;boundary:"
