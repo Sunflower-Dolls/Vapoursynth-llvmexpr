@@ -255,10 +255,11 @@ def test_large_sort(backend: str, n: int, numbers: list[float]) -> None:
     expr_func = get_expr_func(backend)
     c0 = core.std.BlankClip(format=vs.GRAYS, color=0.0)
     expr = " ".join(map(str, numbers)) + f" sort{n}"
+    expr_kwargs = {"tile_x": 0, "tile_y": 0} if backend == "Expr" else {}
 
     for i in range(n):
         full_expr = expr + f" drop{n - i - 1} a! drop{i} a@"
-        res = expr_func(c0, full_expr, vs.GRAYS)
+        res = expr_func(c0, full_expr, vs.GRAYS, **expr_kwargs)
         val = res.get_frame(0)[0][0, 0]
         assert val == pytest.approx(sorted(numbers)[n - 1 - i])
 
@@ -554,7 +555,9 @@ def test_auto_tiling_matches_baseline_expr_backend(
 ) -> None:
     expr = "x[-1,0] x[1,0] + X +"
     baseline = core.llvmexpr.Expr(ramp_clip, expr, vs.GRAYS, tile_x=0, tile_y=0)
-    autotiled = core.llvmexpr.Expr(ramp_clip, expr, vs.GRAYS, tile_x=tile_x, tile_y=tile_y)
+    autotiled = core.llvmexpr.Expr(
+        ramp_clip, expr, vs.GRAYS, tile_x=tile_x, tile_y=tile_y
+    )
 
     f_baseline = baseline.get_frame(0)
     f_autotiled = autotiled.get_frame(0)
