@@ -30,10 +30,12 @@ class GitHubApi:
             raise ValueError(f"Invalid repo '{repo}'. Expected owner/repo format.")
         self.repo = repo
         self.base = f"https://api.github.com/repos/{repo}"
+        self._token = token
         self.headers = {
-            "Accept": "application/vnd.github+json",
-            "Authorization": f"Bearer {token}",
-            "X-GitHub-Api-Version": "2022-11-28",
+          "Accept": "application/vnd.github+json",
+          "Authorization": f"Bearer {token}",
+          "X-GitHub-Api-Version": "2022-11-28",
+          "User-Agent": "benchmark-history-report",
         }
 
     def _request_json(self, url: str) -> dict[str, Any]:
@@ -45,6 +47,60 @@ class GitHubApi:
         request = urllib.request.Request(url=url, headers=self.headers)
         with urllib.request.urlopen(request) as response:
             return response.read()
+
+    @staticmethod
+    def _is_github_owned_host(hostname: str) -> bool:
+        hostname = hostname.lower().strip(".")
+        return hostname.endswith("github.com") or hostname.endswith(
+            "githubusercontent.com"
+        )
+
+    def _request_bytes_follow_redirects(self, url: str) -> bytes:
+        class _NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, req, fp, code, msg, hdrs, newurl):
+                return None
+
+        opener = urllib.request.build_opener(_NoRedirect())
+        request = urllib.request.Request(url=url, headers=self.headers)
+
+        try:
+            with opener.open(request) as response:
+                return response.read()
+        except urllib.error.HTTPError as exc:
+            if exc.code not in (301, 302, 303, 307, 308):
+                raise
+
+            location = exc.headers.get("Location")
+            if not location:
+                raise
+
+            redirect_url = urllib.parse.urljoin(url, location)
+            redirect_host = urllib.parse.urlparse(redirect_url).hostname or ""
+
+            attempts: list[dict[str, str]] = [
+                {
+                    "User-Agent": self.headers["User-Agent"],
+                }
+            ]
+            if self._is_github_owned_host(redirect_host):
+                attempts.append(self.headers)
+
+            last_exc: Exception | None = None
+            for headers in attempts:
+                try:
+                    follow_request = urllib.request.Request(
+                        url=redirect_url, headers=headers
+                    )
+                    with urllib.request.urlopen(follow_request) as response:
+                        return response.read()
+                except urllib.error.HTTPError as follow_exc:
+                    last_exc = follow_exc
+                    if follow_exc.code not in (401, 403):
+                        raise
+
+            if last_exc:
+                raise last_exc
+            raise
 
     def list_workflow_runs(
         self,
@@ -105,7 +161,7 @@ class GitHubApi:
 
     def download_artifact_json(self, url: str) -> dict[str, Any] | None:
         try:
-            artifact_zip = self._request_bytes(url)
+            artifact_zip = self._request_bytes_follow_redirects(url)
         except urllib.error.HTTPError as exc:
             print(
                 f"Warning: failed to download artifact: HTTP {exc.code}",
