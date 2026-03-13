@@ -53,6 +53,25 @@ def test_pixel_read_write():
     assert frame[0][40, 30] == 30
 
 
+def test_yuv420_plane0_pixel_read_not_subsampled():
+    """Test that luma plane reads are not accidentally subsampled."""
+    clip = core.std.BlankClip(
+        format=vs.YUV420P8, width=16, height=16, color=[0, 128, 128]
+    )
+
+    def modify_frame(n, f):
+        fout = f.copy()
+        luma = np.asarray(fout[0])
+        luma[:] = np.arange(luma.shape[1], dtype=luma.dtype)[None, :]
+        return fout
+
+    clip = core.std.ModifyFrame(clip, clip, modify_frame)
+
+    res = core.llvmexpr.SingleExpr(clip, "15 0 src0^0[] ReadVal$")
+    frame = res.get_frame(0)
+    assert frame.props["ReadVal"] == pytest.approx(15.0)
+
+
 def test_property_write():
     """Test writing a value to a frame property."""
     clip = core.std.BlankClip()
@@ -450,6 +469,21 @@ def test_multi_clip_different_dimensions():
     assert frame.props["Sum"] == 30
     assert res.width == 100
     assert res.height == 100
+
+
+def test_single_expr_cache_key_includes_input_dimensions():
+    """Test that JIT cache includes secondary input dimensions."""
+    clip0 = core.std.BlankClip(width=64, height=64, format=vs.GRAY8, color=0)
+    clip1_big = core.std.BlankClip(width=200, height=200, format=vs.GRAY8, color=0)
+    clip1_small = core.std.BlankClip(width=150, height=150, format=vs.GRAY8, color=0)
+
+    expr = "y:width CacheKeyW$"
+
+    res_big = core.llvmexpr.SingleExpr([clip0, clip1_big], expr)
+    assert res_big.get_frame(0).props["CacheKeyW"] == pytest.approx(200.0)
+
+    res_small = core.llvmexpr.SingleExpr([clip0, clip1_small], expr)
+    assert res_small.get_frame(0).props["CacheKeyW"] == pytest.approx(150.0)
 
 
 def test_clip_dimensions_tokens():

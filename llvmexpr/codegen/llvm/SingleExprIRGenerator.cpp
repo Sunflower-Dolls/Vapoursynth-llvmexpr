@@ -180,8 +180,14 @@ llvm::Value* SingleExprIRGenerator::generatePixelLoadPlane(int clip_idx,
                                                            llvm::Value* x,
                                                            llvm::Value* y) {
     const VSVideoInfo* vinfo = vi[clip_idx];
-    int plane_w = vinfo->width >> vinfo->format.subSamplingW;
-    int plane_h = vinfo->height >> vinfo->format.subSamplingH;
+    const VSVideoFormat& format = vinfo->format;
+
+    int plane_w = vinfo->width;
+    int plane_h = vinfo->height;
+    if (format.colorFamily == cfYUV && plane_idx > 0) {
+        plane_w >>= format.subSamplingW;
+        plane_h >>= format.subSamplingH;
+    }
 
     llvm::Value* final_x =
         getFinalCoord(x, builder.getInt32(plane_w), mirror_boundary);
@@ -195,7 +201,6 @@ llvm::Value* SingleExprIRGenerator::generatePixelLoadPlane(int clip_idx,
     llvm::Value* row_ptr =
         builder.CreateGEP(builder.getInt8Ty(), base_ptr, y_offset);
 
-    const VSVideoFormat& format = vinfo->format;
     int bpp = format.bytesPerSample;
 
     llvm::Value* x_offset = builder.CreateMul(final_x, builder.getInt32(bpp));

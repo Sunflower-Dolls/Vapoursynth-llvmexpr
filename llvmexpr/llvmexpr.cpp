@@ -271,7 +271,7 @@ std::string generate_cache_key(
     const std::vector<const VSVideoInfo*>& vi, bool mirror,
     const std::map<std::pair<int, std::string>, int>& prop_map, int plane_width,
     int plane_height, const std::vector<std::string>& output_props = {},
-    int tile_x = 0, int tile_y = 0) {
+    int tile_x = 0, int tile_y = 0, int opt_level = 0, int approx_math = 0) {
     auto get_vf_name = [&](const VSVideoFormat* vf) {
         std::array<char, 32> // NOLINT(cppcoreguidelines-avoid-magic-numbers)
             vf_name_buffer{};
@@ -285,7 +285,9 @@ std::string generate_cache_key(
                     get_vf_name(&vo->format), plane_width, plane_height);
 
     for (size_t i = 0; i < vi.size(); ++i) {
-        result += std::format("|in{}={}", i, get_vf_name(&vi[i]->format));
+        result += std::format("|in{}={}|in{}_w={}|in{}_h={}", i,
+                              get_vf_name(&vi[i]->format), i, vi[i]->width, i,
+                              vi[i]->height);
     }
 
     for (const auto& [key, val] : prop_map) {
@@ -297,6 +299,8 @@ std::string generate_cache_key(
     }
 
     result += std::format("|tile_x={}|tile_y={}", tile_x, tile_y);
+    result +=
+        std::format("|opt_level={}|approx_math={}", opt_level, approx_math);
 
     return result;
 }
@@ -370,7 +374,7 @@ const VSFrame*
                         const std::string key = generate_cache_key(
                             expr_str, &d->vi, vsapi, vi, d->mirror_boundary,
                             d->prop_map, width, height, {}, resolved_tile_x,
-                            resolved_tile_y);
+                            resolved_tile_y, d->opt_level, d->approx_math);
 
                         std::lock_guard<std::mutex> lock(cache_mutex);
                         if (!jit_cache.contains(key)) {
@@ -410,7 +414,7 @@ const VSFrame*
                         const std::string autotune_key = generate_cache_key(
                             expr_str, &d->vi, vsapi, vi, d->mirror_boundary,
                             d->prop_map, width, height, {}, d->tile_x,
-                            d->tile_y);
+                            d->tile_y, d->opt_level, d->approx_math);
 
                         int best_tile_x = 0;
                         int best_tile_y = 0;
@@ -749,7 +753,8 @@ const VSFrame*
 
             const std::string key = generate_cache_key(
                 expr_str, &d->vi, vsapi, vi, d->mirror_boundary, d->prop_map,
-                d->vi.width, d->vi.height, output_prop_names);
+                d->vi.width, d->vi.height, output_prop_names, 0, 0,
+                d->opt_level, d->approx_math);
 
             std::lock_guard<std::mutex> lock(cache_mutex);
             if (!jit_cache.contains(key)) {
