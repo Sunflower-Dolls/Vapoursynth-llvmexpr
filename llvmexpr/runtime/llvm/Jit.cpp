@@ -94,7 +94,9 @@ OrcJit::OrcJit(bool no_nans_fp_math) {
 
     llvm::TargetOptions opts;
     opts.AllowFPOpFusion = llvm::FPOpFusion::Fast;
+#if LLVM_VERSION_MAJOR < 22
     opts.UnsafeFPMath = true;
+#endif
     opts.NoInfsFPMath = true;
     opts.NoNaNsFPMath = no_nans_fp_math;
     jtmb.setOptions(opts);
