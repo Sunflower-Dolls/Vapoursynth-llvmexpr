@@ -90,6 +90,7 @@ class CodeGenerator {
     void checkStackEffect(const std::string& s, int expected,
                           const Range& range);
     int computeStackEffect(const std::string& s, const Range& range);
+    Expr* resolveParamSubstitution(Expr* expr) const;
 
     void inlineFunctionCall(const FunctionSignature& sig, FunctionDef* func_def,
                             const std::vector<std::unique_ptr<Expr>>& args,

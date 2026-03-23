@@ -765,6 +765,60 @@ RESULT = test_function(10, $src0, $x)
         assert "$" not in output
         assert "a[]" not in output
 
+    def test_nested_clip_param_substitution_same_name(self):
+        """Test nested Clip parameter substitution when parameter names match."""
+        infix = """
+function fn1(Value a, Clip b) {
+    return a + fn2(b)
+}
+function fn2(Clip b) {
+    return b
+}
+RESULT = fn1(5, $x)
+"""
+        success, output = run_infix2postfix(infix, "expr")
+        assert success, f"Failed to convert: {output}"
+        assert (
+            output.strip()
+            == "5 __internal_func_fn1_0_a! __internal_func_fn1_0_a@ x __internal_ret_fn2_1! 1 __internal_ret_label_fn2_1# #__internal_ret_label_fn2_1 __internal_ret_fn2_1@ + __internal_ret_fn1_0! 1 __internal_ret_label_fn1_0# #__internal_ret_label_fn1_0 __internal_ret_fn1_0@ RESULT! RESULT@"
+        )
+
+    def test_nested_clip_param_substitution_different_name(self):
+        """Test nested Clip parameter substitution when parameter names differ."""
+        infix = """
+function fn1(Value a, Clip b) {
+    return a + fn2(b)
+}
+function fn2(Clip c) {
+    return c
+}
+RESULT = fn1(5, $x)
+"""
+        success, output = run_infix2postfix(infix, "expr")
+        assert success, f"Failed to convert: {output}"
+        assert (
+            output.strip()
+            == "5 __internal_func_fn1_0_a! __internal_func_fn1_0_a@ x __internal_ret_fn2_1! 1 __internal_ret_label_fn2_1# #__internal_ret_label_fn2_1 __internal_ret_fn2_1@ + __internal_ret_fn1_0! 1 __internal_ret_label_fn1_0# #__internal_ret_label_fn1_0 __internal_ret_fn1_0@ RESULT! RESULT@"
+        )
+
+    def test_nested_value_argument_uses_outer_clip_substitution(self):
+        """Test nested Value arguments still see outer Clip substitutions."""
+        infix = """
+function fn1(Clip b) {
+    return fn2(b)
+}
+function fn2(Value v) {
+    return v
+}
+RESULT = fn1($x)
+"""
+        success, output = run_infix2postfix(infix, "expr")
+        assert success, f"Failed to convert: {output}"
+        assert (
+            output.strip()
+            == "x __internal_func_fn2_1_v! __internal_func_fn2_1_v@ __internal_ret_fn2_1! 1 __internal_ret_label_fn2_1# #__internal_ret_label_fn2_1 __internal_ret_fn2_1@ __internal_ret_fn1_0! 1 __internal_ret_label_fn1_0# #__internal_ret_label_fn1_0 __internal_ret_fn1_0@ RESULT! RESULT@"
+        )
+
     def test_nth_N_function(self):
         """Test nth_N function."""
         infix = """

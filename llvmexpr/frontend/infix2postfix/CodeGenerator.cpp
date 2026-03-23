@@ -518,6 +518,31 @@ int CodeGenerator::computeStackEffect(const std::string& s,
     }
 }
 
+Expr* CodeGenerator::resolveParamSubstitution(Expr* expr) const {
+    Expr* resolved = expr;
+    std::set<const Expr*> seen;
+
+    while (resolved != nullptr) {
+        auto* var_expr = get_if<VariableExpr>(resolved);
+        if (var_expr == nullptr) {
+            break;
+        }
+
+        auto it = param_substitutions.find(var_expr->name.value);
+        if (it == param_substitutions.end() || it->second == nullptr) {
+            break;
+        }
+
+        if (!seen.insert(resolved).second || it->second == resolved) {
+            break;
+        }
+
+        resolved = it->second;
+    }
+
+    return resolved;
+}
+
 void CodeGenerator::inlineFunctionCall(
     const FunctionSignature& sig, FunctionDef* func_def,
     const std::vector<std::unique_ptr<Expr>>& args,
@@ -532,7 +557,7 @@ void CodeGenerator::inlineFunctionCall(
     auto saved_var_rename_map = var_rename_map;
     const auto* saved_current_function = current_function;
 
-    param_substitutions.clear();
+    std::map<std::string, Expr*> next_param_substitutions;
     std::map<std::string, std::string> param_map;
 
     PostfixBuilder param_assignments;
@@ -545,7 +570,8 @@ void CodeGenerator::inlineFunctionCall(
         auto* arg_expr = args[i].get();
 
         if (param_type == Type::Literal || param_type == Type::Clip) {
-            param_substitutions[param_name] = arg_expr;
+            next_param_substitutions[param_name] =
+                resolveParamSubstitution(arg_expr);
         } else if (param_type == Type::Array) {
             auto* var_expr = get_if<VariableExpr>(arg_expr);
             if (var_expr != nullptr) {
@@ -607,6 +633,7 @@ void CodeGenerator::inlineFunctionCall(
     }
 
     // Update context for function body generation
+    param_substitutions = std::move(next_param_substitutions);
     var_rename_map = param_map;
     current_function = &sig;
 
