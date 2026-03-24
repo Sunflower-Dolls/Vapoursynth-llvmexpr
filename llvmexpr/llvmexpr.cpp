@@ -1,18 +1,18 @@
 /**
  * Copyright (C) 2025 yuygfgg
- * 
+ *
  * This file is part of Vapoursynth-llvmexpr.
- * 
+ *
  * Vapoursynth-llvmexpr is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
- * 
+ *
  * Vapoursynth-llvmexpr is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with Vapoursynth-llvmexpr.  If not, see <https://www.gnu.org/licenses/>.
  */
@@ -1351,7 +1351,7 @@ VapourSynthPluginInit2(VSPlugin* plugin, const VSPLUGINAPI* vspapi) {
     // NOLINTEND(readability-identifier-naming)
     vspapi->configPlugin(
         "com.yuygfgg.llvmexpr", "llvmexpr", "LLVM JIT RPN Expression Filter",
-        VS_MAKE_VERSION(4, 3), VAPOURSYNTH_API_VERSION, 0, plugin);
+        VS_MAKE_VERSION(4, 4), VAPOURSYNTH_API_VERSION, 0, plugin);
     vspapi->registerFunction(
         "Expr",
         "clips:vnode[];expr:data[];format:int:opt;boundary:int:opt;"
