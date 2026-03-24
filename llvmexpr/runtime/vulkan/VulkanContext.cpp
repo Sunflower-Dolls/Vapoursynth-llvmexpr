@@ -232,9 +232,11 @@ void VulkanContext::createDevice() {
         device_extensions.push_back("VK_KHR_portability_subset");
     }
 
-    vk::DeviceCreateInfo create_info({}, queue_create_info,
-                                     {}, // layers deprecated
-                                     device_extensions);
+    vk::DeviceCreateInfo create_info(
+        {}, 1, &queue_create_info,
+        0, nullptr, // layers deprecated
+        static_cast<uint32_t>(device_extensions.size()),
+        device_extensions.empty() ? nullptr : device_extensions.data());
 
     device = vk::raii::Device(physical_device, create_info);
 
