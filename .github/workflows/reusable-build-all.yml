@@ -20,6 +20,7 @@ jobs:
   build:
     runs-on: ${{ inputs.os }}
     env:
+      BASE_ARTIFACT_NAME: ${{ inputs.artifact_name }}
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       PIP_CACHE_DIR: ${{ github.workspace }}/.pip-cache
 
@@ -276,36 +277,72 @@ jobs:
           llvm-config --version
           pkg-config --version
 
-      - name: Check LLVM version (>= 21) (Windows)
+      - name: Detect LLVM version and resolve artifact name (Windows)
+        id: llvm_meta_windows
         if: runner.os == 'Windows'
         shell: msys2 {0}
         run: |
           set -e
-          ver=$(llvm-config --version | cut -d. -f1)
+          llvm_version=$(llvm-config --version)
+          ver=${llvm_version%%.*}
           if [ "$ver" -lt 21 ]; then
-            echo "LLVM >= 21 is required, found: $(llvm-config --version)" >&2
+            echo "LLVM >= 21 is required, found: $llvm_version" >&2
             exit 1
           fi
-      - name: Check LLVM version (>= 21) (Unix)
+          artifact_name="$BASE_ARTIFACT_NAME"
+          if printf '%s\n' "$artifact_name" | grep -Eq 'llvm[0-9]+'; then
+            artifact_name=$(printf '%s\n' "$artifact_name" | sed -E "s/llvm[0-9]+/llvm${ver}/")
+          elif printf '%s\n' "$artifact_name" | grep -Eq -- '-static-shaderc$'; then
+            artifact_name=$(printf '%s\n' "$artifact_name" | sed -E "s/-static-shaderc$/-llvm${ver}-static-shaderc/")
+          else
+            artifact_name="${artifact_name}-llvm${ver}"
+          fi
+          echo "llvm_major=$ver" >> $GITHUB_OUTPUT
+          echo "artifact_name=$artifact_name" >> $GITHUB_OUTPUT
+      - name: Detect LLVM version and resolve artifact name (Linux)
+        id: llvm_meta_linux
         if: runner.os == 'Linux'
         shell: bash
         run: |
           set -e
-          ver=$(llvm-config --version | cut -d. -f1)
+          llvm_version=$(llvm-config --version)
+          ver=${llvm_version%%.*}
           if [ "$ver" -lt 21 ]; then
-            echo "LLVM >= 21 is required, found: $(llvm-config --version)" >&2
+            echo "LLVM >= 21 is required, found: $llvm_version" >&2
             exit 1
           fi
-      - name: Check LLVM version (= 20) (macOS)
+          artifact_name="$BASE_ARTIFACT_NAME"
+          if printf '%s\n' "$artifact_name" | grep -Eq 'llvm[0-9]+'; then
+            artifact_name=$(printf '%s\n' "$artifact_name" | sed -E "s/llvm[0-9]+/llvm${ver}/")
+          elif printf '%s\n' "$artifact_name" | grep -Eq -- '-static-shaderc$'; then
+            artifact_name=$(printf '%s\n' "$artifact_name" | sed -E "s/-static-shaderc$/-llvm${ver}-static-shaderc/")
+          else
+            artifact_name="${artifact_name}-llvm${ver}"
+          fi
+          echo "llvm_major=$ver" >> $GITHUB_OUTPUT
+          echo "artifact_name=$artifact_name" >> $GITHUB_OUTPUT
+      - name: Detect LLVM version and resolve artifact name (macOS)
+        id: llvm_meta_macos
         if: runner.os == 'macOS'
         shell: bash
         run: |
           set -e
-          ver=$(llvm-config --version | cut -d. -f1)
+          llvm_version=$(llvm-config --version)
+          ver=${llvm_version%%.*}
           if [ "$ver" -ne 20 ]; then
-            echo "LLVM 20 is required on macOS, found: $(llvm-config --version)" >&2
+            echo "LLVM 20 is required on macOS, found: $llvm_version" >&2
             exit 1
           fi
+          artifact_name="$BASE_ARTIFACT_NAME"
+          if printf '%s\n' "$artifact_name" | grep -Eq 'llvm[0-9]+'; then
+            artifact_name=$(printf '%s\n' "$artifact_name" | sed -E "s/llvm[0-9]+/llvm${ver}/")
+          elif printf '%s\n' "$artifact_name" | grep -Eq -- '-static-shaderc$'; then
+            artifact_name=$(printf '%s\n' "$artifact_name" | sed -E "s/-static-shaderc$/-llvm${ver}-static-shaderc/")
+          else
+            artifact_name="${artifact_name}-llvm${ver}"
+          fi
+          echo "llvm_major=$ver" >> $GITHUB_OUTPUT
+          echo "artifact_name=$artifact_name" >> $GITHUB_OUTPUT
 
       - name: Configure (Meson) with SSL fix (Windows)
         if: runner.os == 'Windows'
@@ -459,7 +496,7 @@ jobs:
         if: runner.os == 'Windows' || runner.os == 'macOS'
         uses: actions/upload-artifact@v4
         with:
-          name: benchmark-${{ inputs.artifact_name }}
+          name: benchmark-${{ steps.llvm_meta_windows.outputs.artifact_name || steps.llvm_meta_linux.outputs.artifact_name || steps.llvm_meta_macos.outputs.artifact_name }}
           path: benchmark-results.json
           if-no-files-found: warn
 
@@ -526,6 +563,6 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.artifact_name }}
+          name: ${{ steps.llvm_meta_windows.outputs.artifact_name || steps.llvm_meta_linux.outputs.artifact_name || steps.llvm_meta_macos.outputs.artifact_name }}
           path: ${{ steps.collect_windows.outputs.artifact_dir || steps.collect_unix.outputs.artifact_dir }}
           if-no-files-found: error
