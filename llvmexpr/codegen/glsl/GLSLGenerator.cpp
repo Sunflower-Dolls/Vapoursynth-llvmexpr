@@ -1473,7 +1473,6 @@ void GLSLGenerator::processToken(const Token& token) {
         emitLine(std::format("int {} = int(roundEven({}));", y_int, coord_y));
 
         push(emitPixelLoad(payload.clip_idx, x_int, y_int, use_mirror));
-        push(emitPixelLoad(payload.clip_idx, x_int, y_int, use_mirror));
         break;
     }
 
